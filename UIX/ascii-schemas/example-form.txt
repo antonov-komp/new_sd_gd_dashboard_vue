@@ -1,0 +1,84 @@
+# Пример ASCII-схемы Vue.js компонента формы
+
+## Компонент: LeadForm.vue
+
++------------------------------------------+
+|  # LeadForm.vue                          |
+|  (Vue.js компонент формы создания лида)  |
++------------------------------------------+
+|                                          |
+|  Имя клиента:                            |
+|  [___________________________________]   |
+|  v-model="formData.NAME"                 |
+|  :class="{ 'error': errors.NAME }"        |
+|                                          |
+|  Email:                                  |
+|  [___________________________________]   |
+|  v-model="formData.EMAIL"                |
+|  :class="{ 'error': errors.EMAIL }"      |
+|                                          |
+|  Телефон:                                |
+|  [___________________________________]   |
+|  v-model="formData.PHONE"                |
+|                                          |
+|  Статус:                                 |
+|  [▼ Новый___________________________]    |
+|  v-model="formData.STATUS_ID"             |
+|  :options="statusOptions"                |
+|                                          |
+|  Комментарий:                            |
+|  [___________________________________]   |
+|  [___________________________________]   |
+|  [___________________________________]   |
+|  v-model="formData.COMMENTS"             |
+|                                          |
+|  [* Сохранить]  [ Отмена ]              |
+|  @click="handleSubmit"  @click="cancel"  |
+|  :disabled="isSubmitting"                |
+|                                          |
++------------------------------------------+
+
+## Vue.js спецификация компонента:
+
+### Props:
+- `leadId` (Number, optional) - ID лида для редактирования
+- `initialData` (Object, optional) - Начальные данные формы
+
+### Events:
+- `@saved` - Эмитится при успешном сохранении (payload: { leadId, data })
+- `@cancel` - Эмитится при отмене формы
+
+### State (data):
+- `formData` (Object) - Данные формы:
+  - NAME (String, required)
+  - EMAIL (String, required, email format)
+  - PHONE (String, optional)
+  - STATUS_ID (Number, required)
+  - COMMENTS (String, optional)
+- `isSubmitting` (Boolean) - Флаг отправки формы
+- `errors` (Object) - Ошибки валидации
+- `statusOptions` (Array) - Список статусов из Bitrix24 API
+
+### Methods:
+- `handleSubmit()` - Обработка отправки формы
+- `validateForm()` - Валидация полей формы
+- `loadStatusOptions()` - Загрузка статусов из Bitrix24 API
+- `cancel()` - Отмена формы
+
+### Computed:
+- `isFormValid` - Проверка валидности всей формы
+
+## Интерактивность (Vue.js реактивность):
+
+- При изменении полей: автоматическая валидация через `v-model` + `watch`
+- При ошибке валидации: класс `error` добавляется через `:class`, показывается сообщение
+- При отправке: `isSubmitting = true`, кнопка становится неактивной (`:disabled`)
+- После успешного сохранения: эмит события `@saved`, уведомление через Bitrix24 UI (BX.UI.Notification)
+- Реактивное обновление: все изменения в `formData` автоматически отражаются в UI
+
+## Интеграция с Bitrix24:
+
+- Использует `Bitrix24ApiService.createLead()` для создания лида
+- Использует `Bitrix24ApiService.getStatuses()` для загрузки статусов
+- Показывает уведомления через `BX.UI.Notification.Center.notify()`
+
