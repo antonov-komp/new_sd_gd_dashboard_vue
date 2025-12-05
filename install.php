@@ -1,88 +1,59 @@
 <?php
-require_once (__DIR__.'/crest.php');
+require_once(__DIR__ . '/crest.php');
 
+// Если запрос на получение результата установки (для Vue.js)
+if (isset($_GET['get_result'])) {
+    header('Content-Type: application/json');
+    
+    $result = CRest::installApp();
+    echo json_encode($result);
+    exit;
+}
+
+// Обычная установка (если не через Vue.js)
 $result = CRest::installApp();
 ?>
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
-	<meta charset="UTF-8">
-	<title>Установка Bitrix24 приложения</title>
-	<script src="//api.bitrix24.com/api/v1/"></script>
-	<style>
-		body {
-			font-family: Arial, sans-serif;
-			padding: 40px;
-			background: #f5f5f5;
-		}
-		.container {
-			background: white;
-			padding: 30px;
-			border-radius: 4px;
-			box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-			max-width: 600px;
-			margin: 0 auto;
-		}
-		.success {
-			background: #e8f5e9;
-			padding: 15px;
-			border-left: 4px solid #4caf50;
-			margin: 20px 0;
-		}
-		.error {
-			background: #ffebee;
-			padding: 15px;
-			border-left: 4px solid #f44336;
-			margin: 20px 0;
-		}
-		.info {
-			background: #e3f2fd;
-			padding: 15px;
-			border-left: 4px solid #2196f3;
-			margin: 20px 0;
-		}
-		pre {
-			background: #f5f5f5;
-			padding: 10px;
-			border-radius: 4px;
-			overflow-x: auto;
-			font-size: 12px;
-		}
-	</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Установка Bitrix24 приложения</title>
+    <script src="//api.bitrix24.com/api/v1/"></script>
+    <!-- В production используйте собранные файлы из /dist -->
+    <!-- Для разработки используйте Vite dev server -->
+    <?php 
+    $distIndexPath = __DIR__ . '/dist/index.html';
+    if (file_exists($distIndexPath)) { 
+        // Читаем dist/index.html и извлекаем пути к скриптам и стилям
+        $distHtml = file_get_contents($distIndexPath);
+        // Ищем скрипт с type="module" (Vue.js), а не Bitrix24 API скрипт
+        preg_match('/<script[^>]+type=["\']module["\'][^>]+src="([^"]+)"[^>]*>/i', $distHtml, $scriptMatch);
+        // Если не нашли, ищем любой скрипт с crossorigin (Vite сборка)
+        if (empty($scriptMatch[1])) {
+            preg_match('/<script[^>]+crossorigin[^>]+src="([^"]+)"[^>]*>/i', $distHtml, $scriptMatch);
+        }
+        preg_match('/<link[^>]+href="([^"]+)"[^>]*>/i', $distHtml, $styleMatch);
+        
+        if (!empty($scriptMatch[1])) {
+            $scriptPath = $scriptMatch[1];
+            echo '<script type="module" crossorigin src="' . htmlspecialchars($scriptPath) . '"></script>' . "\n";
+        }
+        
+        if (!empty($styleMatch[1])) {
+            $stylePath = $styleMatch[1];
+            echo '<link rel="stylesheet" crossorigin href="' . htmlspecialchars($stylePath) . '">' . "\n";
+        }
+    } else { ?>
+        <!-- В режиме разработки используйте Vite dev server -->
+        <script type="module" src="http://localhost:3000/src/main.js"></script>
+    <?php } ?>
 </head>
 <body>
-	<div class="container">
-		<h1>Установка Bitrix24 приложения</h1>
-		
-		<?php if($result['rest_only'] === false): ?>
-			<?php if($result['install'] == true): ?>
-				<div class="success">
-					<strong>✓ Установка завершена успешно!</strong>
-				</div>
-				<script>
-					BX24.init(function(){
-						BX24.installFinish();
-					});
-				</script>
-			<?php else: ?>
-				<div class="error">
-					<strong>✗ Ошибка установки</strong>
-					<p>Не удалось установить приложение. Проверьте настройки.</p>
-				</div>
-			<?php endif; ?>
-			
-			<div class="info">
-				<h3>Информация об установке:</h3>
-				<pre><?php print_r($result); ?></pre>
-			</div>
-		<?php else: ?>
-			<div class="info">
-				<strong>REST-only режим</strong>
-				<p>Это приложение работает только через REST API, без пользовательского интерфейса.</p>
-				<p>Результат установки:</p>
-				<pre><?php print_r($result); ?></pre>
-			</div>
-		<?php endif; ?>
-	</div>
+    <div id="app"></div>
+    <script>
+        // Передаём результат установки в Vue.js приложение
+        window.INSTALL_RESULT = <?php echo json_encode($result); ?>;
+    </script>
 </body>
 </html>
