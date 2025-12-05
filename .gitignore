@@ -1,0 +1,7 @@
+# Settings file
+settings.php
+settings.json
+
+# Logs directory
+logs/
+
