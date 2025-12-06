@@ -2,6 +2,9 @@
 settings.php
 settings.json
 
+# Webhook secret (токен от Bitrix24)
+webhook-secret.php
+
 # Logs directory
 logs/
 

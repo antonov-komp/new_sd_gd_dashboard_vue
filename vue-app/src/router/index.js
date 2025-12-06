@@ -1,6 +1,7 @@
 import { createRouter, createWebHashHistory } from 'vue-router';
 import InstallPage from '@/components/InstallPage.vue';
 import IndexPage from '@/components/IndexPage.vue';
+import WebhookLogsPage from '@/pages/WebhookLogsPage.vue';
 
 const routes = [
   {
@@ -12,6 +13,11 @@ const routes = [
     path: '/',
     name: 'index',
     component: IndexPage
+  },
+  {
+    path: '/webhook-logs',
+    name: 'webhook-logs',
+    component: WebhookLogsPage
   }
 ];
 
