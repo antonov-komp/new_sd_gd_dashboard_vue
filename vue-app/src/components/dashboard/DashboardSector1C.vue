@@ -34,7 +34,7 @@
 <script>
 import { ref, onMounted } from 'vue';
 import DashboardStage from './DashboardStage.vue';
-import { DashboardSector1CService } from '@/services/dashboard-sector-1c-service.js';
+import { DashboardSector1CService } from '@/services/dashboard-sector-1c/index.js';
 
 /**
  * Главный компонент дашборда сектора 1С
@@ -47,13 +47,14 @@ import { DashboardSector1CService } from '@/services/dashboard-sector-1c-service
  * Каждый этап содержит нулевую точку и колонки сотрудников
  * 
  * Использует Bitrix24 REST API для получения данных:
- * - crm.deal.list - получение списка тикетов
- * - crm.deal.update - обновление тикета
+ * - crm.item.list - получение списка элементов смарт-процесса 140
+ * - crm.item.update - обновление элемента
+ * - crm.item.add - создание элемента
  * - user.get - получение данных сотрудников
  * 
  * Документация:
- * - https://context7.com/bitrix24/rest/crm.deal.list
- * - https://context7.com/bitrix24/rest/crm.deal.update
+ * - https://context7.com/bitrix24/rest/crm.item.list
+ * - https://context7.com/bitrix24/rest/crm.item.update
  * - https://context7.com/bitrix24/rest/user.get
  */
 export default {
@@ -104,7 +105,7 @@ export default {
     /**
      * Загрузка данных сектора из API
      * 
-     * Временно использует заглушку (будет заменено в TASK-005-07)
+     * Использует рефакторенный сервис с разделением на модули
      */
     const loadSectorData = async () => {
       isLoading.value = true;
