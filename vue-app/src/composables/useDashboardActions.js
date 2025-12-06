@@ -9,6 +9,7 @@ import { useNotifications } from './useNotifications.js';
 import { useLoadingProgress } from './useLoadingProgress.js';
 import { handleErrorWithNotification } from '@/services/dashboard-sector-1c/utils/error-handler.js';
 import { canMoveTicket, validateTicketData } from '@/services/dashboard-sector-1c/utils/validation.js';
+import { normalizeProgressData } from '@/services/dashboard-sector-1c/utils/progress-utils.js';
 
 /**
  * Композабл для действий дашборда
@@ -19,6 +20,41 @@ import { canMoveTicket, validateTicketData } from '@/services/dashboard-sector-1
 export function useDashboardActions(state) {
   const notifications = useNotifications();
   const loadingProgress = useLoadingProgress();
+
+  /**
+   * Обработка колбэка прогресса из сервиса
+   * 
+   * Нормализует данные прогресса и обновляет состояние загрузки
+   * 
+   * @param {object} progressInfo - Объект с данными прогресса из сервиса
+   * @param {object} loadingProgress - Объект композабла useLoadingProgress
+   * 
+   * @example
+   * handleProgressCallback(
+   *   { step: 'loading_tickets', progress: 50, details: { description: 'Загрузка...' } },
+   *   loadingProgress
+   * );
+   */
+  function handleProgressCallback(progressInfo, loadingProgress) {
+    // Нормализуем данные прогресса
+    const normalized = normalizeProgressData(progressInfo);
+    
+    // Обновляем этап (step) - это обязательно должно быть
+    if (normalized.step) {
+      loadingProgress.updateStep(normalized.step, normalized.details || {});
+    }
+    
+    // Обновляем прогресс
+    if (normalized.progress !== undefined && normalized.progress !== null) {
+      loadingProgress.updateProgress(normalized.progress);
+      // Если прогресс обновляется, значит загрузка продолжается - очищаем временную ошибку
+      loadingProgress.clearTemporaryError();
+    }
+    
+    // НЕ показываем ошибки из колбэка прогресса во время загрузки
+    // Ошибки будут показаны только в catch блоке, если загрузка действительно завершилась с ошибкой
+    // Это предотвращает показ временных ошибок, которые могут исчезнуть при успешной загрузке
+  }
 
   /**
    * Загрузка данных сектора из API
@@ -38,32 +74,7 @@ export function useDashboardActions(state) {
       const data = await DashboardSector1CService.getSectorData(
         useCache,
         (progressInfo) => {
-          console.log('Progress callback received:', progressInfo);
-          
-          // Обновляем этап (step) - это обязательно должно быть
-          if (progressInfo.step) {
-            console.log('Updating step to:', progressInfo.step);
-            loadingProgress.updateStep(progressInfo.step, progressInfo.details || {});
-          } else {
-            console.warn('Progress info without step:', progressInfo);
-          }
-          
-          // Обновляем прогресс
-          if (progressInfo.progress !== undefined && progressInfo.progress !== null) {
-            console.log('Updating progress to:', progressInfo.progress);
-            loadingProgress.updateProgress(progressInfo.progress);
-            // Если прогресс обновляется, значит загрузка продолжается - очищаем временную ошибку
-            loadingProgress.clearTemporaryError();
-          } else if (progressInfo.percent !== undefined && progressInfo.percent !== null) {
-            // Если передан percent вместо progress, используем его
-            console.log('Updating progress from percent to:', progressInfo.percent);
-            loadingProgress.updateProgress(progressInfo.percent);
-            loadingProgress.clearTemporaryError();
-          }
-          
-          // НЕ показываем ошибки из колбэка прогресса во время загрузки
-          // Ошибки будут показаны только в catch блоке, если загрузка действительно завершилась с ошибкой
-          // Это предотвращает показ временных ошибок, которые могут исчезнуть при успешной загрузке
+          handleProgressCallback(progressInfo, loadingProgress);
         }
       );
       

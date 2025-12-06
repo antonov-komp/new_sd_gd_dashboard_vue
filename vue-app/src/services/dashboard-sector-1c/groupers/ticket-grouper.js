@@ -7,22 +7,12 @@
 import { mapStageId } from '../mappers/stage-mapper.js';
 import { mapTicket } from '../mappers/ticket-mapper.js';
 import { mapEmployee } from '../mappers/employee-mapper.js';
-
-/**
- * Константы для группировки тикетов
- */
-
-/**
- * ID ответственного "Хранитель объектов"
- * 
- * Тикеты с этим ответственным попадают в нулевую точку,
- * а не в колонки сотрудников.
- * 
- * Используется в:
- * - getZeroPointTickets() — для включения тикетов в нулевую точку
- * - groupTicketsByStages() — для исключения тикетов из колонок сотрудников
- */
-export const KEEPER_OBJECTS_ID = 1051;
+import { 
+  KEEPER_OBJECTS_ID, 
+  getAssignedById, 
+  parseEmployeeId, 
+  isZeroPointTicket 
+} from '../utils/ticket-utils.js';
 
 /**
  * Группировка тикетов по этапам
@@ -79,15 +69,27 @@ export function groupTicketsByStages(tickets, employees) {
     }
   ];
 
+  // Оптимизация: создаём Map для быстрого поиска этапов по ID
+  const stagesMap = new Map(stages.map(stage => [stage.id, stage]));
+
+  // Оптимизация: создаём Map для быстрого поиска сотрудников в каждом этапе
+  // Ключ: stageId, Значение: Map<employeeId, employee>
+  const employeesMapByStage = new Map();
+  stages.forEach(stage => {
+    const employeesMap = new Map(stage.employees.map(emp => [emp.id, emp]));
+    employeesMapByStage.set(stage.id, employeesMap);
+  });
+
   // Распределяем тикеты по этапам и сотрудникам
   tickets.forEach(ticket => {
     // Обрабатываем как верхний, так и нижний регистр полей
     const stageId = mapStageId(ticket.stageId || ticket.STAGE_ID || '');
-    const stage = stages.find(s => s.id === stageId);
+    const stage = stagesMap.get(stageId);
     
     if (stage) {
-      const assignedById = ticket.assignedById || ticket.ASSIGNED_BY_ID || null;
-      const employeeId = assignedById ? parseInt(assignedById) : null;
+      // Используем утилиты для извлечения и парсинга ID
+      const assignedById = getAssignedById(ticket);
+      const employeeId = parseEmployeeId(assignedById);
       
       // Пропускаем тикеты с ответственным 1051 (они попадают в нулевую точку)
       if (employeeId === KEEPER_OBJECTS_ID) {
@@ -95,8 +97,9 @@ export function groupTicketsByStages(tickets, employees) {
       }
       
       if (employeeId) {
-        // Ищем сотрудника в этапе
-        let employee = stage.employees.find(e => e.id === employeeId);
+        // Оптимизация: используем Map для быстрого поиска сотрудника
+        const employeesMap = employeesMapByStage.get(stageId);
+        let employee = employeesMap.get(employeeId);
         
         // Если сотрудника нет в списке (не был загружен), создаём его
         if (!employee) {
@@ -108,6 +111,7 @@ export function groupTicketsByStages(tickets, employees) {
             tickets: []
           };
           stage.employees.push(employee);
+          employeesMap.set(employeeId, employee); // Добавляем в Map для быстрого доступа
         }
         
         employee.tickets.push(mapTicket(ticket));
@@ -144,13 +148,8 @@ export function getZeroPointTickets(tickets) {
   // Тикеты без назначенного сотрудника ИЛИ с ответственным 1051
   tickets
     .filter(t => {
-      const assignedById = t.assignedById || t.ASSIGNED_BY_ID;
-      const employeeId = assignedById ? parseInt(assignedById) : null;
-      
-      // Попадают в нулевую точку:
-      // 1. Тикеты без ответственного (employeeId === null)
-      // 2. Тикеты с ответственным 1051 (Хранитель объектов)
-      return !employeeId || employeeId === KEEPER_OBJECTS_ID;
+      // Используем утилиту для проверки нулевой точки
+      return isZeroPointTicket(t);
     })
     .forEach(ticket => {
       const stageId = mapStageId(ticket.stageId || ticket.STAGE_ID || '');
@@ -176,20 +175,12 @@ export function extractUniqueEmployeeIds(tickets) {
   const employeeIds = new Set();
 
   tickets.forEach(ticket => {
-    // Пробуем разные варианты имени поля assignedById
-    // В смарт-процессах может быть assignedById или assignedByIdId
-    const assignedById = ticket.assignedById || 
-                        ticket.assignedByIdId || 
-                        ticket.ASSIGNED_BY_ID ||
-                        ticket['assignedById'] ||
-                        (ticket.assignedById && typeof ticket.assignedById === 'object' && (ticket.assignedById.id || ticket.assignedById.ID)) ||
-                        (ticket.assignedById && typeof ticket.assignedById === 'object' && ticket.assignedById.value);
+    // Используем утилиты для извлечения и парсинга ID
+    const assignedById = getAssignedById(ticket);
+    const employeeId = parseEmployeeId(assignedById);
     
-    if (assignedById) {
-      const employeeId = parseInt(assignedById);
-      if (employeeId && !isNaN(employeeId) && employeeId > 0) {
-        employeeIds.add(employeeId);
-      }
+    if (employeeId) {
+      employeeIds.add(employeeId);
     }
   });
 

@@ -29,6 +29,11 @@ import { groupTicketsByStages, getZeroPointTickets, extractUniqueEmployeeIds } f
 import { ApiClient } from './data/api-client.js';
 import { CacheManager } from './cache/cache-manager.js';
 import { ENTITY_TYPE_ID } from './utils/constants.js';
+import { 
+  createProgressDetails, 
+  normalizeProgressData,
+  calculateProgress 
+} from './utils/progress-utils.js';
 
 /**
  * Сервис для работы с дашбордом сектора 1С
@@ -55,7 +60,9 @@ export class DashboardSector1CService {
   static async getSectorData(useCache = true, onProgress = null) {
     // Начало загрузки - устанавливаем начальный этап
     if (onProgress) {
-      onProgress({ step: 'cache_check', progress: 0, details: { description: 'Инициализация загрузки...' } });
+      onProgress(createProgressDetails('cache_check', 0, {
+        description: 'Инициализация загрузки...'
+      }));
     }
     
     // Проверяем кеш
@@ -63,9 +70,10 @@ export class DashboardSector1CService {
       const cacheKey = CacheManager.getSectorDataCacheKey();
       const cached = CacheManager.get(cacheKey);
       if (cached !== null) {
-        console.log('Cache hit for sector data');
         if (onProgress) {
-          onProgress({ step: 'cache_hit', progress: 100, details: { description: 'Данные загружены из кеша' } });
+          onProgress(createProgressDetails('cache_hit', 100, {
+            description: 'Данные загружены из кеша'
+          }));
         }
         return cached;
       }
@@ -74,138 +82,89 @@ export class DashboardSector1CService {
     try {
       // Шаг 1: Получаем все тикеты с пагинацией (с кешированием)
       if (onProgress) {
-        onProgress({ 
-          step: 'loading_tickets', 
-          progress: 10,
-          details: { description: 'Начало загрузки тикетов из Bitrix24...' }
-        });
+        onProgress(createProgressDetails('loading_tickets', 10, {
+          description: 'Начало загрузки тикетов из Bitrix24...'
+        }));
       }
       
       const targetStages = getTargetStages();
       const allTickets = await TicketRepository.getAllTickets(targetStages, (stageProgress) => {
         if (onProgress) {
-          console.log('TicketRepository progress callback:', stageProgress);
+          // Нормализуем данные прогресса из репозитория
+          const normalized = normalizeProgressData(stageProgress);
           
-          // НЕ передаём ошибки через колбэк прогресса
-          // Ошибки будут показаны только в catch блоке, если загрузка действительно завершилась с ошибкой
+          // Рассчитываем общий прогресс: 10-50% для загрузки тикетов
+          const totalProgress = calculateProgress(10, 40, normalized.progress || 0);
           
-          // Прогресс загрузки тикетов: 10-50%
-          const baseProgress = 10;
-          const ticketsProgressRange = 40; // 10-50%
-          const stageProgressPercent = stageProgress.percent || 0;
-          const totalProgress = baseProgress + (stageProgressPercent * ticketsProgressRange / 100);
-          
-          // Если step уже передан из TicketRepository, используем его, иначе устанавливаем 'loading_tickets'
-          const step = stageProgress.step || 'loading_tickets';
-          
-          const progressData = {
-            step: step,
-            progress: Math.min(50, totalProgress),
-            details: {
-              stage: stageProgress.stageName || stageProgress.stage,
-              stageIndex: stageProgress.stageIndex,
-              totalStages: stageProgress.totalStages,
-              count: stageProgress.count,
-              total: stageProgress.total,
-              description: stageProgress.details?.description || `Загрузка тикетов стадии "${stageProgress.stageName || stageProgress.stage}"${stageProgress.stageIndex && stageProgress.totalStages ? ` (${stageProgress.stageIndex}/${stageProgress.totalStages})` : ''}${stageProgress.count !== undefined ? `. Загружено: ${stageProgress.count}` : ''}...`,
-              warning: stageProgress.warning // Передаём предупреждение, если есть (но не ошибку)
+          // Формируем объект прогресса с деталями
+          onProgress(createProgressDetails(
+            normalized.step || 'loading_tickets',
+            totalProgress,
+            {
+              ...normalized.details,
+              warning: normalized.details.warning
             }
-          };
-          
-          console.log('Calling onProgress from TicketRepository:', progressData);
-          onProgress(progressData);
+          ));
         }
       });
-      console.log('Total tickets loaded:', allTickets.length);
 
       // Шаг 2: Фильтруем тикеты по тегу сектора 1С
       if (onProgress) {
-        onProgress({ 
-          step: 'filtering', 
-          progress: 50,
-          details: {
-            totalTickets: allTickets.length,
-            description: `Фильтрация ${allTickets.length} тикетов по сектору 1С...`
-          }
-        });
+        onProgress(createProgressDetails('filtering', 50, {
+          totalTickets: allTickets.length,
+          description: `Фильтрация ${allTickets.length} тикетов по сектору 1С...`
+        }));
       }
       const filteredTickets = filterBySector(allTickets);
-      console.log(`Filtered ${filteredTickets.length} tickets from ${allTickets.length} (sector tag: 1C)`);
       
       if (onProgress) {
-        onProgress({ 
-          step: 'filtering', 
-          progress: 50,
-          details: {
-            totalTickets: allTickets.length,
-            filteredTickets: filteredTickets.length,
-            description: `Отфильтровано ${filteredTickets.length} тикетов из ${allTickets.length}`
-          }
-        });
+        onProgress(createProgressDetails('filtering', 50, {
+          totalTickets: allTickets.length,
+          filteredTickets: filteredTickets.length,
+          description: `Отфильтровано ${filteredTickets.length} тикетов из ${allTickets.length}`
+        }));
       }
 
       // Шаг 3: Извлекаем уникальных сотрудников из тикетов
       if (onProgress) {
-        onProgress({ 
-          step: 'extracting_employees', 
-          progress: 60,
-          details: {
-            filteredTickets: filteredTickets.length,
-            description: `Анализ ${filteredTickets.length} тикетов для определения сотрудников...`
-          }
-        });
+        onProgress(createProgressDetails('extracting_employees', 60, {
+          filteredTickets: filteredTickets.length,
+          description: `Анализ ${filteredTickets.length} тикетов для определения сотрудников...`
+        }));
       }
       const uniqueEmployeeIds = extractUniqueEmployeeIds(filteredTickets);
-      console.log('Unique employee IDs:', uniqueEmployeeIds);
       
       if (onProgress) {
-        onProgress({ 
-          step: 'extracting_employees', 
-          progress: 60,
-          details: {
-            employeeCount: uniqueEmployeeIds.length,
-            description: `Найдено ${uniqueEmployeeIds.length} уникальных сотрудников`
-          }
-        });
+        onProgress(createProgressDetails('extracting_employees', 60, {
+          employeeCount: uniqueEmployeeIds.length,
+          description: `Найдено ${uniqueEmployeeIds.length} уникальных сотрудников`
+        }));
       }
 
       // Шаг 4: Получаем данные только этих сотрудников (с кешированием)
       if (onProgress) {
-        onProgress({ 
-          step: 'loading_employees', 
-          progress: 65,
-          details: {
-            employeeCount: uniqueEmployeeIds.length,
-            description: `Загрузка данных ${uniqueEmployeeIds.length} сотрудников...`
-          }
-        });
+        onProgress(createProgressDetails('loading_employees', 65, {
+          employeeCount: uniqueEmployeeIds.length,
+          description: `Загрузка данных ${uniqueEmployeeIds.length} сотрудников...`
+        }));
       }
       const bitrixUsers = await EmployeeRepository.getEmployeesByIds(uniqueEmployeeIds);
       const employees = mapEmployees(bitrixUsers);
-      console.log('Loaded employees:', employees.length);
       
       if (onProgress) {
-        onProgress({ 
-          step: 'loading_employees', 
-          progress: 90,
-          details: { 
-            employeeCount: employees.length,
-            description: `Загружено данных ${employees.length} сотрудников`
-          }
-        });
+        onProgress(createProgressDetails('loading_employees', 90, {
+          employeeCount: employees.length,
+          description: `Загружено данных ${employees.length} сотрудников`
+        }));
       }
 
       // Шаг 5: Группируем тикеты по этапам и сотрудникам
       if (onProgress) {
-        onProgress({ 
-          step: 'grouping', 
-          progress: 90,
-          details: {
-            filteredTickets: filteredTickets.length,
-            employees: employees.length,
-            description: `Группировка ${filteredTickets.length} тикетов по этапам и ${employees.length} сотрудникам...`
-          }
-        });
+        onProgress(createProgressDetails('grouping', 90, {
+          filteredTickets: filteredTickets.length,
+          employeeCount: employees.length,
+          description: `Группировка ${filteredTickets.length} тикетов по этапам и ${employees.length} сотрудникам...`
+        }));
       }
       const stages = groupTicketsByStages(filteredTickets, employees);
 
@@ -217,13 +176,9 @@ export class DashboardSector1CService {
 
       // Шаг 6: Сохраняем в кеш
       if (onProgress) {
-        onProgress({ 
-          step: 'caching', 
-          progress: 95,
-          details: {
-            description: 'Сохранение результатов в кеш для ускорения следующих загрузок...'
-          }
-        });
+        onProgress(createProgressDetails('caching', 95, {
+          description: 'Сохранение результатов в кеш для ускорения следующих загрузок...'
+        }));
       }
       if (useCache) {
         const cacheKey = CacheManager.getSectorDataCacheKey();
@@ -231,7 +186,9 @@ export class DashboardSector1CService {
       }
 
       if (onProgress) {
-        onProgress({ step: 'complete', progress: 100 });
+        onProgress(createProgressDetails('complete', 100, {
+          description: 'Загрузка завершена'
+        }));
       }
 
       return result;

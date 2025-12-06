@@ -138,22 +138,61 @@ const STEP_TEXTS = {
 };
 
 /**
+ * Fallback тексты для этапов (если этап не найден в STEP_TEXTS)
+ * Вынесено за пределы computed для оптимизации
+ */
+const FALLBACK_TEXTS = {
+  'loading_tickets': { title: 'Загрузка тикетов', description: 'Получение данных из Bitrix24...' },
+  'filtering': { title: 'Фильтрация тикетов', description: 'Отбор тикетов сектора 1С...' },
+  'extracting_employees': { title: 'Определение сотрудников', description: 'Анализ назначенных сотрудников...' },
+  'loading_employees': { title: 'Загрузка данных сотрудников', description: 'Получение информации о сотрудниках...' },
+  'grouping': { title: 'Группировка данных', description: 'Распределение тикетов по этапам...' },
+  'caching': { title: 'Сохранение в кеш', description: 'Оптимизация для следующих загрузок...' },
+  'cache_check': { title: 'Проверка кеша', description: 'Поиск сохранённых данных...' },
+  'cache_hit': { title: 'Данные загружены', description: 'Мгновенная загрузка...' },
+  'complete': { title: 'Готово!', description: 'Дашборд загружен' },
+  'error': { title: 'Ошибка загрузки', description: 'Не удалось загрузить данные' }
+};
+
+/**
  * Компонент анимированного прелоадера для дашборда сектора 1С
  * 
- * Отображает:
+ * Отображает детальную информацию о процессе загрузки данных:
  * - Анимацию загрузки (спиннер)
- * - Текущий этап загрузки
- * - Прогресс-бар с процентом выполнения
- * - Детали этапа (количество элементов)
+ * - Текущий этап загрузки с описанием
+ * - Прогресс-бар с процентом выполнения (0-100%)
+ * - Детали этапа (количество элементов, название стадии и т.д.)
  * - Обработку ошибок с возможностью повтора
  * 
  * @component
+ * @example
+ * <LoadingPreloader
+ *   :current-step="currentStep"
+ *   :progress="progress"
+ *   :step-details="stepDetails"
+ *   :error="error"
+ *   @retry="handleRetry"
+ * />
  */
 export default {
   name: 'LoadingPreloader',
   props: {
     /**
      * Текущий этап загрузки
+     * 
+     * Возможные значения:
+     * - 'cache_check' - Проверка кеша
+     * - 'cache_hit' - Данные загружены из кеша
+     * - 'loading_tickets' - Загрузка тикетов
+     * - 'filtering' - Фильтрация тикетов
+     * - 'extracting_employees' - Определение сотрудников
+     * - 'loading_employees' - Загрузка данных сотрудников
+     * - 'grouping' - Группировка данных
+     * - 'caching' - Сохранение в кеш
+     * - 'complete' - Готово
+     * - 'error' - Ошибка загрузки
+     * 
+     * @type {string|null}
      */
     currentStep: {
       type: String,
@@ -161,6 +200,9 @@ export default {
     },
     /**
      * Процент выполнения (0-100)
+     * 
+     * @type {number}
+     * @default 0
      */
     progress: {
       type: Number,
@@ -168,6 +210,20 @@ export default {
     },
     /**
      * Детали текущего этапа (количество элементов, название стадии и т.д.)
+     * 
+     * @type {object}
+     * @property {string} [description] - Описание этапа
+     * @property {string} [stage] - ID стадии
+     * @property {string} [stageName] - Название стадии
+     * @property {number} [stageIndex] - Индекс стадии (1-based)
+     * @property {number} [totalStages] - Общее количество стадий
+     * @property {number} [count] - Количество загруженных элементов
+     * @property {number} [total] - Общее количество элементов
+     * @property {number} [filteredTickets] - Количество отфильтрованных тикетов
+     * @property {number} [totalTickets] - Общее количество тикетов
+     * @property {number} [employeeCount] - Количество сотрудников
+     * @property {string} [warning] - Предупреждение (если есть)
+     * @default {}
      */
     stepDetails: {
       type: Object,
@@ -175,6 +231,9 @@ export default {
     },
     /**
      * Сообщение об ошибке (если есть)
+     * 
+     * @type {string|null}
+     * @default null
      */
     error: {
       type: String,
@@ -186,41 +245,34 @@ export default {
     
     /**
      * Получение информации об этапе из маппинга
+     * 
+     * Оптимизировано: использует деструктуризацию props и optional chaining
+     * для избежания лишних вычислений
      */
     const stepInfo = computed(() => {
-      // Если есть описание в details, используем его
-      if (props.stepDetails && typeof props.stepDetails === 'object' && props.stepDetails.description) {
+      // Деструктуризация props для оптимизации доступа
+      const { currentStep, stepDetails } = props;
+      
+      // Если есть описание в details, используем его (быстрая проверка с optional chaining)
+      if (stepDetails?.description) {
         return {
-          title: props.currentStep ? (STEP_TEXTS[props.currentStep]?.title || props.currentStep) : 'Загрузка...',
-          description: props.stepDetails.description
+          title: currentStep ? (STEP_TEXTS[currentStep]?.title || currentStep) : 'Загрузка...',
+          description: stepDetails.description
         };
       }
       
-      if (!props.currentStep) {
+      // Если нет этапа, возвращаем дефолтное значение
+      if (!currentStep) {
         return { title: 'Загрузка...', description: 'Инициализация...' };
       }
       
-      // Если этап найден в маппинге, возвращаем его
-      if (STEP_TEXTS[props.currentStep]) {
-        return STEP_TEXTS[props.currentStep];
+      // Если этап найден в маппинге, возвращаем его (быстрая проверка)
+      if (STEP_TEXTS[currentStep]) {
+        return STEP_TEXTS[currentStep];
       }
       
-      // Если этап не найден, пытаемся преобразовать английское название в русское
-      const stepName = props.currentStep;
-      const fallbackTexts = {
-        'loading_tickets': { title: 'Загрузка тикетов', description: 'Получение данных из Bitrix24...' },
-        'filtering': { title: 'Фильтрация тикетов', description: 'Отбор тикетов сектора 1С...' },
-        'extracting_employees': { title: 'Определение сотрудников', description: 'Анализ назначенных сотрудников...' },
-        'loading_employees': { title: 'Загрузка данных сотрудников', description: 'Получение информации о сотрудниках...' },
-        'grouping': { title: 'Группировка данных', description: 'Распределение тикетов по этапам...' },
-        'caching': { title: 'Сохранение в кеш', description: 'Оптимизация для следующих загрузок...' },
-        'cache_check': { title: 'Проверка кеша', description: 'Поиск сохранённых данных...' },
-        'cache_hit': { title: 'Данные загружены', description: 'Мгновенная загрузка...' },
-        'complete': { title: 'Готово!', description: 'Дашборд загружен' },
-        'error': { title: 'Ошибка загрузки', description: 'Не удалось загрузить данные' }
-      };
-      
-      return fallbackTexts[stepName] || { 
+      // Если этап не найден, используем fallback (константа вынесена за пределы computed)
+      return FALLBACK_TEXTS[currentStep] || { 
         title: 'Загрузка...', 
         description: 'Пожалуйста, подождите...' 
       };

@@ -16,6 +16,11 @@
 
 import { ApiClient } from './api-client.js';
 import { CacheManager } from '../cache/cache-manager.js';
+import { 
+  createProgressDetails, 
+  normalizeProgressData,
+  calculateProgress 
+} from '../utils/progress-utils.js';
 
 /**
  * ID смарт-процесса сектора 1С
@@ -47,53 +52,36 @@ export class TicketRepository {
         const stageId = stageIds[i];
         const stageName = this.getStageName(stageId);
         
-        console.log(`Loading tickets for stage: ${stageId}`);
-        
         if (onProgress) {
-          onProgress({
-            step: 'loading_tickets', // Обязательно передаём step
+          const baseProgress = (i / totalStages) * 100;
+          onProgress(createProgressDetails('loading_tickets', baseProgress, {
             stage: stageId,
             stageName: stageName,
             stageIndex: i + 1,
-            totalStages: totalStages,
-            percent: (i / totalStages) * 100,
-            details: {
-              stage: stageId,
-              stageName: stageName,
-              stageIndex: i + 1,
-              totalStages: totalStages,
-              description: `Загрузка тикетов стадии "${stageName}" (${i + 1}/${totalStages})...`
-            }
-          });
+            totalStages: totalStages
+          }));
         }
         
         try {
           const stageTickets = await this.getTicketsByStage(stageId, true, onProgress ? (batchProgress) => {
-            // Пересчитываем прогресс с учётом текущей стадии
-            const stageProgress = (i / totalStages) + (batchProgress.percent / 100 / totalStages);
-            onProgress({
-              step: 'loading_tickets', // Обязательно передаём step
+            // Используем утилиту для расчёта прогресса в диапазоне
+            const stageProgress = calculateProgress(
+              (i / totalStages) * 100,  // базовый прогресс
+              (1 / totalStages) * 100,   // диапазон для текущей стадии
+              batchProgress.percent || 0 // процент выполнения батча
+            );
+            
+            onProgress(createProgressDetails('loading_tickets', stageProgress, {
               stage: stageId,
               stageName: stageName,
               stageIndex: i + 1,
               totalStages: totalStages,
-              percent: stageProgress * 100,
               count: batchProgress.count,
-              total: batchProgress.total,
-              details: {
-                stage: stageId,
-                stageName: stageName,
-                stageIndex: i + 1,
-                totalStages: totalStages,
-                count: batchProgress.count,
-                total: batchProgress.total,
-                description: `Загрузка тикетов стадии "${stageName}" (${i + 1}/${totalStages}). Загружено: ${batchProgress.count}${batchProgress.total ? ` из ${batchProgress.total}` : ''}...`
-              }
-            });
+              total: batchProgress.total
+            }));
           } : null);
           
           allTickets.push(...stageTickets);
-          console.log(`Loaded ${stageTickets.length} tickets for stage ${stageId}`);
         } catch (stageError) {
           console.error(`Error loading tickets for stage ${stageId}:`, stageError);
           
@@ -159,9 +147,13 @@ export class TicketRepository {
       const cacheKey = CacheManager.getTicketsCacheKey(stageId);
       const cached = CacheManager.get(cacheKey);
       if (cached !== null) {
-        console.log(`Cache hit for stage ${stageId}`);
         if (onProgress) {
-          onProgress({ percent: 100, count: cached.length, total: cached.length });
+          onProgress(normalizeProgressData({
+            step: 'loading_tickets',
+            percent: 100,
+            count: cached.length,
+            total: cached.length
+          }));
         }
         return cached;
       }
@@ -214,11 +206,12 @@ export class TicketRepository {
           // Вызываем колбэк прогресса
           if (onProgress) {
             const percent = totalEstimated > 0 ? Math.min(100, (allTickets.length / totalEstimated) * 100) : 0;
-            onProgress({
+            onProgress(normalizeProgressData({
+              step: 'loading_tickets',
               percent: percent,
               count: allTickets.length,
               total: totalEstimated
-            });
+            }));
           }
           
           // Сбрасываем ошибку первого батча, если загрузка успешна
@@ -241,12 +234,11 @@ export class TicketRepository {
         
         // Уведомляем о частичной загрузке
         if (onProgress && allTickets.length > 0) {
-          onProgress({
-            percent: 100,
+          onProgress(createProgressDetails('loading_tickets', 100, {
             count: allTickets.length,
             total: allTickets.length,
             warning: `Загружено частично: ${allTickets.length} тикетов. Ошибка при загрузке остальных.`
-          });
+          }));
         }
       }
     }
