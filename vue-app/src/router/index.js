@@ -18,6 +18,11 @@ const routes = [
     path: '/webhook-logs',
     name: 'webhook-logs',
     component: WebhookLogsPage
+  },
+  {
+    path: '/dashboard/sector-1c',
+    name: 'dashboard-sector-1c',
+    component: () => import('@/components/dashboard/DashboardSector1C.vue')
   }
 ];
 
