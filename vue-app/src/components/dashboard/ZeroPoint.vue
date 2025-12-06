@@ -29,17 +29,23 @@
 </template>
 
 <script>
-import { ref } from 'vue';
 import TicketCard from './TicketCard.vue';
 
 /**
  * Компонент нулевой точки
  * 
- * Отображает входящие тикеты для этапа
+ * Отображает входящие тикеты для этапа (тикеты без назначенного сотрудника)
  * Позволяет перетаскивать тикеты из нулевой точки на сотрудников
  * 
  * Используется в:
  * - DashboardStage.vue (для каждого этапа)
+ * 
+ * @component
+ * @prop {Array} tickets - Массив тикетов без назначенного сотрудника
+ * @prop {string} stageId - ID этапа
+ * @emits {Object} ticket-dragged - Тикет начал перетаскиваться
+ * @emits {Object} ticket-assigned - Тикет назначен сотруднику
+ * @emits {Object} ticket-clicked - Тикет кликнут
  */
 export default {
   name: 'ZeroPoint',
@@ -47,10 +53,18 @@ export default {
     TicketCard
   },
   props: {
+    /**
+     * Массив тикетов без назначенного сотрудника
+     * @type {Array<Object>}
+     */
     tickets: {
       type: Array,
       default: () => []
     },
+    /**
+     * ID этапа
+     * @type {string}
+     */
     stageId: {
       type: String,
       required: true

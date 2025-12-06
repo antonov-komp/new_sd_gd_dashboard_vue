@@ -45,14 +45,34 @@
  * Используется в:
  * - EmployeeColumn.vue (тикеты сотрудника)
  * - ZeroPoint.vue (входящие тикеты)
+ * 
+ * @component
+ * @prop {Object} ticket - Объект тикета
+ * @prop {number} ticket.id - ID тикета
+ * @prop {string} ticket.title - Название тикета
+ * @prop {string} ticket.priority - Приоритет (high, medium, low)
+ * @prop {string} ticket.status - Статус (in_progress, new, done, pending)
+ * @prop {string} ticket.description - Описание тикета (опционально)
+ * @prop {boolean} draggable - Можно ли перетаскивать тикет
+ * @emits {Object} click - Тикет кликнут
+ * @emits {Object} drag-start - Начато перетаскивание тикета
+ * @emits {void} drag-end - Завершено перетаскивание тикета
  */
 export default {
   name: 'TicketCard',
   props: {
+    /**
+     * Объект тикета
+     * @type {Object}
+     */
     ticket: {
       type: Object,
       required: true
     },
+    /**
+     * Можно ли перетаскивать тикет
+     * @type {boolean}
+     */
     draggable: {
       type: Boolean,
       default: true

@@ -1,7 +1,7 @@
 <template>
   <div class="dashboard-stage" :style="{ borderLeftColor: stage.color }">
     <div class="stage-header">
-      <h2>{{ stage.name }}</h2>
+      <h2>{{ stageNameWithCount }}</h2>
     </div>
     
     <div class="stage-content">
@@ -30,7 +30,7 @@
 </template>
 
 <script>
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import ZeroPoint from './ZeroPoint.vue';
 import EmployeeColumn from './EmployeeColumn.vue';
 
@@ -62,6 +62,45 @@ export default {
   emits: ['ticket-moved', 'ticket-assigned', 'ticket-clicked'],
   setup(props, { emit }) {
     const isDragging = ref(false);
+
+    /**
+     * Подсчёт общего количества тикетов по стадии
+     * 
+     * Сумма = тикеты в нулевой точке + тикеты у всех сотрудников
+     * 
+     * @returns {number} Общее количество тикетов
+     */
+    const totalTicketsCount = computed(() => {
+      // Тикеты в нулевой точке
+      const zeroPointCount = Array.isArray(props.zeroPointTickets) 
+        ? props.zeroPointTickets.length 
+        : 0;
+      
+      // Тикеты у всех сотрудников в этой стадии
+      const employeesTicketsCount = Array.isArray(props.stage.employees)
+        ? props.stage.employees.reduce((total, employee) => {
+            const employeeTickets = Array.isArray(employee.tickets) 
+              ? employee.tickets.length 
+              : 0;
+            return total + employeeTickets;
+          }, 0)
+        : 0;
+      
+      return zeroPointCount + employeesTicketsCount;
+    });
+
+    /**
+     * Название стадии с количеством тикетов
+     * 
+     * Формат: "Название стадии (N)"
+     * 
+     * @returns {string} Название стадии с количеством тикетов
+     */
+    const stageNameWithCount = computed(() => {
+      const baseName = props.stage?.name || 'Стадия';
+      const count = totalTicketsCount.value;
+      return `${baseName} (${count})`;
+    });
 
     /**
      * Обработка начала перетаскивания тикета
@@ -106,6 +145,8 @@ export default {
 
     return {
       isDragging,
+      totalTicketsCount,
+      stageNameWithCount,
       handleTicketDragged,
       handleTicketAssigned,
       handleTicketDropped,

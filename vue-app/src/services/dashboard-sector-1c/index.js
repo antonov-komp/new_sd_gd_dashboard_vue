@@ -27,11 +27,8 @@ import { getTargetStages } from './mappers/stage-mapper.js';
 import { filterBySector } from './filters/sector-filter.js';
 import { groupTicketsByStages, getZeroPointTickets, extractUniqueEmployeeIds } from './groupers/ticket-grouper.js';
 import { ApiClient } from './data/api-client.js';
-
-/**
- * ID смарт-процесса сектора 1С
- */
-const ENTITY_TYPE_ID = 140;
+import { CacheManager } from './cache/cache-manager.js';
+import { ENTITY_TYPE_ID } from './utils/constants.js';
 
 /**
  * Сервис для работы с дашбордом сектора 1С
@@ -41,17 +38,32 @@ export class DashboardSector1CService {
    * Получение данных сектора 1С
    * 
    * Логика:
-   * 1. Получаем все тикеты смарт-процесса 140 (с пагинацией)
-   * 2. Фильтруем тикеты по тегу сектора 1С
-   * 3. Из тикетов извлекаем уникальных сотрудников (assignedById)
-   * 4. Получаем данные только этих сотрудников
-   * 5. Раскладываем тикеты по этапам и сотрудникам
+   * 1. Проверяем кеш данных сектора
+   * 2. Если кеш есть - возвращаем из кеша
+   * 3. Если кеша нет:
+   *    - Получаем все тикеты смарт-процесса 140 (с пагинацией, с кешированием)
+   *    - Фильтруем тикеты по тегу сектора 1С
+   *    - Из тикетов извлекаем уникальных сотрудников (assignedById)
+   *    - Получаем данные только этих сотрудников (с кешированием)
+   *    - Раскладываем тикеты по этапам и сотрудникам
+   *    - Сохраняем результат в кеш
    * 
+   * @param {boolean} useCache - Использовать кеш (по умолчанию true)
    * @returns {Promise<object>} Данные сектора (stages, employees, zeroPointTickets)
    */
-  static async getSectorData() {
+  static async getSectorData(useCache = true) {
+    // Проверяем кеш
+    if (useCache) {
+      const cacheKey = CacheManager.getSectorDataCacheKey();
+      const cached = CacheManager.get(cacheKey);
+      if (cached !== null) {
+        console.log('Cache hit for sector data');
+        return cached;
+      }
+    }
+
     try {
-      // Шаг 1: Получаем все тикеты с пагинацией
+      // Шаг 1: Получаем все тикеты с пагинацией (с кешированием)
       const targetStages = getTargetStages();
       const allTickets = await TicketRepository.getAllTickets(targetStages);
       console.log('Total tickets loaded:', allTickets.length);
@@ -64,7 +76,7 @@ export class DashboardSector1CService {
       const uniqueEmployeeIds = extractUniqueEmployeeIds(filteredTickets);
       console.log('Unique employee IDs:', uniqueEmployeeIds);
 
-      // Шаг 4: Получаем данные только этих сотрудников
+      // Шаг 4: Получаем данные только этих сотрудников (с кешированием)
       const bitrixUsers = await EmployeeRepository.getEmployeesByIds(uniqueEmployeeIds);
       const employees = mapEmployees(bitrixUsers);
       console.log('Loaded employees:', employees.length);
@@ -72,11 +84,19 @@ export class DashboardSector1CService {
       // Шаг 5: Группируем тикеты по этапам и сотрудникам
       const stages = groupTicketsByStages(filteredTickets, employees);
 
-      return {
+      const result = {
         stages,
         employees: employees,
         zeroPointTickets: getZeroPointTickets(filteredTickets)
       };
+
+      // Сохраняем в кеш
+      if (useCache) {
+        const cacheKey = CacheManager.getSectorDataCacheKey();
+        CacheManager.set(cacheKey, result, CacheManager.TICKETS_TTL);
+      }
+
+      return result;
     } catch (error) {
       console.error('Error getting sector data:', error);
       throw error;
@@ -97,7 +117,14 @@ export class DashboardSector1CService {
   static async assignTicket(ticketId, employeeId, stageId) {
     try {
       const bitrixStageId = mapStageIdToBitrix(stageId);
-      return await TicketRepository.assignTicket(ticketId, employeeId, bitrixStageId);
+      const result = await TicketRepository.assignTicket(ticketId, employeeId, bitrixStageId);
+      
+      // Инвалидируем кеш данных сектора после назначения
+      if (result) {
+        CacheManager.invalidateTicketsCache();
+      }
+      
+      return result;
     } catch (error) {
       console.error('Error assigning ticket:', error);
       throw error;
@@ -129,7 +156,14 @@ export class DashboardSector1CService {
         fields.assignedById = ticketData.employeeId;
       }
 
-      return await TicketRepository.createTicket(fields);
+      const ticketId = await TicketRepository.createTicket(fields);
+      
+      // Инвалидируем кеш данных сектора после создания
+      if (ticketId > 0) {
+        CacheManager.invalidateTicketsCache();
+      }
+      
+      return ticketId;
     } catch (error) {
       console.error('Error creating ticket:', error);
       throw error;

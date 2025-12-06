@@ -44,8 +44,8 @@
 </template>
 
 <script>
-import { ref } from 'vue';
 import TicketCard from './TicketCard.vue';
+import { useDragAndDrop } from '@/composables/useDragAndDrop.js';
 
 /**
  * Компонент колонки сотрудника
@@ -53,8 +53,13 @@ import TicketCard from './TicketCard.vue';
  * Отображает информацию о сотруднике и его тикетах
  * Поддерживает Drag & Drop для назначения тикетов сотруднику
  * 
- * Используется в:
- * - DashboardStage.vue (для каждого сотрудника этапа)
+ * Использует композабл useDragAndDrop для логики перетаскивания
+ * 
+ * @component
+ * @prop {Object} employee - Объект сотрудника с тикетами
+ * @prop {string} stageId - ID этапа
+ * @emits {Object, number} ticket-dropped - Тикет сброшен на сотрудника
+ * @emits {Object} ticket-clicked - Тикет кликнут
  */
 export default {
   name: 'EmployeeColumn',
@@ -62,10 +67,22 @@ export default {
     TicketCard
   },
   props: {
+    /**
+     * Объект сотрудника
+     * @type {Object}
+     * @property {number} id - ID сотрудника
+     * @property {string} name - Имя сотрудника
+     * @property {string} position - Должность
+     * @property {Array} tickets - Массив тикетов сотрудника
+     */
     employee: {
       type: Object,
       required: true
     },
+    /**
+     * ID этапа
+     * @type {string}
+     */
     stageId: {
       type: String,
       required: true
@@ -73,81 +90,28 @@ export default {
   },
   emits: ['ticket-clicked', 'ticket-dropped'],
   setup(props, { emit }) {
-    const isDropZoneActive = ref(false);
-
     /**
-     * Обработка наведения при перетаскивании
-     * 
-     * @param {Event} event - Событие dragover
-     */
-    const handleDragOver = (event) => {
-      event.preventDefault();
-      event.dataTransfer.dropEffect = 'move';
-      isDropZoneActive.value = true;
-    };
-
-    /**
-     * Обработка ухода курсора из зоны сброса
-     * 
-     * @param {Event} event - Событие dragleave
-     */
-    const handleDragLeave = (event) => {
-      // Проверяем, что мы действительно покинули зону
-      const rect = event.currentTarget.getBoundingClientRect();
-      const x = event.clientX;
-      const y = event.clientY;
-      
-      if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
-        isDropZoneActive.value = false;
-      }
-    };
-
-    /**
-     * Обработка сброса тикета
-     * 
-     * @param {Event} event - Событие drop
-     */
-    const handleDrop = async (event) => {
-      event.preventDefault();
-      isDropZoneActive.value = false;
-
-      const ticketData = event.dataTransfer.getData('application/json');
-      if (ticketData) {
-        try {
-          const ticket = JSON.parse(ticketData);
-          
-          // Валидация: можно ли переместить тикет сюда
-          if (canDropTicket(ticket, props.employee.id, props.stageId)) {
-            emit('ticket-dropped', ticket, props.employee.id);
-          } else {
-            // Показ уведомления об ошибке
-            if (typeof BX !== 'undefined' && BX.UI && BX.UI.Notification) {
-              BX.UI.Notification.Center.notify({
-                content: 'Нельзя переместить тикет сюда',
-                autoHideDelay: 3000
-              });
-            }
-          }
-        } catch (err) {
-          console.error('Error parsing ticket data:', err);
-        }
-      }
-    };
-
-    /**
-     * Проверка возможности сброса тикета
+     * Callback при сбросе тикета
      * 
      * @param {Object} ticket - Тикет
      * @param {number} employeeId - ID сотрудника
      * @param {string} stageId - ID этапа
-     * @returns {boolean} Можно ли переместить тикет
      */
-    const canDropTicket = (ticket, employeeId, stageId) => {
-      // Логика валидации (например, нельзя переместить тикет на того же сотрудника)
-      if (ticket.assigneeId === employeeId && ticket.stageId === stageId) {
-        return false;
-      }
-      return true;
+    const onDrop = async (ticket, employeeId, stageId) => {
+      // employeeId и stageId уже переданы из handleDrop
+      emit('ticket-dropped', ticket, employeeId);
+    };
+
+    // Используем композабл для Drag & Drop
+    const dragAndDrop = useDragAndDrop(onDrop);
+    
+    /**
+     * Обработчик сброса с передачей ID сотрудника и этапа
+     * 
+     * @param {DragEvent} event - Событие drop
+     */
+    const handleDropWithContext = (event) => {
+      dragAndDrop.handleDrop(event, props.employee.id, props.stageId);
     };
 
     /**
@@ -168,10 +132,13 @@ export default {
     };
 
     return {
-      isDropZoneActive,
-      handleDragOver,
-      handleDragLeave,
-      handleDrop,
+      // Состояние и методы из композабла
+      isDropZoneActive: dragAndDrop.isDropZoneActive,
+      handleDragOver: dragAndDrop.handleDragOver,
+      handleDragLeave: dragAndDrop.handleDragLeave,
+      handleDrop: handleDropWithContext,
+      
+      // Локальные методы
       handleTicketDragStart,
       handleAddTicket
     };

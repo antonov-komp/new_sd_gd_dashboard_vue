@@ -15,6 +15,7 @@
  */
 
 import { ApiClient } from './api-client.js';
+import { CacheManager } from '../cache/cache-manager.js';
 
 /**
  * ID смарт-процесса сектора 1С
@@ -54,11 +55,23 @@ export class TicketRepository {
    * 
    * Bitrix24 возвращает максимум 50 элементов за запрос
    * Используем пагинацию для получения всех тикетов
+   * Использует кеширование для оптимизации
    * 
    * @param {string} stageId - ID стадии
+   * @param {boolean} useCache - Использовать кеш (по умолчанию true)
    * @returns {Promise<Array>} Массив тикетов стадии
    */
-  static async getTicketsByStage(stageId) {
+  static async getTicketsByStage(stageId, useCache = true) {
+    // Проверяем кеш
+    if (useCache) {
+      const cacheKey = CacheManager.getTicketsCacheKey(stageId);
+      const cached = CacheManager.get(cacheKey);
+      if (cached !== null) {
+        console.log(`Cache hit for stage ${stageId}`);
+        return cached;
+      }
+    }
+
     const allTickets = [];
     let start = 0;
     const limit = 50; // Максимум элементов за запрос
@@ -102,6 +115,12 @@ export class TicketRepository {
       }
     }
 
+    // Сохраняем в кеш
+    if (useCache) {
+      const cacheKey = CacheManager.getTicketsCacheKey(stageId);
+      CacheManager.set(cacheKey, allTickets, CacheManager.TICKETS_TTL);
+    }
+
     return allTickets;
   }
 
@@ -129,6 +148,8 @@ export class TicketRepository {
    * Метод: crm.item.update
    * Документация: https://context7.com/bitrix24/rest/crm.item.update
    * 
+   * Инвалидирует кеш тикетов после обновления
+   * 
    * @param {number} ticketId - ID тикета
    * @param {object} fields - Поля для обновления
    * @returns {Promise<boolean>} Успешность операции
@@ -140,7 +161,14 @@ export class TicketRepository {
       fields: fields
     });
 
-    return result.result === true;
+    const success = result.result === true;
+    
+    // Инвалидируем кеш тикетов после обновления
+    if (success) {
+      CacheManager.invalidateTicketsCache();
+    }
+
+    return success;
   }
 
   /**
@@ -148,6 +176,8 @@ export class TicketRepository {
    * 
    * Метод: crm.item.add
    * Документация: https://context7.com/bitrix24/rest/crm.item.add
+   * 
+   * Инвалидирует кеш тикетов после создания
    * 
    * @param {object} fields - Поля тикета
    * @returns {Promise<number>} ID созданного тикета
@@ -158,7 +188,14 @@ export class TicketRepository {
       fields: fields
     });
 
-    return result.result ? parseInt(result.result) : 0;
+    const ticketId = result.result ? parseInt(result.result) : 0;
+    
+    // Инвалидируем кеш тикетов после создания
+    if (ticketId > 0) {
+      CacheManager.invalidateTicketsCache();
+    }
+
+    return ticketId;
   }
 
   /**

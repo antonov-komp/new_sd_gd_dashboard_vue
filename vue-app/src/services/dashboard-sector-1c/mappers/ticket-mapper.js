@@ -5,6 +5,7 @@
  */
 
 import { mapStageId } from './stage-mapper.js';
+import { PRIORITY_MAPPING, PRIORITY_TO_BITRIX } from '../utils/constants.js';
 
 /**
  * Маппинг тикета из Bitrix24 в внутренний формат
@@ -43,12 +44,7 @@ export function mapTicket(bitrixTicket) {
  * @returns {string} Приоритет (high, medium, low)
  */
 export function mapPriority(bitrixPriority) {
-  const mapping = {
-    '3': 'high',
-    '2': 'medium',
-    '1': 'low'
-  };
-  return mapping[bitrixPriority] || 'medium';
+  return PRIORITY_MAPPING[bitrixPriority] || 'medium';
 }
 
 /**
@@ -58,12 +54,7 @@ export function mapPriority(bitrixPriority) {
  * @returns {string} Приоритет в Bitrix24
  */
 export function mapPriorityToBitrix(priority) {
-  const mapping = {
-    'high': '3',
-    'medium': '2',
-    'low': '1'
-  };
-  return mapping[priority] || '2';
+  return PRIORITY_TO_BITRIX[priority] || '2';
 }
 
 /**
