@@ -31,3 +31,4 @@ app.config.errorHandler = (err, instance, info) => {
 
 app.mount('#app');
 
+

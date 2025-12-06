@@ -52,3 +52,4 @@ vue-app/
 - [README.md](./README.md) - общая информация
 - [INSTALL.md](./INSTALL.md) - подробная инструкция по установке
 
+

@@ -57,3 +57,4 @@ npm run build
 
 PHP файлы (`install.php`, `index.php`) автоматически подключат собранные файлы или будут использовать Vite dev server в режиме разработки.
 
+
