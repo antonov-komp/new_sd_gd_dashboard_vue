@@ -86,9 +86,6 @@
       
       <div v-if="totalTicketsCount === 0" class="empty-state">
         <p>Нет тикетов</p>
-        <button class="add-ticket-btn" @click="handleAddTicket">
-          + Добавить тикет
-        </button>
       </div>
     </div>
   </div>
@@ -233,14 +230,6 @@ export default {
       // Обработка начала перетаскивания (если нужно)
     };
 
-    /**
-     * Обработка добавления тикета
-     */
-    const handleAddTicket = () => {
-      // Обработка добавления тикета (можно открыть модальное окно)
-      logger.debug('Add ticket for employee', props.employee.id);
-    };
-
     return {
       // Состояние и методы из композабла
       isDropZoneActive: dragAndDrop.isDropZoneActive,
@@ -255,8 +244,7 @@ export default {
       totalTicketsCount,
       
       // Локальные методы
-      handleTicketDragStart,
-      handleAddTicket
+      handleTicketDragStart
     };
   }
 };
@@ -325,21 +313,6 @@ export default {
   text-align: center;
   padding: 20px;
   color: #999;
-}
-
-.add-ticket-btn {
-  margin-top: 10px;
-  padding: 8px 16px;
-  background: #007bff;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-}
-
-.add-ticket-btn:hover {
-  background: #0056b3;
 }
 
 /* Анимации для transition-group */
