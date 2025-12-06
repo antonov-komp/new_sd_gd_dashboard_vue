@@ -32,3 +32,4 @@ export function mapEmployees(bitrixUsers) {
   return bitrixUsers.map(user => mapEmployee(user));
 }
 
+

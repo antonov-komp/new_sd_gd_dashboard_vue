@@ -575,3 +575,4 @@ const getEmployeeTickets = (employeeId, stageId) => {
 
 - **2025-12-06 11:18 (UTC+3, Брест):** Создана подзадача TASK-005-02
 
+

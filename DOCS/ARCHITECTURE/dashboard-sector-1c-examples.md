@@ -411,3 +411,4 @@ export function useCustomDragAndDrop(onDrop) {
 **Дата создания:** 2025-12-06 18:00 (UTC+3, Брест)  
 **Автор:** Рефактор-менеджер
 
+

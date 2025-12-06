@@ -5,15 +5,15 @@
       <h1>Дашборд - Сектор 1С</h1>
     </div>
 
-    <!-- Состояние загрузки -->
-    <div v-if="isLoading" class="loading-state">
-      <p>Загрузка данных...</p>
-    </div>
-
-    <!-- Состояние ошибки -->
-    <div v-else-if="error" class="error-state">
-      <p>Ошибка: {{ error }}</p>
-    </div>
+    <!-- Прелоадер -->
+    <LoadingPreloader
+      v-if="isLoading || error || currentStep"
+      :current-step="currentStep"
+      :progress="progress"
+      :step-details="stepDetails"
+      :error="error || null"
+      @retry="handleRetry"
+    />
 
     <!-- Контент дашборда -->
     <div v-else class="dashboard-content">
@@ -34,6 +34,7 @@
 <script>
 import { onMounted } from 'vue';
 import DashboardStage from './DashboardStage.vue';
+import LoadingPreloader from './LoadingPreloader.vue';
 import { useDashboardState } from '@/composables/useDashboardState.js';
 import { useDashboardActions } from '@/composables/useDashboardActions.js';
 
@@ -67,7 +68,8 @@ import { useDashboardActions } from '@/composables/useDashboardActions.js';
 export default {
   name: 'DashboardSector1C',
   components: {
-    DashboardStage
+    DashboardStage,
+    LoadingPreloader
   },
   setup() {
     // Используем композаблы для состояния и действий
@@ -79,6 +81,16 @@ export default {
       actions.loadSectorData();
     });
 
+    /**
+     * Обработка повтора загрузки при ошибке
+     */
+    const handleRetry = () => {
+      actions.loadSectorData(false); // Не используем кеш при повторе
+    };
+
+    // Извлекаем loadingProgress для удобства доступа
+    const loadingProgress = actions.loadingProgress;
+
     return {
       // Состояние из композабла
       isLoading: state.isLoading,
@@ -88,6 +100,12 @@ export default {
       employees: state.employees,
       draggedTicket: state.draggedTicket,
       
+      // Прогресс загрузки - передаём refs напрямую для правильной реактивности
+      currentStep: loadingProgress.currentStep,
+      progress: loadingProgress.progress,
+      stepDetails: loadingProgress.stepDetails,
+      loadingProgress, // Оставляем для доступа к методам, если нужно
+      
       // Действия из композабла
       loadSectorData: actions.loadSectorData,
       handleTicketDragStart: actions.handleTicketDragStart,
@@ -95,7 +113,8 @@ export default {
       assignTicketToEmployee: actions.assignTicketToEmployee,
       moveTicketToStage: actions.moveTicketToStage,
       createTicket: actions.createTicket,
-      getEmployeeTickets: state.getEmployeeTickets
+      getEmployeeTickets: state.getEmployeeTickets,
+      handleRetry
     };
   }
 };
@@ -145,18 +164,7 @@ export default {
   gap: 20px;
 }
 
-.loading-state,
-.error-state {
-  padding: 40px;
-  text-align: center;
-  background: white;
-  border-radius: 4px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.error-state {
-  color: #dc3545;
-}
+/* Стили для загрузки и ошибок теперь в компоненте LoadingPreloader */
 
 /* Адаптивность */
 @media (max-width: 1024px) {

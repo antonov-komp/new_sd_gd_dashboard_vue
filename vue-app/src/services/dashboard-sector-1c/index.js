@@ -49,39 +49,164 @@ export class DashboardSector1CService {
    *    - Сохраняем результат в кеш
    * 
    * @param {boolean} useCache - Использовать кеш (по умолчанию true)
+   * @param {Function|null} onProgress - Колбэк для отслеживания прогресса (опционально)
    * @returns {Promise<object>} Данные сектора (stages, employees, zeroPointTickets)
    */
-  static async getSectorData(useCache = true) {
+  static async getSectorData(useCache = true, onProgress = null) {
+    // Начало загрузки - устанавливаем начальный этап
+    if (onProgress) {
+      onProgress({ step: 'cache_check', progress: 0, details: { description: 'Инициализация загрузки...' } });
+    }
+    
     // Проверяем кеш
     if (useCache) {
       const cacheKey = CacheManager.getSectorDataCacheKey();
       const cached = CacheManager.get(cacheKey);
       if (cached !== null) {
         console.log('Cache hit for sector data');
+        if (onProgress) {
+          onProgress({ step: 'cache_hit', progress: 100, details: { description: 'Данные загружены из кеша' } });
+        }
         return cached;
       }
     }
 
     try {
       // Шаг 1: Получаем все тикеты с пагинацией (с кешированием)
+      if (onProgress) {
+        onProgress({ 
+          step: 'loading_tickets', 
+          progress: 10,
+          details: { description: 'Начало загрузки тикетов из Bitrix24...' }
+        });
+      }
+      
       const targetStages = getTargetStages();
-      const allTickets = await TicketRepository.getAllTickets(targetStages);
+      const allTickets = await TicketRepository.getAllTickets(targetStages, (stageProgress) => {
+        if (onProgress) {
+          console.log('TicketRepository progress callback:', stageProgress);
+          
+          // НЕ передаём ошибки через колбэк прогресса
+          // Ошибки будут показаны только в catch блоке, если загрузка действительно завершилась с ошибкой
+          
+          // Прогресс загрузки тикетов: 10-50%
+          const baseProgress = 10;
+          const ticketsProgressRange = 40; // 10-50%
+          const stageProgressPercent = stageProgress.percent || 0;
+          const totalProgress = baseProgress + (stageProgressPercent * ticketsProgressRange / 100);
+          
+          // Если step уже передан из TicketRepository, используем его, иначе устанавливаем 'loading_tickets'
+          const step = stageProgress.step || 'loading_tickets';
+          
+          const progressData = {
+            step: step,
+            progress: Math.min(50, totalProgress),
+            details: {
+              stage: stageProgress.stageName || stageProgress.stage,
+              stageIndex: stageProgress.stageIndex,
+              totalStages: stageProgress.totalStages,
+              count: stageProgress.count,
+              total: stageProgress.total,
+              description: stageProgress.details?.description || `Загрузка тикетов стадии "${stageProgress.stageName || stageProgress.stage}"${stageProgress.stageIndex && stageProgress.totalStages ? ` (${stageProgress.stageIndex}/${stageProgress.totalStages})` : ''}${stageProgress.count !== undefined ? `. Загружено: ${stageProgress.count}` : ''}...`,
+              warning: stageProgress.warning // Передаём предупреждение, если есть (но не ошибку)
+            }
+          };
+          
+          console.log('Calling onProgress from TicketRepository:', progressData);
+          onProgress(progressData);
+        }
+      });
       console.log('Total tickets loaded:', allTickets.length);
 
       // Шаг 2: Фильтруем тикеты по тегу сектора 1С
+      if (onProgress) {
+        onProgress({ 
+          step: 'filtering', 
+          progress: 50,
+          details: {
+            totalTickets: allTickets.length,
+            description: `Фильтрация ${allTickets.length} тикетов по сектору 1С...`
+          }
+        });
+      }
       const filteredTickets = filterBySector(allTickets);
       console.log(`Filtered ${filteredTickets.length} tickets from ${allTickets.length} (sector tag: 1C)`);
+      
+      if (onProgress) {
+        onProgress({ 
+          step: 'filtering', 
+          progress: 50,
+          details: {
+            totalTickets: allTickets.length,
+            filteredTickets: filteredTickets.length,
+            description: `Отфильтровано ${filteredTickets.length} тикетов из ${allTickets.length}`
+          }
+        });
+      }
 
       // Шаг 3: Извлекаем уникальных сотрудников из тикетов
+      if (onProgress) {
+        onProgress({ 
+          step: 'extracting_employees', 
+          progress: 60,
+          details: {
+            filteredTickets: filteredTickets.length,
+            description: `Анализ ${filteredTickets.length} тикетов для определения сотрудников...`
+          }
+        });
+      }
       const uniqueEmployeeIds = extractUniqueEmployeeIds(filteredTickets);
       console.log('Unique employee IDs:', uniqueEmployeeIds);
+      
+      if (onProgress) {
+        onProgress({ 
+          step: 'extracting_employees', 
+          progress: 60,
+          details: {
+            employeeCount: uniqueEmployeeIds.length,
+            description: `Найдено ${uniqueEmployeeIds.length} уникальных сотрудников`
+          }
+        });
+      }
 
       // Шаг 4: Получаем данные только этих сотрудников (с кешированием)
+      if (onProgress) {
+        onProgress({ 
+          step: 'loading_employees', 
+          progress: 65,
+          details: {
+            employeeCount: uniqueEmployeeIds.length,
+            description: `Загрузка данных ${uniqueEmployeeIds.length} сотрудников...`
+          }
+        });
+      }
       const bitrixUsers = await EmployeeRepository.getEmployeesByIds(uniqueEmployeeIds);
       const employees = mapEmployees(bitrixUsers);
       console.log('Loaded employees:', employees.length);
+      
+      if (onProgress) {
+        onProgress({ 
+          step: 'loading_employees', 
+          progress: 90,
+          details: { 
+            employeeCount: employees.length,
+            description: `Загружено данных ${employees.length} сотрудников`
+          }
+        });
+      }
 
       // Шаг 5: Группируем тикеты по этапам и сотрудникам
+      if (onProgress) {
+        onProgress({ 
+          step: 'grouping', 
+          progress: 90,
+          details: {
+            filteredTickets: filteredTickets.length,
+            employees: employees.length,
+            description: `Группировка ${filteredTickets.length} тикетов по этапам и ${employees.length} сотрудникам...`
+          }
+        });
+      }
       const stages = groupTicketsByStages(filteredTickets, employees);
 
       const result = {
@@ -90,15 +215,35 @@ export class DashboardSector1CService {
         zeroPointTickets: getZeroPointTickets(filteredTickets)
       };
 
-      // Сохраняем в кеш
+      // Шаг 6: Сохраняем в кеш
+      if (onProgress) {
+        onProgress({ 
+          step: 'caching', 
+          progress: 95,
+          details: {
+            description: 'Сохранение результатов в кеш для ускорения следующих загрузок...'
+          }
+        });
+      }
       if (useCache) {
         const cacheKey = CacheManager.getSectorDataCacheKey();
         CacheManager.set(cacheKey, result, CacheManager.TICKETS_TTL);
       }
 
+      if (onProgress) {
+        onProgress({ step: 'complete', progress: 100 });
+      }
+
       return result;
     } catch (error) {
       console.error('Error getting sector data:', error);
+      if (onProgress) {
+        onProgress({
+          step: 'error',
+          progress: 0,
+          error: error.message
+        });
+      }
       throw error;
     }
   }

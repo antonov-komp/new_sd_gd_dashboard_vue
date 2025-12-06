@@ -12,8 +12,8 @@ import { ref } from 'vue';
  * @returns {object} Объект с реактивным состоянием дашборда
  */
 export function useDashboardState() {
-  // Состояние загрузки
-  const isLoading = ref(true);
+  // Состояние загрузки (начинаем с false, будет установлено в true при загрузке)
+  const isLoading = ref(false);
   const error = ref(null);
 
   // Данные сектора
@@ -186,4 +186,5 @@ export function useDashboardState() {
     getEmployeeTickets
   };
 }
+
 

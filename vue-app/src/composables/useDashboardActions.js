@@ -6,6 +6,7 @@
 
 import { DashboardSector1CService } from '@/services/dashboard-sector-1c/index.js';
 import { useNotifications } from './useNotifications.js';
+import { useLoadingProgress } from './useLoadingProgress.js';
 import { handleErrorWithNotification } from '@/services/dashboard-sector-1c/utils/error-handler.js';
 import { canMoveTicket, validateTicketData } from '@/services/dashboard-sector-1c/utils/validation.js';
 
@@ -17,6 +18,7 @@ import { canMoveTicket, validateTicketData } from '@/services/dashboard-sector-1
  */
 export function useDashboardActions(state) {
   const notifications = useNotifications();
+  const loadingProgress = useLoadingProgress();
 
   /**
    * Загрузка данных сектора из API
@@ -26,15 +28,64 @@ export function useDashboardActions(state) {
   const loadSectorData = async (useCache = true) => {
     state.isLoading.value = true;
     state.error.value = null;
+    loadingProgress.reset();
+    
+    // Устанавливаем начальный этап сразу
+    loadingProgress.updateStep('cache_check', { description: 'Инициализация загрузки данных...' });
+    loadingProgress.updateProgress(0);
 
     try {
-      const data = await DashboardSector1CService.getSectorData(useCache);
+      const data = await DashboardSector1CService.getSectorData(
+        useCache,
+        (progressInfo) => {
+          console.log('Progress callback received:', progressInfo);
+          
+          // Обновляем этап (step) - это обязательно должно быть
+          if (progressInfo.step) {
+            console.log('Updating step to:', progressInfo.step);
+            loadingProgress.updateStep(progressInfo.step, progressInfo.details || {});
+          } else {
+            console.warn('Progress info without step:', progressInfo);
+          }
+          
+          // Обновляем прогресс
+          if (progressInfo.progress !== undefined && progressInfo.progress !== null) {
+            console.log('Updating progress to:', progressInfo.progress);
+            loadingProgress.updateProgress(progressInfo.progress);
+            // Если прогресс обновляется, значит загрузка продолжается - очищаем временную ошибку
+            loadingProgress.clearTemporaryError();
+          } else if (progressInfo.percent !== undefined && progressInfo.percent !== null) {
+            // Если передан percent вместо progress, используем его
+            console.log('Updating progress from percent to:', progressInfo.percent);
+            loadingProgress.updateProgress(progressInfo.percent);
+            loadingProgress.clearTemporaryError();
+          }
+          
+          // НЕ показываем ошибки из колбэка прогресса во время загрузки
+          // Ошибки будут показаны только в catch блоке, если загрузка действительно завершилась с ошибкой
+          // Это предотвращает показ временных ошибок, которые могут исчезнуть при успешной загрузке
+        }
+      );
+      
       state.updateState(data);
     } catch (err) {
       state.error.value = err.message;
+      loadingProgress.setError(err.message);
       handleErrorWithNotification(err, 'loading sector data', notifications.error);
     } finally {
-      state.isLoading.value = false;
+      // Небольшая задержка перед скрытием прелоадера (если загрузка успешна)
+      if (!state.error.value) {
+        // Показываем "Готово!" на 800мс перед скрытием
+        setTimeout(() => {
+          state.isLoading.value = false;
+          // Ещё небольшая задержка перед сбросом прогресса
+          setTimeout(() => {
+            loadingProgress.reset();
+          }, 200);
+        }, 800);
+      } else {
+        state.isLoading.value = false;
+      }
     }
   };
 
@@ -155,7 +206,9 @@ export function useDashboardActions(state) {
     assignTicketToEmployee,
     createTicket,
     handleTicketDragStart,
-    handleTicketDrop
+    handleTicketDrop,
+    loadingProgress
   };
 }
+
 

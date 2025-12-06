@@ -35,19 +35,110 @@ export class TicketRepository {
    * - DT140_12:CLIENT - Исполнение
    * 
    * @param {Array<string>} stageIds - Массив ID стадий для загрузки
+   * @param {Function|null} onProgress - Колбэк для отслеживания прогресса (опционально)
    * @returns {Promise<Array>} Массив всех тикетов
    */
-  static async getAllTickets(stageIds) {
+  static async getAllTickets(stageIds, onProgress = null) {
     const allTickets = [];
+    const totalStages = stageIds.length;
     
-    for (const stageId of stageIds) {
-      console.log(`Loading tickets for stage: ${stageId}`);
-      const stageTickets = await this.getTicketsByStage(stageId);
-      allTickets.push(...stageTickets);
-      console.log(`Loaded ${stageTickets.length} tickets for stage ${stageId}`);
+    try {
+      for (let i = 0; i < stageIds.length; i++) {
+        const stageId = stageIds[i];
+        const stageName = this.getStageName(stageId);
+        
+        console.log(`Loading tickets for stage: ${stageId}`);
+        
+        if (onProgress) {
+          onProgress({
+            step: 'loading_tickets', // Обязательно передаём step
+            stage: stageId,
+            stageName: stageName,
+            stageIndex: i + 1,
+            totalStages: totalStages,
+            percent: (i / totalStages) * 100,
+            details: {
+              stage: stageId,
+              stageName: stageName,
+              stageIndex: i + 1,
+              totalStages: totalStages,
+              description: `Загрузка тикетов стадии "${stageName}" (${i + 1}/${totalStages})...`
+            }
+          });
+        }
+        
+        try {
+          const stageTickets = await this.getTicketsByStage(stageId, true, onProgress ? (batchProgress) => {
+            // Пересчитываем прогресс с учётом текущей стадии
+            const stageProgress = (i / totalStages) + (batchProgress.percent / 100 / totalStages);
+            onProgress({
+              step: 'loading_tickets', // Обязательно передаём step
+              stage: stageId,
+              stageName: stageName,
+              stageIndex: i + 1,
+              totalStages: totalStages,
+              percent: stageProgress * 100,
+              count: batchProgress.count,
+              total: batchProgress.total,
+              details: {
+                stage: stageId,
+                stageName: stageName,
+                stageIndex: i + 1,
+                totalStages: totalStages,
+                count: batchProgress.count,
+                total: batchProgress.total,
+                description: `Загрузка тикетов стадии "${stageName}" (${i + 1}/${totalStages}). Загружено: ${batchProgress.count}${batchProgress.total ? ` из ${batchProgress.total}` : ''}...`
+              }
+            });
+          } : null);
+          
+          allTickets.push(...stageTickets);
+          console.log(`Loaded ${stageTickets.length} tickets for stage ${stageId}`);
+        } catch (stageError) {
+          console.error(`Error loading tickets for stage ${stageId}:`, stageError);
+          
+          // Формируем понятное сообщение об ошибке
+          let errorMessage = `Ошибка загрузки стадии "${stageName}"`;
+          if (stageError.message) {
+            if (stageError.message.includes('HTTP error') || stageError.message.includes('network')) {
+              errorMessage = `Ошибка соединения при загрузке стадии "${stageName}". Проверьте подключение к интернету.`;
+            } else if (stageError.message.includes('timeout')) {
+              errorMessage = `Превышено время ожидания при загрузке стадии "${stageName}". Попробуйте позже.`;
+            } else if (stageError.message.includes('403') || stageError.message.includes('401')) {
+              errorMessage = `Ошибка доступа при загрузке стадии "${stageName}". Проверьте права доступа.`;
+            } else {
+              errorMessage = `Ошибка загрузки стадии "${stageName}": ${stageError.message}`;
+            }
+          }
+          
+          // НЕ передаём ошибку через колбэк прогресса - она будет показана только в catch блоке
+          // Это предотвращает показ временных ошибок во время загрузки
+          
+          // Пробрасываем ошибку дальше, чтобы прервать весь процесс
+          throw new Error(errorMessage);
+        }
+      }
+    } catch (error) {
+      console.error('Error in getAllTickets:', error);
+      throw error;
     }
 
     return allTickets;
+  }
+
+  /**
+   * Получение читаемого названия стадии
+   * 
+   * @param {string} stageId - ID стадии
+   * @returns {string} Название стадии
+   */
+  static getStageName(stageId) {
+    const stageNames = {
+      'DT140_12:UC_0VHWE2': 'Сформировано обращение',
+      'DT140_12:PREPARATION': 'Рассмотрение ТЗ',
+      'DT140_12:CLIENT': 'Исполнение'
+    };
+    return stageNames[stageId] || stageId;
   }
 
   /**
@@ -59,15 +150,19 @@ export class TicketRepository {
    * 
    * @param {string} stageId - ID стадии
    * @param {boolean} useCache - Использовать кеш (по умолчанию true)
+   * @param {Function|null} onProgress - Колбэк для отслеживания прогресса (опционально)
    * @returns {Promise<Array>} Массив тикетов стадии
    */
-  static async getTicketsByStage(stageId, useCache = true) {
+  static async getTicketsByStage(stageId, useCache = true, onProgress = null) {
     // Проверяем кеш
     if (useCache) {
       const cacheKey = CacheManager.getTicketsCacheKey(stageId);
       const cached = CacheManager.get(cacheKey);
       if (cached !== null) {
         console.log(`Cache hit for stage ${stageId}`);
+        if (onProgress) {
+          onProgress({ percent: 100, count: cached.length, total: cached.length });
+        }
         return cached;
       }
     }
@@ -76,6 +171,8 @@ export class TicketRepository {
     let start = 0;
     const limit = 50; // Максимум элементов за запрос
     let hasMore = true;
+    let totalEstimated = 0; // Оценочное общее количество (будет обновляться)
+    let firstBatchError = null; // Сохраняем ошибку первого батча
 
     while (hasMore) {
       try {
@@ -106,13 +203,57 @@ export class TicketRepository {
           allTickets.push(...batchTickets);
           start += batchTickets.length;
           hasMore = batchTickets.length === limit;
+          
+          // Обновляем оценку общего количества
+          if (hasMore) {
+            totalEstimated = start + limit; // Предполагаем, что будет ещё хотя бы один батч
+          } else {
+            totalEstimated = allTickets.length; // Это финальное количество
+          }
+          
+          // Вызываем колбэк прогресса
+          if (onProgress) {
+            const percent = totalEstimated > 0 ? Math.min(100, (allTickets.length / totalEstimated) * 100) : 0;
+            onProgress({
+              percent: percent,
+              count: allTickets.length,
+              total: totalEstimated
+            });
+          }
+          
+          // Сбрасываем ошибку первого батча, если загрузка успешна
+          firstBatchError = null;
         } else {
           hasMore = false;
         }
       } catch (error) {
         console.error(`Error loading tickets batch for stage ${stageId} (start: ${start}):`, error);
-        hasMore = false; // Прерываем цикл при ошибке
+        
+        // Если это первый батч и произошла ошибка - это критично
+        if (start === 0) {
+          firstBatchError = error;
+          // Пробрасываем ошибку, так как не удалось загрузить даже первый батч
+          throw new Error(`Не удалось загрузить тикеты для стадии ${stageId}: ${error.message || error}`);
+        }
+        
+        // Если это не первый батч, прерываем цикл, но возвращаем то, что успело загрузиться
+        hasMore = false;
+        
+        // Уведомляем о частичной загрузке
+        if (onProgress && allTickets.length > 0) {
+          onProgress({
+            percent: 100,
+            count: allTickets.length,
+            total: allTickets.length,
+            warning: `Загружено частично: ${allTickets.length} тикетов. Ошибка при загрузке остальных.`
+          });
+        }
       }
+    }
+    
+    // Если была ошибка первого батча, пробрасываем её
+    if (firstBatchError && allTickets.length === 0) {
+      throw firstBatchError;
     }
 
     // Сохраняем в кеш
