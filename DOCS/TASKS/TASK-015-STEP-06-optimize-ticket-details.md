@@ -22,15 +22,71 @@
 **Текущее состояние (TASK-013):**
 
 1. **TicketDetailsService:**
-   - Метод `getTicketDetails()` для получения полных данных
-   - Метод `processAdditionalFields()` для обработки дополнительных полей
-   - Метод `extractUserFields()` для извлечения пользовательских полей
+   - Файл: `vue-app/src/services/dashboard-sector-1c/services/ticket-details-service.js` (137 строк)
+   - Метод `getTicketDetails()` (строки 38-79): получение полных данных тикета
+   - Метод `processAdditionalFields()` (строки 90-109): обработка дополнительных полей
+   - Метод `extractUserFields()` (строки 119-134): извлечение пользовательских полей (UF_*)
+   - Использует `TicketRepository.getTicket()` для получения данных
+   - Использует `Logger` для логирования ошибок
+
+2. **Текущая реализация `extractUserFields()`:**
+   ```javascript
+   // Строки 119-134
+   static extractUserFields(ticketData) {
+     const userFields = {};
+     for (const key in ticketData) {
+       if (ticketData.hasOwnProperty(key)) {
+         const lowerKey = key.toLowerCase();
+         if (lowerKey.startsWith('uf_')) {
+           userFields[key] = ticketData[key];
+         }
+       }
+     }
+     return userFields;
+   }
+   ```
+   - Использует `for...in` цикл (можно оптимизировать через `Object.keys()`)
+   - Проверяет `hasOwnProperty` (можно упростить)
+   - Приводит к нижнему регистру для проверки (можно оптимизировать)
+
+3. **Текущая реализация `processAdditionalFields()`:**
+   ```javascript
+   // Строки 90-109
+   static processAdditionalFields(ticketData) {
+     const userFields = this.extractUserFields(ticketData);
+     const additionalFields = {
+       typeProduct: userFields.UF_CRM_7_TYPE_PRODUCT || 
+                    userFields.uf_crm_7_type_product || 
+                    userFields.ufCrm7TypeProduct || 
+                    null,
+       all: userFields
+     };
+     return additionalFields;
+   }
+   ```
+   - Нет кеширования результатов
+   - Поддержка разных вариантов именования (верхний/нижний регистр, camelCase)
+
+4. **Использование:**
+   - Вызывается из `getTicketDetails()` (строка 53)
+   - Результат добавляется в `additionalFields` (строка 70)
+   - Используется для структурирования данных тикета
 
 **Выявленные проблемы:**
 1. Обработка полей может быть оптимизирована
+   - `extractUserFields()` использует `for...in` (медленнее, чем `Object.keys()`)
+   - Нет кеширования результатов обработки
+   - Повторные вызовы для одного тикета обрабатывают данные заново
 2. Нет типизации для структуры данных тикета
+   - Нет JSDoc типов для `TicketDetails`, `TicketAdditionalFields`
+   - Нет типизации параметров и возвращаемых значений
 3. Метод `extractUserFields()` можно улучшить
+   - Использовать `Object.keys()` вместо `for...in`
+   - Упростить проверку (убрать `hasOwnProperty`)
+   - Оптимизировать проверку префикса `UF_`
 4. Нет кеширования результатов
+   - Каждый вызов `processAdditionalFields()` обрабатывает данные заново
+   - Можно кешировать результаты по `ticketId`
 
 ---
 
@@ -243,22 +299,97 @@ export function normalizeFieldName(fieldName) {
 3. Добавить кеширование
 4. Улучшить обработку ошибок
 
-**Пример обновления:**
+**Текущий код (строки 38-79):**
 ```javascript
-import { processAdditionalFields } from '../utils/ticket-field-processor.js';
-
-/**
- * @type {import('../types/ticket-types.js').TicketDetails}
- */
 static async getTicketDetails(ticketId, options = {}) {
-  // ... существующий код ...
-  
-  // Использование оптимизированного процессора
-  const additionalFields = processAdditionalFields(ticketData, ticketId, true);
-  
-  // ... остальной код ...
+  const {
+    select = ['*'],
+    useOriginalUfNames = true
+  } = options;
+
+  try {
+    // Получаем базовые данные тикета через репозиторий
+    const ticketData = await TicketRepository.getTicket(ticketId);
+
+    if (!ticketData) {
+      throw new Error(`Тикет с ID ${ticketId} не найден`);
+    }
+
+    // Обрабатываем дополнительные поля
+    const additionalFields = this.processAdditionalFields(ticketData);
+
+    // Формируем структурированный ответ
+    return {
+      // Базовые поля
+      id: ticketData.id || ticketData.ID,
+      title: ticketData.title || ticketData.TITLE,
+      // ... остальные поля ...
+      additionalFields: additionalFields,
+      rawData: ticketData
+    };
+  } catch (error) {
+    Logger.error('Error getting ticket details', 'TicketDetailsService', error);
+    throw error;
+  }
 }
 ```
+
+**Новый код (после рефакторинга):**
+```javascript
+import { processAdditionalFields } from '../utils/ticket-field-processor.js';
+import { Logger } from '../utils/logger.js';
+import { TicketRepository } from '../data/ticket-repository.js';
+
+/**
+ * Получение полных данных по тикету
+ * 
+ * @param {number} ticketId - ID тикета
+ * @param {object} options - Опции получения данных
+ * @param {Array<string>} options.select - Список полей для получения
+ * @param {boolean} options.useCache - Использовать кеш для обработки полей (по умолчанию true)
+ * @returns {Promise<import('../types/ticket-types.js').TicketDetails>} Полные данные тикета
+ */
+static async getTicketDetails(ticketId, options = {}) {
+  const {
+    select = ['*'],
+    useOriginalUfNames = true,
+    useCache = true
+  } = options;
+
+  try {
+    // Получаем базовые данные тикета через репозиторий
+    const ticketData = await TicketRepository.getTicket(ticketId);
+
+    if (!ticketData) {
+      throw new Error(`Тикет с ID ${ticketId} не найден`);
+    }
+
+    // Использование оптимизированного процессора с кешированием
+    const additionalFields = processAdditionalFields(ticketData, ticketId, useCache);
+
+    // Формируем структурированный ответ
+    return {
+      // Базовые поля
+      id: ticketData.id || ticketData.ID,
+      title: ticketData.title || ticketData.TITLE,
+      // ... остальные поля ...
+      additionalFields: additionalFields,
+      rawData: ticketData
+    };
+  } catch (error) {
+    Logger.error('Error getting ticket details', 'TicketDetailsService', error);
+    throw error;
+  }
+}
+```
+
+**Изменения:**
+- Удалить: `this.processAdditionalFields(ticketData)` (строка 53)
+- Удалить: методы `processAdditionalFields()` и `extractUserFields()` (строки 90-134)
+- Добавить: `import { processAdditionalFields } from '../utils/ticket-field-processor.js';`
+- Заменить: `this.processAdditionalFields(ticketData)` на `processAdditionalFields(ticketData, ticketId, useCache)`
+- Добавить: опцию `useCache` в параметры `options`
+- Добавить: JSDoc типы для возвращаемого значения
 
 **Критерии:**
 - [ ] Используется оптимизированный процессор полей
@@ -274,21 +405,49 @@ static async getTicketDetails(ticketId, options = {}) {
 ### Принципы оптимизации:
 
 1. **Производительность**
-   - Кеширование результатов обработки
-   - Оптимизация извлечения полей
-   - Минимизация операций
+   - Кеширование результатов обработки (по `ticketId`)
+   - Оптимизация извлечения полей (`Object.keys()` вместо `for...in`)
+   - Минимизация операций (убрать лишние проверки)
 
 2. **Типизация**
-   - JSDoc типы для всех структур данных
+   - JSDoc типы для всех структур данных (`TicketDetails`, `TicketAdditionalFields`)
    - Типизация параметров и возвращаемых значений
+   - Документация структуры данных
 
 3. **Расширяемость**
-   - Легко добавлять новые поля
-   - Поддержка разных вариантов именования
+   - Легко добавлять новые поля в `processAdditionalFields()`
+   - Поддержка разных вариантов именования (верхний/нижний регистр, camelCase)
+   - Структура `all` для доступа ко всем пользовательским полям
 
 4. **Читаемость**
    - Понятная структура
    - Хорошая документация
+   - Комментарии для сложных мест
+
+### ⚠️ Важно: Сохранение контекста функционала
+
+**Критически важно сохранить следующую функциональность:**
+
+1. **Обработка полей:**
+   - Поддержка разных вариантов именования (`UF_CRM_7_TYPE_PRODUCT`, `uf_crm_7_type_product`, `ufCrm7TypeProduct`)
+   - Извлечение всех полей, начинающихся с `UF_`
+   - Структура `additionalFields` с полем `all` для всех пользовательских полей
+
+2. **Структура данных:**
+   - Базовые поля тикета должны остаться такими же
+   - Поле `additionalFields` должно содержать структурированные данные
+   - Поле `rawData` должно содержать исходные данные из Bitrix24
+
+3. **Обработка ошибок:**
+   - Логирование ошибок через `Logger.error()`
+   - Выброс исключений при отсутствии тикета
+   - Сохранение текущей логики обработки ошибок
+
+**Что НЕЛЬЗЯ изменять:**
+- ❌ Структуру возвращаемых данных (`getTicketDetails()`)
+- ❌ Поддержку разных вариантов именования полей
+- ❌ Логику обработки ошибок
+- ❌ Интеграцию с `TicketRepository`
 
 ---
 
@@ -310,9 +469,28 @@ static async getTicketDetails(ticketId, options = {}) {
 
 ### Функциональное тестирование:
 
-1. Проверить получение данных тикета
-2. Проверить обработку дополнительных полей
-3. Проверить работу кеша
+1. **Проверить получение данных тикета:**
+   - Вызвать `TicketDetailsService.getTicketDetails(ticketId)`
+   - Проверить, что возвращаются все базовые поля (id, title, stageId, etc.)
+   - Проверить, что `additionalFields` содержит структурированные данные
+   - Проверить, что `rawData` содержит исходные данные из Bitrix24
+
+2. **Проверить обработку дополнительных полей:**
+   - Проверить извлечение полей `UF_*` из данных тикета
+   - Проверить поддержку разных вариантов именования (`UF_CRM_7_TYPE_PRODUCT`, `uf_crm_7_type_product`, `ufCrm7TypeProduct`)
+   - Проверить, что поле `typeProduct` заполняется корректно
+   - Проверить, что поле `all` содержит все пользовательские поля
+
+3. **Проверить работу кеша:**
+   - Вызвать `getTicketDetails(ticketId)` дважды
+   - Проверить, что второй вызов использует кеш (быстрее)
+   - Вызвать `clearFieldCache()` и проверить, что кеш очищен
+   - Проверить, что следующий вызов обрабатывает данные заново
+
+4. **Проверить оптимизацию:**
+   - Проверить, что `extractUserFields()` использует `Object.keys()` вместо `for...in`
+   - Проверить производительность обработки полей (должна быть быстрее)
+   - Проверить, что кеширование ускоряет повторные вызовы
 
 ### Производительность:
 

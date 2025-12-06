@@ -22,17 +22,44 @@
 **Текущее состояние (TASK-008):**
 
 1. **Константы секторов:**
-   - Файл: `vue-app/src/services/dashboard-sector-1c/utils/sector-constants.js`
+   - Файл: `vue-app/src/services/dashboard-sector-1c/utils/sector-constants.js` (70 строк)
    - Содержит константы: `SECTOR_1C_ID`, `SECTOR_HARDWARE_ID`, `SECTOR_BITRIX24_ID`, `SECTOR_PDM_ID`, `KEEPER_USER_ID`
+   - Также содержит массивы: `ALL_SECTOR_IDS`, `OTHER_SECTOR_IDS`
    - Экспортирует константы напрямую
+   - Реэкспортируется через `constants.js` для удобства
 
 2. **Утилиты секторов:**
-   - Файл: `vue-app/src/services/dashboard-sector-1c/utils/sector-helper.js`
+   - Файл: `vue-app/src/services/dashboard-sector-1c/utils/sector-helper.js` (107 строк)
    - Функции: `getEmployeeSectorId()`, `isEmployeeFromSector1C()`, `isEmployeeFromOtherSector()`
+   - Использует константы из `sector-constants.js`
 
-3. **Использование:**
-   - Константы используются в `ticket-grouper.js`, `employee-mapper.js`, `DashboardStage.vue`, `EmployeeColumn.vue`
-   - Утилиты используются в `ticket-grouper.js`, `employee-mapper.js`
+3. **Использование в коде:**
+   - **`employee-mapper.js`:** Использует `getEmployeeSectorId()` для вычисления `sectorId` при маппинге сотрудника
+   - **`ticket-grouper.js`:** Использует `SECTOR_1C_ID` для проверки `emp.sectorId === SECTOR_1C_ID` (3 раза)
+   - **`DashboardStage.vue`:** Использует данные из группера для подсчёта тикетов (не использует константы напрямую)
+   - **`EmployeeColumn.vue`:** Использует `employee.isFromSector1C` для разделения тикетов (не использует константы напрямую)
+
+4. **Структура данных сотрудника (после маппинга):**
+```javascript
+{
+  id: 123,
+  name: 'Иван Иванов',
+  position: 'Разработчик',
+  email: 'ivan@example.com',
+  sectorId: 366, // Вычисляется через getEmployeeSectorId() на основе UF_DEPARTMENT
+  departmentId: [366], // Исходные данные отдела (для отладки)
+  tickets: [], // Все тикеты (для обратной совместимости)
+  ticketsInsideSector: [], // Тикеты внутри сектора (если сотрудник из сектора 1С)
+  ticketsOutsideSector: [], // Тикеты вне сектора (если сотрудник из другого сектора)
+  isFromSector1C: true // Вычисляется в группере как emp.sectorId === SECTOR_1C_ID
+}
+```
+
+5. **Поток данных:**
+   - Bitrix24 API → `employee-repository.js` → получает данные с `UF_DEPARTMENT`
+   - `employee-mapper.js` → вызывает `getEmployeeSectorId(bitrixUser)` → вычисляет `sectorId`
+   - `ticket-grouper.js` → использует `emp.sectorId` для проверки `emp.sectorId === SECTOR_1C_ID`
+   - Результат → компоненты получают данные с полями `isFromSector1C`, `ticketsInsideSector`, `ticketsOutsideSector`
 
 **Выявленные проблемы:**
 1. Константы могут быть расширены для других модулей
@@ -74,13 +101,46 @@
 
 **Файл:** `vue-app/src/services/dashboard-sector-1c/utils/sector-constants.js`
 
-**Текущая структура:**
+**Текущая структура (реальный код из файла):**
 ```javascript
+// vue-app/src/services/dashboard-sector-1c/utils/sector-constants.js
+
 export const SECTOR_1C_ID = 366;
 export const SECTOR_HARDWARE_ID = 368;
 export const SECTOR_BITRIX24_ID = 369;
 export const SECTOR_PDM_ID = 367;
 export const KEEPER_USER_ID = 1051;
+
+export const ALL_SECTOR_IDS = [
+  SECTOR_1C_ID,
+  SECTOR_HARDWARE_ID,
+  SECTOR_BITRIX24_ID,
+  SECTOR_PDM_ID
+];
+
+export const OTHER_SECTOR_IDS = [
+  SECTOR_HARDWARE_ID,
+  SECTOR_BITRIX24_ID,
+  SECTOR_PDM_ID
+];
+```
+
+**Текущее использование (найдено через grep):**
+- `SECTOR_1C_ID` используется в:
+  - `ticket-grouper.js` (3 раза) — для проверки `emp.sectorId === SECTOR_1C_ID`
+  - `sector-helper.js` (2 раза) — для сравнения в функциях проверки
+- Константы реэкспортируются через `constants.js`:
+```javascript
+// vue-app/src/services/dashboard-sector-1c/utils/constants.js
+export {
+  SECTOR_1C_ID,
+  SECTOR_HARDWARE_ID,
+  SECTOR_BITRIX24_ID,
+  SECTOR_PDM_ID,
+  KEEPER_USER_ID,
+  ALL_SECTOR_IDS,
+  OTHER_SECTOR_IDS
+} from './sector-constants.js';
 ```
 
 **Новая структура:**
@@ -183,12 +243,52 @@ export function getSectorMetadata(sectorId) {
 }
 ```
 
+**Детали реализации:**
+
+1. **Сохранение обратной совместимости:**
+   - Старые константы (`SECTOR_1C_ID`, `KEEPER_USER_ID`) должны экспортироваться
+   - Они будут ссылаться на новые значения из `SECTOR_IDS`
+   - Это гарантирует, что существующий код продолжит работать
+
+2. **Метаданные секторов:**
+   - Позволяют расширять функциональность без изменения основной логики
+   - Можно добавить цвета, иконки, описания для каждого сектора
+   - Упрощают отображение информации о секторах в UI
+
+3. **Утилиты для работы с секторами:**
+   - `isSectorId()` — проверка, является ли ID сектором (исключает хранителя)
+   - `getSectorMetadata()` — получение метаданных сектора по ID
+   - Эти функции можно использовать для валидации и отображения
+
+**Пример использования новых констант:**
+```javascript
+// Использование объекта SECTOR_IDS
+import { SECTOR_IDS } from './sector-constants.js';
+if (employee.sectorId === SECTOR_IDS.SECTOR_1C) {
+  // Сотрудник из сектора 1С
+}
+
+// Использование метаданных
+import { getSectorMetadata } from './sector-constants.js';
+const metadata = getSectorMetadata(employee.sectorId);
+if (metadata) {
+  console.log(`Сотрудник из ${metadata.name} (${metadata.code})`);
+}
+
+// Использование утилиты проверки
+import { isSectorId } from './sector-constants.js';
+if (isSectorId(departmentId)) {
+  // Это сектор, а не обычный отдел
+}
+```
+
 **Критерии:**
 - [ ] Константы реструктурированы в объект `SECTOR_IDS`
-- [ ] Добавлены метаданные секторов
+- [ ] Добавлены метаданные секторов (`SECTOR_METADATA`)
 - [ ] Сохранена обратная совместимость (старые константы экспортируются)
-- [ ] Добавлены утилиты для работы с секторами
-- [ ] Добавлены JSDoc комментарии
+- [ ] Добавлены утилиты для работы с секторами (`isSectorId()`, `getSectorMetadata()`)
+- [ ] Добавлены JSDoc комментарии для всех экспортов
+- [ ] Все существующие тесты проходят
 
 ---
 
@@ -196,20 +296,53 @@ export function getSectorMetadata(sectorId) {
 
 **Файл:** `vue-app/src/services/dashboard-sector-1c/utils/sector-helper.js`
 
-**Текущая структура:**
+**Текущая структура (реальный код из файла):**
 ```javascript
+// vue-app/src/services/dashboard-sector-1c/utils/sector-helper.js
+
 export function getEmployeeSectorId(employee) {
-  // Логика определения сектора
+  if (!employee || !employee.UF_DEPARTMENT) {
+    return null;
+  }
+
+  // Обрабатываем массив или число
+  const departments = Array.isArray(employee.UF_DEPARTMENT)
+    ? employee.UF_DEPARTMENT
+    : [employee.UF_DEPARTMENT];
+
+  // Ищем первый отдел, который является сектором
+  for (const deptId of departments) {
+    const deptIdNum = typeof deptId === 'number' ? deptId : parseInt(deptId);
+    
+    if (!isNaN(deptIdNum) && ALL_SECTOR_IDS.includes(deptIdNum)) {
+      return deptIdNum;
+    }
+  }
+
+  return null;
 }
 
 export function isEmployeeFromSector1C(employee) {
-  // Проверка принадлежности к сектору 1С
+  const sectorId = getEmployeeSectorId(employee);
+  return sectorId === SECTOR_1C_ID;
 }
 
 export function isEmployeeFromOtherSector(employee) {
-  // Проверка принадлежности к другому сектору
+  const sectorId = getEmployeeSectorId(employee);
+  return sectorId !== null && 
+         sectorId !== SECTOR_1C_ID && 
+         (sectorId === SECTOR_HARDWARE_ID || 
+          sectorId === SECTOR_BITRIX24_ID || 
+          sectorId === SECTOR_PDM_ID);
 }
 ```
+
+**Текущее использование:**
+- `getEmployeeSectorId()` используется в:
+  - `employee-mapper.js` (строка 15) — для вычисления `sectorId` при маппинге сотрудника
+- `isEmployeeFromSector1C()` и `isEmployeeFromOtherSector()`:
+  - Не используются напрямую в текущем коде
+  - Вместо них используется прямое сравнение `emp.sectorId === SECTOR_1C_ID` в `ticket-grouper.js`
 
 **Улучшения:**
 1. Добавить кеширование результатов
@@ -341,45 +474,200 @@ export function isKeeper(employee) {
 }
 ```
 
+**Детали реализации:**
+
+1. **Кеширование результатов:**
+   - Используется `Map` для хранения результатов определения сектора
+   - Ключ: `employee.id`, Значение: `sectorId` или `null`
+   - Кеш очищается при необходимости через `clearSectorCache()`
+   - Опциональное использование кеша через параметр `useCache` (по умолчанию `true`)
+
+2. **Нормализация `UF_DEPARTMENT`:**
+   - Обрабатывает три случая: массив, число, undefined/null
+   - Фильтрует невалидные значения (не числа)
+   - Возвращает всегда массив для единообразной обработки
+
+3. **Валидация входных данных:**
+   - Проверка наличия объекта `employee`
+   - Проверка наличия поля `employee.id`
+   - Обработка случаев, когда `UF_DEPARTMENT` отсутствует или имеет неожиданный формат
+
+4. **Функция `isKeeper()`:**
+   - Проверяет, является ли сотрудник хранителем (ID 1051)
+   - Использует нормализацию `UF_DEPARTMENT` для обработки разных форматов
+   - Может быть использована для фильтрации хранителя из списков
+
+**Пример использования с кешированием:**
+```javascript
+// Первый вызов — вычисление и сохранение в кеш
+const sectorId1 = getEmployeeSectorId(employee); // Вычисляется
+const sectorId2 = getEmployeeSectorId(employee); // Из кеша (быстро)
+
+// Очистка кеша (например, при обновлении данных)
+clearSectorCache();
+const sectorId3 = getEmployeeSectorId(employee); // Вычисляется заново
+
+// Использование без кеша (для тестирования или особых случаев)
+const sectorId4 = getEmployeeSectorId(employee, false); // Всегда вычисляется
+```
+
 **Критерии:**
-- [ ] Добавлено кеширование результатов
-- [ ] Оптимизирована нормализация `UF_DEPARTMENT`
-- [ ] Добавлена валидация входных данных
-- [ ] Улучшена обработка edge cases
-- [ ] Добавлены JSDoc комментарии
-- [ ] Добавлена функция `isKeeper()`
+- [ ] Добавлено кеширование результатов (используется `Map`)
+- [ ] Оптимизирована нормализация `UF_DEPARTMENT` (функция `normalizeDepartment()`)
+- [ ] Добавлена валидация входных данных (проверка `employee` и `employee.id`)
+- [ ] Улучшена обработка edge cases (массив, число, undefined, null)
+- [ ] Добавлены JSDoc комментарии для всех функций
+- [ ] Добавлена функция `isKeeper()` для проверки хранителя
+- [ ] Кеш работает корректно (сохранение и получение значений)
+- [ ] Производительность улучшена (кеширование ускоряет повторные вызовы)
 
 ---
 
 ### 3. Обновление использования констант
 
 **Файлы для обновления:**
-- `vue-app/src/services/dashboard-sector-1c/groupers/ticket-grouper.js`
-- `vue-app/src/services/dashboard-sector-1c/mappers/employee-mapper.js`
-- `vue-app/src/components/dashboard/DashboardStage.vue`
-- `vue-app/src/components/dashboard/EmployeeColumn.vue`
 
-**Изменения:**
-1. Обновить импорты констант (использовать новые константы)
-2. Обновить использование утилит (использовать оптимизированные функции)
-3. Сохранить обратную совместимость
+1. **`vue-app/src/services/dashboard-sector-1c/groupers/ticket-grouper.js`**
+   - **Текущее использование:** `SECTOR_1C_ID` используется 3 раза (строки 63, 76, 89)
+   - **Изменения:**
+     - Заменить `emp.sectorId === SECTOR_1C_ID` на `isEmployeeFromSector1C(emp)`
+     - Импортировать `isEmployeeFromSector1C` из `sector-helper.js`
+     - Использовать `SECTOR_IDS.SECTOR_1C` вместо `SECTOR_1C_ID` (опционально, для обратной совместимости можно оставить)
+   
+   **Пример обновления:**
+   ```javascript
+   // Было (строка 63):
+   import { SECTOR_1C_ID } from '../utils/sector-constants.js';
+   // ...
+   isFromSector1C: emp.sectorId === SECTOR_1C_ID,
+   
+   // Стало:
+   import { SECTOR_IDS, SECTOR_1C_ID } from '../utils/sector-constants.js';
+   import { isEmployeeFromSector1C } from '../utils/sector-helper.js';
+   // ...
+   isFromSector1C: isEmployeeFromSector1C(emp),
+   ```
 
-**Пример обновления:**
+2. **`vue-app/src/services/dashboard-sector-1c/mappers/employee-mapper.js`**
+   - **Текущее использование:** `getEmployeeSectorId()` используется в строке 15
+   - **Изменения:**
+     - Обновить импорт для использования новых констант (если нужно)
+     - Функция `getEmployeeSectorId()` уже использует оптимизированную логику
+     - Добавить использование кеша (если будет реализован в `sector-helper.js`)
+   
+   **Пример обновления:**
+   ```javascript
+   // Текущий код уже правильный:
+   import { getEmployeeSectorId } from '../utils/sector-helper.js';
+   const sectorId = getEmployeeSectorId(bitrixUser);
+   
+   // После рефакторинга можно добавить использование кеша:
+   const sectorId = getEmployeeSectorId(bitrixUser, true); // useCache = true
+   ```
+
+3. **`vue-app/src/services/dashboard-sector-1c/utils/constants.js`**
+   - **Текущее использование:** Реэкспорт констант секторов
+   - **Изменения:**
+     - Добавить реэкспорт новых констант (`SECTOR_IDS`, `SECTOR_METADATA`)
+     - Добавить реэкспорт новых функций (`isSectorId()`, `getSectorMetadata()`)
+   
+   **Пример обновления:**
+   ```javascript
+   // Было:
+   export {
+     SECTOR_1C_ID,
+     SECTOR_HARDWARE_ID,
+     SECTOR_BITRIX24_ID,
+     SECTOR_PDM_ID,
+     KEEPER_USER_ID,
+     ALL_SECTOR_IDS,
+     OTHER_SECTOR_IDS
+   } from './sector-constants.js';
+   
+   // Стало:
+   export {
+     // Старые константы (для обратной совместимости)
+     SECTOR_1C_ID,
+     SECTOR_HARDWARE_ID,
+     SECTOR_BITRIX24_ID,
+     SECTOR_PDM_ID,
+     KEEPER_USER_ID,
+     ALL_SECTOR_IDS,
+     OTHER_SECTOR_IDS,
+     // Новые константы
+     SECTOR_IDS,
+     SECTOR_METADATA,
+     // Новые функции
+     isSectorId,
+     getSectorMetadata
+   } from './sector-constants.js';
+   ```
+
+4. **`vue-app/src/components/dashboard/DashboardStage.vue`**
+   - **Текущее использование:** Использует computed свойства для подсчёта тикетов
+   - **Изменения:**
+     - Не требует изменений (использует данные из группера)
+     - Можно добавить использование метаданных секторов для отображения (опционально)
+
+5. **`vue-app/src/components/dashboard/EmployeeColumn.vue`**
+   - **Текущее использование:** Использует `employee.isFromSector1C` для разделения тикетов
+   - **Изменения:**
+     - Не требует изменений (использует данные из группера)
+     - Можно добавить использование метаданных секторов для отображения (опционально)
+
+**Важно:** Сохранить обратную совместимость — старые константы (`SECTOR_1C_ID`, `KEEPER_USER_ID`) должны продолжать экспортироваться и работать.
+
+**Детали миграции:**
+
+1. **Миграция `ticket-grouper.js`:**
+   - Заменить 3 вхождения `emp.sectorId === SECTOR_1C_ID` на `isEmployeeFromSector1C(emp)`
+   - Это улучшит читаемость и централизует логику проверки
+   - Сохранить импорт `SECTOR_1C_ID` для обратной совместимости (если используется где-то еще)
+
+2. **Миграция `employee-mapper.js`:**
+   - Код уже использует `getEmployeeSectorId()`, изменения минимальны
+   - Можно добавить использование кеша (параметр `useCache = true`)
+
+3. **Миграция `constants.js`:**
+   - Добавить реэкспорт новых констант и функций
+   - Это позволит использовать новые возможности через единую точку входа
+
+4. **Проверка компонентов:**
+   - `DashboardStage.vue` и `EmployeeColumn.vue` не требуют изменений
+   - Они используют данные из группера, который уже содержит нужную информацию
+
+**План миграции (пошагово):**
+
+1. **Шаг 1:** Обновить `sector-constants.js` (добавить новые структуры, сохранить старые)
+2. **Шаг 2:** Обновить `sector-helper.js` (добавить кеширование и оптимизации)
+3. **Шаг 3:** Обновить `ticket-grouper.js` (заменить прямые сравнения на функции)
+4. **Шаг 4:** Обновить `constants.js` (добавить реэкспорт новых констант)
+5. **Шаг 5:** Протестировать все изменения
+6. **Шаг 6:** Убедиться, что обратная совместимость сохранена
+
+**Пример миграции для `ticket-grouper.js`:**
 ```javascript
-// Было:
+// БЫЛО (строка 16):
 import { SECTOR_1C_ID } from '../utils/sector-constants.js';
+
+// БЫЛО (строки 63, 76, 89):
+isFromSector1C: emp.sectorId === SECTOR_1C_ID,
+
+// СТАЛО (строка 16):
+import { SECTOR_IDS, SECTOR_1C_ID } from '../utils/sector-constants.js';
 import { isEmployeeFromSector1C } from '../utils/sector-helper.js';
 
-// Стало:
-import { SECTOR_IDS, SECTOR_1C_ID } from '../utils/sector-constants.js';
-import { isEmployeeFromSector1C, isKeeper } from '../utils/sector-helper.js';
+// СТАЛО (строки 63, 76, 89):
+isFromSector1C: isEmployeeFromSector1C(emp),
 ```
 
 **Критерии:**
 - [ ] Все файлы обновлены для использования новых констант
-- [ ] Использование утилит оптимизировано
-- [ ] Обратная совместимость сохранена
+- [ ] Использование утилит оптимизировано (заменены прямые сравнения на функции)
+- [ ] Обратная совместимость сохранена (старые константы работают)
 - [ ] Код компилируется без ошибок
+- [ ] Все тесты проходят
+- [ ] Функциональность не нарушена (разделение тикетов работает корректно)
 
 ---
 
@@ -390,18 +678,55 @@ import { isEmployeeFromSector1C, isKeeper } from '../utils/sector-helper.js';
 1. **Обратная совместимость**
    - Старые константы должны экспортироваться
    - Существующий код должен работать без изменений
+   - Структура данных сотрудника не должна измениться
 
 2. **Производительность**
    - Кеширование результатов определения сектора
    - Оптимизация проверок
+   - Минимизация повторных вычислений
 
 3. **Расширяемость**
    - Легко добавлять новые секторы
    - Метаданные секторов доступны
+   - Утилиты поддерживают новые секторы автоматически
 
 4. **Типизация**
    - JSDoc комментарии для всех функций
    - Типизация параметров и возвращаемых значений
+   - Документация структуры данных
+
+### ⚠️ Важно: Сохранение контекста функционала
+
+**Критически важно сохранить следующую функциональность:**
+
+1. **Разделение тикетов по секторам:**
+   - Тикеты сотрудников сектора 1С (366) должны отображаться как "внутри сектора"
+   - Тикеты сотрудников других секторов (368, 369, 367) должны отображаться как "вне сектора"
+   - Тикеты хранителя (1051) должны попадать в нулевую точку
+   - Формат отображения в заголовке стадии: "(N / M)" где N — внутри, M — вне сектора
+
+2. **Структура данных сотрудника:**
+   - Поле `sectorId` должно вычисляться на основе `UF_DEPARTMENT` из Bitrix24
+   - Поле `isFromSector1C` должно вычисляться как `sectorId === 366`
+   - Массивы `ticketsInsideSector` и `ticketsOutsideSector` должны заполняться корректно
+   - Поле `tickets` должно содержать все тикеты (для обратной совместимости)
+
+3. **Сортировка сотрудников:**
+   - Сначала сотрудники сектора 1С (isFromSector1C === true)
+   - Затем сотрудники других секторов (isFromSector1C === false)
+   - Внутри каждой группы сортировка по ID по возрастанию
+
+4. **Отображение в компонентах:**
+   - `DashboardStage.vue`: отображает количество тикетов в формате "(N / M)"
+   - `EmployeeColumn.vue`: разделяет тикеты для сотрудников других секторов с заголовком "Вне сектора"
+   - Для сотрудников сектора 1С все тикеты отображаются без разделения
+
+**Что НЕЛЬЗЯ изменять:**
+- ❌ Значения констант (366, 368, 369, 367, 1051)
+- ❌ Логику определения сектора (на основе `UF_DEPARTMENT`)
+- ❌ Структуру данных сотрудника (поля `sectorId`, `isFromSector1C`, `ticketsInsideSector`, `ticketsOutsideSector`)
+- ❌ Формат отображения в заголовке стадии "(N / M)"
+- ❌ Логику разделения тикетов на внутри/вне сектора
 
 ---
 
@@ -423,10 +748,31 @@ import { isEmployeeFromSector1C, isKeeper } from '../utils/sector-helper.js';
 
 ### Функциональное тестирование:
 
-1. Проверить определение сектора для сотрудников из разных секторов
-2. Проверить кеширование результатов
-3. Проверить работу с разными форматами `UF_DEPARTMENT`
-4. Проверить обратную совместимость
+1. **Проверить определение сектора для сотрудников из разных секторов:**
+   - Сотрудник из сектора 1С (366) → `getEmployeeSectorId()` возвращает `366`
+   - Сотрудник из сектора Железо (368) → `getEmployeeSectorId()` возвращает `368`
+   - Сотрудник из сектора Битрикс24 (369) → `getEmployeeSectorId()` возвращает `369`
+   - Сотрудник из сектора PDM (367) → `getEmployeeSectorId()` возвращает `367`
+   - Сотрудник без сектора → `getEmployeeSectorId()` возвращает `null`
+
+2. **Проверить кеширование результатов:**
+   - Первый вызов `getEmployeeSectorId(employee)` → вычисляется и сохраняется в кеш
+   - Второй вызов `getEmployeeSectorId(employee)` → возвращается из кеша
+   - Вызов `clearSectorCache()` → кеш очищается
+   - Следующий вызов → вычисляется заново
+
+3. **Проверить работу с разными форматами `UF_DEPARTMENT`:**
+   - Массив: `UF_DEPARTMENT: [366]` → обрабатывается корректно
+   - Число: `UF_DEPARTMENT: 366` → обрабатывается корректно
+   - Множественные отделы: `UF_DEPARTMENT: [366, 368]` → возвращается первый сектор (366)
+   - Пустой массив: `UF_DEPARTMENT: []` → возвращается `null`
+   - Отсутствует поле: `UF_DEPARTMENT: undefined` → возвращается `null`
+
+4. **Проверить обратную совместимость:**
+   - Старые константы (`SECTOR_1C_ID`, `KEEPER_USER_ID`) работают
+   - Существующий код компилируется без ошибок
+   - Разделение тикетов работает как раньше
+   - Отображение в компонентах не изменилось
 
 ### Производительность:
 

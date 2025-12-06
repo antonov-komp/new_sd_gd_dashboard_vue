@@ -22,16 +22,66 @@
 **Текущее состояние (TASK-012):**
 
 1. **Компонент ZeroPoint.vue:**
-   - Убраны иконка и счётчик из заголовка
-   - Убран блок описания
-   - Обновлён fallback для пустого состояния
-   - Стили встроены в компонент
+   - Файл: `vue-app/src/components/dashboard/ZeroPoint.vue` (118 строк)
+   - Структура: простой компонент без оптимизаций
+   - Template (строки 1-21):
+     ```vue
+     <div class="zero-point">
+       <div class="zero-point-header">
+         <h3>Нулевая точка</h3>
+       </div>
+       <div class="zero-point-tickets">
+         <TicketCard v-for="ticket in tickets" ... />
+         <div v-if="tickets.length === 0" class="empty-state">
+           <p>Нет неразобранных тикетов в стадии</p>
+         </div>
+       </div>
+     </div>
+     ```
+   - Script (строки 24-81):
+     - Props: `tickets` (Array), `stageId` (String)
+     - Emits: `ticket-dragged`, `ticket-assigned`, `ticket-clicked`
+     - Метод: `handleTicketDragStart()`
+   - Стили (строки 84-116): встроены в компонент
+   - **Изменения после TASK-012:**
+     - ✅ Убраны иконка и счётчик из заголовка (было `[0] Нулевая точка (14)`)
+     - ✅ Убран блок описания (было "Входящие тикеты. Перетащите тикет на сотрудника")
+     - ✅ Обновлён fallback: "Нет неразобранных тикетов в стадии" (строка 18)
+   - **Текущие проблемы:**
+     - Нет оптимизации рендеринга (`v-memo`, `v-once`)
+     - Нет computed свойств для оптимизации
+     - Стили встроены (можно вынести)
+     - Минимальная типизация props и emits
+
+**Текущее использование:**
+
+1. **В компоненте DashboardStage.vue:**
+   - Используется для каждого этапа (строки 9-15)
+   - Передаются props: `tickets` (нулевая точка для этапа), `stageId`
+   - Обрабатываются события: `ticket-dragged`, `ticket-assigned`, `ticket-clicked`
+
+2. **Структура данных:**
+   - `tickets` — массив тикетов без назначенного сотрудника или с ответственным 1051
+   - `stageId` — ID этапа ('formed', 'review', 'execution')
+
+3. **Поток данных:**
+   - `getZeroPointTickets()` → фильтрует тикеты по этапам → передаёт в `ZeroPoint.vue`
+   - Компонент отображает тикеты или fallback-сообщение
 
 **Выявленные проблемы:**
 1. Стили можно вынести в отдельный файл
+   - Стили встроены в компонент (строки 84-116)
+   - Можно вынести для переиспользования (если нужно)
 2. Логика отображения fallback может быть улучшена
+   - Прямая проверка `tickets.length === 0` в template
+   - Можно использовать computed свойство для оптимизации
 3. Можно оптимизировать рендеринг
+   - Нет `v-memo` для списка тикетов (ререндеры при каждом обновлении)
+   - Нет `v-once` для статического контента (fallback)
 4. Можно улучшить типизацию
+   - Минимальная типизация props (только `type` и `required`)
+   - Нет валидации emits
+   - Нет JSDoc комментариев для структуры данных
 
 ---
 
@@ -62,13 +112,41 @@
 2. Использовать `v-once` для статического контента
 3. Оптимизировать computed свойства
 
-**Пример:**
+**Текущий код (строки 1-21):**
 ```vue
 <template>
   <div class="zero-point">
-    <h3 class="zero-point-title">Нулевая точка</h3>
-    
-    <!-- Оптимизация списка тикетов -->
+    <div class="zero-point-header">
+      <h3>Нулевая точка</h3>
+    </div>
+
+    <div class="zero-point-tickets">
+      <TicketCard
+        v-for="ticket in tickets"
+        :key="ticket.id"
+        :ticket="ticket"
+        :draggable="true"
+        @drag-start="handleTicketDragStart(ticket)"
+        @click="$emit('ticket-clicked', ticket)"
+      />
+      
+      <div v-if="tickets.length === 0" class="empty-state">
+        <p>Нет неразобранных тикетов в стадии</p>
+      </div>
+    </div>
+  </div>
+</template>
+```
+
+**Новый код (после оптимизации):**
+```vue
+<template>
+  <div class="zero-point">
+    <div class="zero-point-header">
+      <h3>Нулевая точка</h3>
+    </div>
+
+    <!-- Оптимизация списка тикетов с v-memo -->
     <div
       v-memo="[tickets.length, tickets.map(t => t.id).join(',')]"
       class="zero-point-tickets"
@@ -77,24 +155,56 @@
         v-for="ticket in tickets"
         :key="ticket.id"
         :ticket="ticket"
+        :draggable="true"
+        @drag-start="handleTicketDragStart(ticket)"
         @click="$emit('ticket-clicked', ticket)"
-        @dragstart="$emit('ticket-dragged', ticket)"
       />
     </div>
     
-    <!-- Fallback с v-once -->
-    <div v-if="tickets.length === 0" v-once class="zero-point-empty">
+    <!-- Fallback с v-once для статического контента -->
+    <div v-if="!hasTickets" v-once class="empty-state">
       <p>Нет неразобранных тикетов в стадии</p>
     </div>
   </div>
 </template>
 ```
 
+**Изменения:**
+- Добавлен `v-memo` для списка тикетов (оптимизация ререндеров)
+- Добавлен `v-once` для fallback (статический контент)
+- Использование computed `hasTickets` вместо прямого `tickets.length === 0`
+
+**Детали оптимизации:**
+
+1. **v-memo для списка тикетов:**
+   - Оптимизирует ререндеры списка тикетов
+   - Ререндер происходит только при изменении количества или ID тикетов
+   - Уменьшает количество ненужных обновлений компонентов `TicketCard`
+
+2. **v-once для fallback:**
+   - Fallback-сообщение статично и не меняется
+   - `v-once` предотвращает ненужные ререндеры статического контента
+   - Улучшает производительность при переключении между состояниями
+
+3. **Computed свойство `hasTickets`:**
+   - Кеширует результат проверки наличия тикетов
+   - Избегает повторных вычислений `tickets.length > 0`
+   - Улучшает читаемость кода
+
+**⚠️ Важно: Сохранение контекста функционала:**
+- Структура компонента не должна измениться
+- Props и emits должны остаться такими же
+- Отображение тикетов должно работать идентично
+- Fallback-сообщение должно остаться: "Нет неразобранных тикетов в стадии"
+- События (`ticket-clicked`, `ticket-dragged`, `ticket-assigned`) должны работать как раньше
+
 **Критерии:**
-- [ ] Использован `v-memo` для списка тикетов
-- [ ] Использован `v-once` для статического контента
-- [ ] Computed свойства оптимизированы
-- [ ] Производительность улучшена
+- [ ] Использован `v-memo` для списка тикетов (оптимизация ререндеров)
+- [ ] Использован `v-once` для статического контента (fallback)
+- [ ] Computed свойства оптимизированы (`hasTickets`)
+- [ ] Производительность улучшена (меньше ререндеров)
+- [ ] Функциональность не нарушена (тикеты отображаются корректно)
+- [ ] События работают как раньше
 
 ---
 
@@ -107,59 +217,155 @@
 2. Добавить JSDoc комментарии
 3. Упростить логику
 
-**Пример:**
+**Текущий код (строки 24-81):**
+```javascript
+<script>
+import TicketCard from './TicketCard.vue';
+
+export default {
+  name: 'ZeroPoint',
+  components: {
+    TicketCard
+  },
+  props: {
+    tickets: {
+      type: Array,
+      default: () => []
+    },
+    stageId: {
+      type: String,
+      required: true
+    }
+  },
+  emits: ['ticket-dragged', 'ticket-assigned', 'ticket-clicked'],
+  setup(props, { emit }) {
+    const handleTicketDragStart = (ticket) => {
+      emit('ticket-dragged', ticket);
+    };
+
+    return {
+      handleTicketDragStart
+    };
+  }
+};
+</script>
+```
+
+**Новый код (после улучшения):**
 ```vue
 <script>
+import { computed } from 'vue';
+import TicketCard from './TicketCard.vue';
+
 /**
  * Компонент нулевой точки (Неразобранное)
  * 
- * Отображает тикеты с ответственным 1051 (Хранитель объектов).
- * Если тикетов нет, показывает fallback-сообщение.
+ * Отображает тикеты с ответственным 1051 (Хранитель объектов) или без назначенного сотрудника.
+ * Если тикетов нет, показывает fallback-сообщение "Нет неразобранных тикетов в стадии".
+ * 
+ * Используется в:
+ * - DashboardStage.vue (для каждого этапа)
+ * 
+ * После TASK-012:
+ * - Убраны иконка и счётчик из заголовка
+ * - Убран блок описания
+ * - Обновлён fallback для пустого состояния
  * 
  * @component
  */
 export default {
   name: 'ZeroPoint',
+  components: {
+    TicketCard
+  },
   props: {
     /**
      * Список тикетов нулевой точки
-     * @type {Array<object>}
+     * 
+     * Тикеты без назначенного сотрудника или с ответственным 1051 (Хранитель объектов).
+     * 
+     * @type {Array<Object>}
+     * @property {number} ticket.id - ID тикета
+     * @property {string} ticket.title - Название тикета
+     * @property {number} ticket.assignedById - ID ответственного (null или 1051)
      */
     tickets: {
       type: Array,
       required: true,
       default: () => []
+    },
+    /**
+     * ID этапа
+     * 
+     * Используется для идентификации этапа, к которому относится нулевая точка.
+     * 
+     * @type {string}
+     */
+    stageId: {
+      type: String,
+      required: true
     }
   },
   emits: {
     /**
-     * Событие клика по тикету
-     * @param {object} ticket - Тикет
-     */
-    'ticket-clicked': (ticket) => typeof ticket === 'object',
-    /**
      * Событие начала перетаскивания тикета
-     * @param {object} ticket - Тикет
+     * 
+     * @param {Object} ticket - Тикет, который начал перетаскиваться
      */
-    'ticket-dragged': (ticket) => typeof ticket === 'object',
+    'ticket-dragged': (ticket) => typeof ticket === 'object' && ticket !== null,
     /**
      * Событие назначения тикета сотруднику
-     * @param {object} data - Данные назначения
+     * 
+     * @param {Object} data - Данные назначения
+     * @param {Object} data.ticket - Тикет
+     * @param {number} data.employeeId - ID сотрудника
+     * @param {string} data.stageId - ID этапа
      */
-    'ticket-assigned': (data) => typeof data === 'object'
+    'ticket-assigned': (data) => typeof data === 'object' && data !== null,
+    /**
+     * Событие клика по тикету
+     * 
+     * @param {Object} ticket - Тикет, по которому кликнули
+     */
+    'ticket-clicked': (ticket) => typeof ticket === 'object' && ticket !== null
   },
-  computed: {
+  setup(props, { emit }) {
     /**
      * Есть ли тикеты в нулевой точке
-     * @returns {boolean}
+     * 
+     * Computed свойство для оптимизации проверки наличия тикетов.
+     * Используется вместо прямого `tickets.length === 0` в template.
+     * 
+     * @returns {boolean} true, если есть тикеты
      */
-    hasTickets() {
-      return this.tickets.length > 0;
-    }
+    const hasTickets = computed(() => {
+      return Array.isArray(props.tickets) && props.tickets.length > 0;
+    });
+
+    /**
+     * Обработка начала перетаскивания тикета
+     * 
+     * @param {Object} ticket - Тикет
+     */
+    const handleTicketDragStart = (ticket) => {
+      emit('ticket-dragged', ticket);
+    };
+
+    return {
+      hasTickets,
+      handleTicketDragStart
+    };
   }
 };
 </script>
 ```
+
+**Изменения:**
+- Добавлен `computed` для `hasTickets` (оптимизация проверки)
+- Улучшена типизация props (JSDoc комментарии с описанием структуры)
+- Улучшена типизация emits (валидация параметров)
+- Добавлены JSDoc комментарии для всех функций
+- Добавлено описание компонента с контекстом TASK-012
 
 **Критерии:**
 - [ ] Улучшена типизация props и emits
@@ -173,44 +379,118 @@ export default {
 
 **Файл:** `vue-app/src/styles/components/zero-point.css`
 
-**Структура:**
+**Текущие стили (строки 84-116):**
 ```css
-/**
- * Стили компонента нулевой точки
- */
-
 .zero-point {
-  padding: 16px;
-  background-color: #f8f9fa;
-  border-radius: 8px;
-  border: 1px solid #dee2e6;
+  background: #f5f5f5;
+  border-radius: 4px;
+  padding: 15px;
+  margin-bottom: 15px;
+  border: 2px dashed #ccc;
 }
 
-.zero-point-title {
-  margin: 0 0 12px 0;
+.zero-point-header {
+  margin-bottom: 10px;
+}
+
+.zero-point-header h3 {
+  margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: #212529;
+  color: #333;
 }
 
 .zero-point-tickets {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
-.zero-point-empty {
-  padding: 20px;
+.empty-state {
   text-align: center;
-  color: #6c757d;
+  padding: 20px;
+  color: #999;
   font-size: 14px;
 }
 ```
 
+**Новые стили (если выносить в отдельный файл):**
+```css
+/**
+ * Стили компонента нулевой точки
+ * 
+ * Файл: vue-app/src/styles/components/zero-point.css
+ * 
+ * После TASK-012:
+ * - Убраны стили для иконки и счётчика
+ * - Убраны стили для блока описания
+ * - Обновлены стили для fallback
+ */
+
+.zero-point {
+  background: #f5f5f5;
+  border-radius: 4px;
+  padding: 15px;
+  margin-bottom: 15px;
+  border: 2px dashed #ccc;
+}
+
+.zero-point-header {
+  margin-bottom: 10px;
+}
+
+.zero-point-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+.zero-point-tickets {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 20px;
+  color: #999;
+  font-size: 14px;
+}
+```
+
+**Примечание:** Вынос стилей в отдельный файл опционален. Если стили используются только в этом компоненте, можно оставить их в компоненте со scoped стилями.
+
+**Детали выноса стилей:**
+
+1. **Решение о выносе:**
+   - Если стили используются только в `ZeroPoint.vue` → оставить в компоненте (scoped)
+   - Если стили могут переиспользоваться → вынести в отдельный файл
+   - Рекомендация: оставить в компоненте, так как стили специфичны для нулевой точки
+
+2. **Если выносить:**
+   - Создать файл: `vue-app/src/styles/components/zero-point.css`
+   - Импортировать в компоненте: `import '@/styles/components/zero-point.css';`
+   - Удалить секцию `<style scoped>` из компонента
+
+3. **Проверка:**
+   - Стили должны выглядеть идентично
+   - Адаптивность должна сохраниться
+   - Не должно быть конфликтов стилей
+
+**⚠️ Важно: Сохранение контекста функционала:**
+- Визуальный вид компонента не должен измениться
+- Стили должны соответствовать текущей реализации
+- Border: `2px dashed #ccc` должен остаться (визуальное разделение)
+- Padding и margin должны остаться такими же
+
 **Критерии:**
-- [ ] Стили вынесены в отдельный файл (если решено)
+- [ ] Стили вынесены в отдельный файл (если решено) или оставлены в компоненте
 - [ ] Стили соответствуют гайдлайнам Bitrix24
-- [ ] Адаптивность сохранена
+- [ ] Адаптивность сохранена (если есть)
+- [ ] Визуальный вид не изменился
+- [ ] Нет конфликтов стилей
 
 ---
 
@@ -234,6 +514,37 @@ export default {
    - Понятный код
    - Легко расширять
 
+### ⚠️ Важно: Сохранение контекста функционала
+
+**Критически важно сохранить следующую функциональность:**
+
+1. **Отображение тикетов:**
+   - Тикеты должны отображаться в том же порядке
+   - Компонент `TicketCard` должен работать идентично
+   - Drag & Drop должен работать как раньше
+
+2. **Fallback-сообщение:**
+   - Текст должен остаться: "Нет неразобранных тикетов в стадии"
+   - Отображается только когда `tickets.length === 0`
+   - Стили должны остаться такими же
+
+3. **События:**
+   - `ticket-clicked` — должно работать идентично
+   - `ticket-dragged` — должно работать идентично
+   - `ticket-assigned` — должно работать идентично
+
+4. **Структура компонента:**
+   - Заголовок "Нулевая точка" должен остаться
+   - Структура HTML не должна измениться
+   - Props и emits должны остаться такими же
+
+**Что НЕЛЬЗЯ изменять:**
+- ❌ Структуру props (`tickets`, `stageId`)
+- ❌ Структуру emits (`ticket-clicked`, `ticket-dragged`, `ticket-assigned`)
+- ❌ Текст fallback-сообщения
+- ❌ Визуальный вид компонента
+- ❌ Логику отображения тикетов
+
 ---
 
 ## ✅ Критерии приёмки
@@ -253,9 +564,26 @@ export default {
 
 ### Функциональное тестирование:
 
-1. Проверить отображение тикетов
-2. Проверить отображение fallback
-3. Проверить работу событий
+1. **Проверить отображение тикетов:**
+   - Открыть дашборд с тикетами в нулевой точке
+   - Проверить, что тикеты отображаются корректно
+   - Проверить, что компонент `TicketCard` работает идентично
+   - Проверить, что порядок тикетов не изменился
+
+2. **Проверить отображение fallback:**
+   - Открыть дашборд без тикетов в нулевой точке
+   - Проверить, что отображается сообщение "Нет неразобранных тикетов в стадии"
+   - Проверить, что стили fallback не изменились
+
+3. **Проверить работу событий:**
+   - Кликнуть по тикету → должно сработать событие `ticket-clicked`
+   - Начать перетаскивание тикета → должно сработать событие `ticket-dragged`
+   - Назначить тикет сотруднику → должно сработать событие `ticket-assigned`
+
+4. **Проверить оптимизацию рендеринга:**
+   - Проверить, что `v-memo` работает корректно (ререндер только при изменении списка)
+   - Проверить, что `v-once` работает корректно (fallback не ререндерится)
+   - Проверить производительность (меньше ререндеров)
 
 ### Производительность:
 
