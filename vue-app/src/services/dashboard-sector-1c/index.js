@@ -35,6 +35,7 @@ import {
   normalizeProgressData,
   calculateProgress 
 } from './utils/progress-utils.js';
+import { Logger } from './utils/logger.js';
 
 /**
  * Сервис для работы с дашбордом сектора 1С
@@ -194,7 +195,7 @@ export class DashboardSector1CService {
 
       return result;
     } catch (error) {
-      console.error('Error getting sector data:', error);
+      Logger.error('Error getting sector data', 'DashboardSector1CService', error);
       if (onProgress) {
         onProgress({
           step: 'error',
@@ -229,7 +230,7 @@ export class DashboardSector1CService {
       
       return result;
     } catch (error) {
-      console.error('Error assigning ticket:', error);
+      Logger.error('Error assigning ticket', 'DashboardSector1CService', error);
       throw error;
     }
   }
@@ -268,7 +269,7 @@ export class DashboardSector1CService {
       
       return ticketId;
     } catch (error) {
-      console.error('Error creating ticket:', error);
+      Logger.error('Error creating ticket', 'DashboardSector1CService', error);
       throw error;
     }
   }
@@ -287,7 +288,7 @@ export class DashboardSector1CService {
       const bitrixTicket = await TicketRepository.getTicket(ticketId);
       return mapTicket(bitrixTicket);
     } catch (error) {
-      console.error('Error getting ticket:', error);
+      Logger.error('Error getting ticket', 'DashboardSector1CService', error);
       throw error;
     }
   }
@@ -311,7 +312,7 @@ export class DashboardSector1CService {
     try {
       return await TicketDetailsService.getTicketDetails(ticketId, options);
     } catch (error) {
-      console.error('Error getting ticket details:', error);
+      Logger.error('Error getting ticket details', 'DashboardSector1CService', error);
       throw error;
     }
   }
@@ -338,7 +339,7 @@ export class DashboardSector1CService {
 
       return result.result !== undefined;
     } catch (error) {
-      console.error('Error adding comment:', error);
+      Logger.error('Error adding comment', 'DashboardSector1CService', error);
       throw error;
     }
   }

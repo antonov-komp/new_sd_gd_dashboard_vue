@@ -3,6 +3,7 @@
  */
 
 import { getEmployeeSectorId } from '../utils/sector-helper.js';
+import { Logger } from '../utils/logger.js';
 
 /**
  * Маппинг сотрудника из Bitrix24 в внутренний формат
@@ -14,8 +15,8 @@ export function mapEmployee(bitrixUser) {
   const sectorId = getEmployeeSectorId(bitrixUser);
   
   // Логирование для отладки определения сектора
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`[EmployeeMapper] Employee ${bitrixUser.ID}:`, {
+  if (import.meta.env?.MODE !== 'production') {
+    Logger.debug(`Employee ${bitrixUser.ID} mapped`, 'EmployeeMapper', {
       name: `${bitrixUser.NAME || ''} ${bitrixUser.LAST_NAME || ''}`.trim(),
       UF_DEPARTMENT: bitrixUser.UF_DEPARTMENT,
       sectorId: sectorId,

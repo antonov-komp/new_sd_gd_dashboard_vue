@@ -4,6 +4,8 @@
  * Обёртка над BX.UI.Notification для удобного использования в компонентах
  */
 
+import { Logger } from '@/services/dashboard-sector-1c/utils/logger.js';
+
 /**
  * Композабл для уведомлений
  * 
@@ -25,7 +27,7 @@ export function useNotifications() {
       });
     } else {
       // Fallback для окружений без Bitrix24
-      console.log(`[${type.toUpperCase()}] ${message}`);
+      Logger.info(`[${type.toUpperCase()}] ${message}`, 'useNotifications');
     }
   };
 

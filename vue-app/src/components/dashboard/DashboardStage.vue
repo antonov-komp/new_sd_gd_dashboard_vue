@@ -33,6 +33,7 @@
 import { ref, computed } from 'vue';
 import ZeroPoint from './ZeroPoint.vue';
 import EmployeeColumn from './EmployeeColumn.vue';
+import { useLogger } from '@/composables/useLogger.js';
 
 /**
  * Компонент этапа дашборда
@@ -61,6 +62,7 @@ export default {
   },
   emits: ['ticket-moved', 'ticket-assigned', 'ticket-clicked'],
   setup(props, { emit }) {
+    const logger = useLogger('DashboardStage');
     const isDragging = ref(false);
 
     /**
@@ -186,7 +188,7 @@ export default {
      */
     const handleTicketClicked = (ticket) => {
       // Обработка клика по тикету (можно открыть модальное окно)
-      console.log('Ticket clicked:', ticket);
+      logger.debug('Ticket clicked', ticket);
       emit('ticket-clicked', ticket);
     };
 

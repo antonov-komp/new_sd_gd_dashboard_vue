@@ -7,6 +7,7 @@
 import { ref } from 'vue';
 import { canMoveTicket } from '@/services/dashboard-sector-1c/utils/validation.js';
 import { useNotifications } from './useNotifications.js';
+import { Logger } from '@/services/dashboard-sector-1c/utils/logger.js';
 
 /**
  * Композабл для Drag & Drop
@@ -90,7 +91,7 @@ export function useDragAndDrop(onDrop) {
         await onDrop(ticket, employeeId, stageId);
       }
     } catch (error) {
-      console.error('Error parsing ticket data:', error);
+      Logger.error('Error parsing ticket data', 'useDragAndDrop', error);
       notifications.error('Ошибка обработки данных тикета');
     }
   };

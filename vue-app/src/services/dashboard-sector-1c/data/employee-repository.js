@@ -12,6 +12,7 @@
 
 import { ApiClient } from './api-client.js';
 import { CacheManager } from '../cache/cache-manager.js';
+import { Logger } from '../utils/logger.js';
 
 /**
  * Репозиторий для работы с сотрудниками
@@ -39,7 +40,7 @@ export class EmployeeRepository {
       const cacheKey = CacheManager.getEmployeesCacheKey(employeeIds);
       const cached = CacheManager.get(cacheKey);
       if (cached !== null) {
-        console.log(`Cache hit for employees: ${employeeIds.length} employees`);
+        Logger.debug(`Cache hit for employees: ${employeeIds.length} employees`, 'EmployeeRepository');
         return cached;
       }
     }
@@ -65,7 +66,7 @@ export class EmployeeRepository {
         if (Array.isArray(result.result)) {
           users = result.result;
         } else {
-          console.warn('Unexpected user.get result format:', result);
+          Logger.warn('Unexpected user.get result format', 'EmployeeRepository', result);
         }
       }
 
@@ -77,7 +78,7 @@ export class EmployeeRepository {
 
       return users;
     } catch (error) {
-      console.error('Error getting employees by IDs:', error);
+      Logger.error('Error getting employees by IDs', 'EmployeeRepository', error);
       // Возвращаем пустой массив при ошибке, чтобы не ломать работу дашборда
       return [];
     }

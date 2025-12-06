@@ -10,7 +10,7 @@
  * @returns {string} Сообщение об ошибке для пользователя
  */
 export function handleApiError(error, context = '') {
-  console.error(`API Error ${context ? `(${context})` : ''}:`, error);
+  Logger.error(`API Error ${context ? `(${context})` : ''}`, 'ErrorHandler', error);
 
   // Определяем тип ошибки и возвращаем понятное сообщение
   if (error.message) {
@@ -61,7 +61,7 @@ export function logError(error, context = '', additionalData = {}) {
     timestamp: new Date().toISOString()
   };
 
-  console.error('Error logged:', errorInfo);
+  Logger.error('Error logged', 'ErrorHandler', errorInfo);
 
   // Здесь можно добавить отправку ошибок на сервер для мониторинга
   // Например, через специальный API endpoint

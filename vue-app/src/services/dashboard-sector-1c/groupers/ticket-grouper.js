@@ -14,6 +14,7 @@ import {
   isZeroPointTicket 
 } from '../utils/ticket-utils.js';
 import { SECTOR_1C_ID } from '../utils/sector-constants.js';
+import { Logger } from '../utils/logger.js';
 
 /**
  * Группировка тикетов по этапам
@@ -32,13 +33,13 @@ import { SECTOR_1C_ID } from '../utils/sector-constants.js';
 export function groupTicketsByStages(tickets, employees) {
   // Проверяем, что tickets - массив
   if (!Array.isArray(tickets)) {
-    console.warn('Tickets is not an array:', tickets);
+    Logger.warn('Tickets is not an array', 'TicketGrouper', tickets);
     tickets = [];
   }
 
   // Проверяем, что employees - массив
   if (!Array.isArray(employees)) {
-    console.warn('Employees is not an array:', employees);
+    Logger.warn('Employees is not an array', 'TicketGrouper', employees);
     employees = [];
   }
 
@@ -201,7 +202,7 @@ export function getZeroPointTickets(tickets) {
 
   // Проверяем, что tickets - массив
   if (!Array.isArray(tickets)) {
-    console.warn('Tickets is not an array in getZeroPointTickets:', tickets);
+    Logger.warn('Tickets is not an array in getZeroPointTickets', 'TicketGrouper', tickets);
     return zeroPointTickets;
   }
 

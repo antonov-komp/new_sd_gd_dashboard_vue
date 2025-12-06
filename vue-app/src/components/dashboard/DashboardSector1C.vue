@@ -46,14 +46,18 @@
     >
       <span class="floating-back-button-icon">←</span>
     </button>
+
+    <!-- Компонент управления логированием (только в режиме разработки) -->
+    <LoggerControl :show-control="showLoggerControl" />
   </div>
 </template>
 
 <script>
-import { onMounted } from 'vue';
+import { onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import DashboardStage from './DashboardStage.vue';
 import LoadingPreloader from './LoadingPreloader.vue';
+import LoggerControl from './LoggerControl.vue';
 import { useDashboardState } from '@/composables/useDashboardState.js';
 import { useDashboardActions } from '@/composables/useDashboardActions.js';
 
@@ -88,7 +92,8 @@ export default {
   name: 'DashboardSector1C',
   components: {
     DashboardStage,
-    LoadingPreloader
+    LoadingPreloader,
+    LoggerControl
   },
   setup() {
     // Роутер для навигации
@@ -124,6 +129,26 @@ export default {
     // Извлекаем loadingProgress для удобства доступа
     const loadingProgress = actions.loadingProgress;
 
+    /**
+     * Показывать ли компонент управления логированием
+     * 
+     * Показывается только в режиме разработки (не production)
+     * Можно также включить через localStorage для отладки в production
+     */
+    const showLoggerControl = computed(() => {
+      // Показываем в режиме разработки
+      if (import.meta.env?.MODE !== 'production') {
+        return true;
+      }
+      
+      // В production можно включить через localStorage (для отладки)
+      if (typeof localStorage !== 'undefined') {
+        return localStorage.getItem('dashboard-sector-1c-show-logger-control') === 'true';
+      }
+      
+      return false;
+    });
+
     return {
       // Состояние из композабла
       isLoading: state.isLoading,
@@ -147,6 +172,11 @@ export default {
       moveTicketToStage: actions.moveTicketToStage,
       createTicket: actions.createTicket,
       getEmployeeTickets: state.getEmployeeTickets,
+      
+      // Управление логированием
+      showLoggerControl,
+      
+      // Навигация и обработка ошибок
       handleRetry,
       isTransitioning: actions.isTransitioning,
       goBack

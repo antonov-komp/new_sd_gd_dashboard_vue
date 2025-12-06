@@ -16,6 +16,7 @@
 
 import { ApiClient } from './api-client.js';
 import { CacheManager } from '../cache/cache-manager.js';
+import { Logger } from '../utils/logger.js';
 import { 
   createProgressDetails, 
   normalizeProgressData,
@@ -83,7 +84,7 @@ export class TicketRepository {
           
           allTickets.push(...stageTickets);
         } catch (stageError) {
-          console.error(`Error loading tickets for stage ${stageId}:`, stageError);
+          Logger.error(`Error loading tickets for stage ${stageId}`, 'TicketRepository', stageError);
           
           // Формируем понятное сообщение об ошибке
           let errorMessage = `Ошибка загрузки стадии "${stageName}"`;
@@ -107,7 +108,7 @@ export class TicketRepository {
         }
       }
     } catch (error) {
-      console.error('Error in getAllTickets:', error);
+      Logger.error('Error in getAllTickets', 'TicketRepository', error);
       throw error;
     }
 
@@ -220,7 +221,7 @@ export class TicketRepository {
           hasMore = false;
         }
       } catch (error) {
-        console.error(`Error loading tickets batch for stage ${stageId} (start: ${start}):`, error);
+        Logger.error(`Error loading tickets batch for stage ${stageId} (start: ${start})`, 'TicketRepository', error);
         
         // Если это первый батч и произошла ошибка - это критично
         if (start === 0) {

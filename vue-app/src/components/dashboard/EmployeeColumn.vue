@@ -86,6 +86,7 @@
 import { computed } from 'vue';
 import TicketCard from './TicketCard.vue';
 import { useDragAndDrop } from '@/composables/useDragAndDrop.js';
+import { useLogger } from '@/composables/useLogger.js';
 
 /**
  * Компонент колонки сотрудника
@@ -130,6 +131,8 @@ export default {
   },
   emits: ['ticket-clicked', 'ticket-dropped'],
   setup(props, { emit }) {
+    const logger = useLogger('EmployeeColumn');
+    
     /**
      * Callback при сбросе тикета
      * 
@@ -223,7 +226,7 @@ export default {
      */
     const handleAddTicket = () => {
       // Обработка добавления тикета (можно открыть модальное окно)
-      console.log('Add ticket for employee:', props.employee.id);
+      logger.debug('Add ticket for employee', props.employee.id);
     };
 
     return {

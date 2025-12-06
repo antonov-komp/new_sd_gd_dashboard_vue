@@ -12,6 +12,7 @@
  */
 
 import { TicketRepository } from '../data/ticket-repository.js';
+import { Logger } from '../utils/logger.js';
 
 /**
  * ID смарт-процесса сектора 1С
@@ -72,7 +73,7 @@ export class TicketDetailsService {
         rawData: ticketData
       };
     } catch (error) {
-      console.error('Error getting ticket details:', error);
+      Logger.error('Error getting ticket details', 'TicketDetailsService', error);
       throw error;
     }
   }
