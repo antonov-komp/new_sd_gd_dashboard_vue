@@ -29,6 +29,7 @@ import { groupTicketsByStages, getZeroPointTickets, extractUniqueEmployeeIds } f
 import { ApiClient } from './data/api-client.js';
 import { CacheManager } from './cache/cache-manager.js';
 import { ENTITY_TYPE_ID } from './utils/constants.js';
+import { TicketDetailsService } from './services/ticket-details-service.js';
 import { 
   createProgressDetails, 
   normalizeProgressData,
@@ -287,6 +288,30 @@ export class DashboardSector1CService {
       return mapTicket(bitrixTicket);
     } catch (error) {
       console.error('Error getting ticket:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Получение полных данных по тикету
+   * 
+   * Использует TicketDetailsService для получения всех полей тикета,
+   * включая дополнительные пользовательские поля (UF_*).
+   * 
+   * Метод: crm.item.get
+   * Документация: https://context7.com/bitrix24/rest/crm.item.get
+   * 
+   * @param {number} ticketId - ID тикета
+   * @param {object} options - Опции получения данных
+   * @param {Array<string>} options.select - Список полей для получения (по умолчанию ['*'] - все поля)
+   * @param {boolean} options.useOriginalUfNames - Использовать оригинальные имена пользовательских полей (по умолчанию true)
+   * @returns {Promise<object>} Полные данные тикета
+   */
+  static async getTicketDetails(ticketId, options = {}) {
+    try {
+      return await TicketDetailsService.getTicketDetails(ticketId, options);
+    } catch (error) {
+      console.error('Error getting ticket details:', error);
       throw error;
     }
   }
