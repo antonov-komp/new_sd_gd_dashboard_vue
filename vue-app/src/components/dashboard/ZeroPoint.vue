@@ -1,14 +1,7 @@
 <template>
   <div class="zero-point">
     <div class="zero-point-header">
-      <span class="zero-point-icon">📥</span>
-      <h3>[0] Нулевая точка</h3>
-      <span class="tickets-count">({{ tickets.length }})</span>
-    </div>
-    
-    <div class="zero-point-description">
-      <p>Входящие тикеты</p>
-      <p class="hint">Перетащите тикет на сотрудника</p>
+      <h3>Нулевая точка</h3>
     </div>
 
     <div class="zero-point-tickets">
@@ -22,7 +15,7 @@
       />
       
       <div v-if="tickets.length === 0" class="empty-state">
-        <p>Нет входящих тикетов</p>
+        <p>Нет неразобранных тикетов в стадии</p>
       </div>
     </div>
   </div>
@@ -98,14 +91,7 @@ export default {
 }
 
 .zero-point-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
   margin-bottom: 10px;
-}
-
-.zero-point-icon {
-  font-size: 24px;
 }
 
 .zero-point-header h3 {
@@ -113,31 +99,6 @@ export default {
   font-size: 16px;
   font-weight: 600;
   color: #333;
-  flex: 1;
-}
-
-.tickets-count {
-  font-size: 14px;
-  color: #666;
-  background: white;
-  padding: 4px 8px;
-  border-radius: 12px;
-}
-
-.zero-point-description {
-  margin-bottom: 15px;
-  font-size: 14px;
-  color: #666;
-}
-
-.zero-point-description p {
-  margin: 4px 0;
-}
-
-.hint {
-  font-size: 12px;
-  color: #999;
-  font-style: italic;
 }
 
 .zero-point-tickets {
