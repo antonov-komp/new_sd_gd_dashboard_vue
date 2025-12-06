@@ -2,6 +2,10 @@
   <div class="dashboard-sector-1c" :class="{ 'is-dragging': draggedTicket }">
     <!-- Заголовок -->
     <div class="dashboard-header">
+      <button class="back-button" @click="goBack" aria-label="Вернуться на главную">
+        <span class="back-button-icon">←</span>
+        <span class="back-button-text">НАЗАД</span>
+      </button>
       <h1>Дашборд - Сектор 1С</h1>
     </div>
 
@@ -32,11 +36,22 @@
         </div>
       </div>
     </Transition>
+
+    <!-- Плавающая кнопка "НАЗАД" для мобильной версии -->
+    <button 
+      class="floating-back-button" 
+      @click="goBack"
+      aria-label="Вернуться на главную"
+      title="Вернуться на главную"
+    >
+      <span class="floating-back-button-icon">←</span>
+    </button>
   </div>
 </template>
 
 <script>
 import { onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import DashboardStage from './DashboardStage.vue';
 import LoadingPreloader from './LoadingPreloader.vue';
 import { useDashboardState } from '@/composables/useDashboardState.js';
@@ -76,6 +91,9 @@ export default {
     LoadingPreloader
   },
   setup() {
+    // Роутер для навигации
+    const router = useRouter();
+
     // Используем композаблы для состояния и действий
     const state = useDashboardState();
     const actions = useDashboardActions(state);
@@ -84,6 +102,17 @@ export default {
     onMounted(() => {
       actions.loadSectorData();
     });
+
+    /**
+     * Возврат на стартовую страницу
+     * 
+     * Используется для кнопок навигации "НАЗАД":
+     * - Кнопка в заголовке (десктоп и планшет)
+     * - Плавающая кнопка (мобильная версия)
+     */
+    const goBack = () => {
+      router.push('/');
+    };
 
     /**
      * Обработка повтора загрузки при ошибке
@@ -119,7 +148,8 @@ export default {
       createTicket: actions.createTicket,
       getEmployeeTickets: state.getEmployeeTickets,
       handleRetry,
-      isTransitioning: actions.isTransitioning
+      isTransitioning: actions.isTransitioning,
+      goBack
     };
   }
 };
@@ -145,6 +175,9 @@ export default {
 }
 
 .dashboard-header {
+  display: flex;
+  align-items: center;
+  gap: 15px;
   margin-bottom: 20px;
   padding: 15px;
   background: white;
@@ -152,7 +185,41 @@ export default {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
+.back-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: #f5f5f5;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #333;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.back-button:hover {
+  background: #e0e0e0;
+  border-color: #bbb;
+}
+
+.back-button:active {
+  background: #d0d0d0;
+}
+
+.back-button-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.back-button-text {
+  font-weight: 500;
+}
+
 .dashboard-header h1 {
+  flex: 1;
   color: #333;
   font-size: 24px;
   margin: 0;
@@ -216,6 +283,65 @@ export default {
   
   .dashboard-sector-1c {
     padding: 10px;
+  }
+
+  /* Скрытие кнопки в заголовке на мобильной версии (для плавающей кнопки) */
+  .back-button {
+    display: none;
+  }
+}
+
+/* Плавающая кнопка "НАЗАД" для мобильной версии */
+.floating-back-button {
+  display: none; /* Скрыта по умолчанию */
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #2196F3; /* Акцентный цвет Bitrix24 */
+  color: white;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1);
+  z-index: 1000; /* Поверх всего контента */
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.floating-back-button:hover {
+  background: #1976D2;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2), 0 3px 6px rgba(0, 0, 0, 0.15);
+  transform: scale(1.05);
+}
+
+.floating-back-button:active {
+  background: #1565C0;
+  transform: scale(0.95);
+}
+
+.floating-back-button-icon {
+  font-size: 28px;
+  line-height: 1;
+  font-weight: bold;
+}
+
+/* Показываем плавающую кнопку только на мобильной версии */
+@media (max-width: 768px) {
+  .floating-back-button {
+    display: flex;
+  }
+}
+
+/* Скрываем плавающую кнопку на планшете и десктопе */
+@media (min-width: 769px) {
+  .floating-back-button {
+    display: none;
   }
 }
 </style>
