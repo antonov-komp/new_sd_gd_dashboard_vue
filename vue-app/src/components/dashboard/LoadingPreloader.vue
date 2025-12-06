@@ -349,6 +349,16 @@ export default {
 <style scoped>
 .loading-preloader {
   position: relative;
+  transition: opacity 0.3s ease-out;
+}
+
+/* Плавное исчезновение элементов прелоадера при fade-out */
+.preloader-fade-leave-active .loading-preloader {
+  transition: opacity 0.4s ease-out;
+}
+
+.preloader-fade-leave-to .loading-preloader {
+  opacity: 0;
 }
 
 /* Подложка (фон) */
@@ -393,6 +403,13 @@ export default {
 
 .spinner-container {
   margin-bottom: 30px;
+  transition: opacity 0.3s ease-out, transform 0.3s ease-out;
+}
+
+/* Плавное исчезновение спиннера при fade-out */
+.preloader-fade-leave-active .spinner-container {
+  opacity: 0;
+  transform: scale(0.9);
 }
 
 .spinner {
@@ -417,6 +434,12 @@ export default {
   align-items: center;
   gap: 20px;
   text-align: center;
+  transition: opacity 0.3s ease-out;
+}
+
+/* Плавное исчезновение контента при fade-out */
+.preloader-fade-leave-active .preloader-content {
+  opacity: 0;
 }
 
 .step-title {

@@ -48,7 +48,15 @@ export class EmployeeRepository {
       const result = await ApiClient.call('user.get', {
         filter: {
           ID: employeeIds
-        }
+        },
+        select: [
+          'ID',
+          'NAME',
+          'LAST_NAME',
+          'EMAIL',
+          'WORK_POSITION',
+          'UF_DEPARTMENT' // Важно: поле отдела для определения сектора
+        ]
       });
 
       // Проверяем структуру ответа

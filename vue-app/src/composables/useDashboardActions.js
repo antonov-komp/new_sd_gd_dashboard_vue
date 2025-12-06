@@ -4,6 +4,7 @@
  * Управляет действиями: загрузка данных, назначение тикетов, создание тикетов
  */
 
+import { ref } from 'vue';
 import { DashboardSector1CService } from '@/services/dashboard-sector-1c/index.js';
 import { useNotifications } from './useNotifications.js';
 import { useLoadingProgress } from './useLoadingProgress.js';
@@ -20,6 +21,14 @@ import { normalizeProgressData } from '@/services/dashboard-sector-1c/utils/prog
 export function useDashboardActions(state) {
   const notifications = useNotifications();
   const loadingProgress = useLoadingProgress();
+  
+  /**
+   * Состояние перехода от прелоадера к дашборду
+   * Используется для синхронизации анимаций fade-out прелоадера и fade-in дашборда
+   * 
+   * @type {import('vue').Ref<boolean>}
+   */
+  const isTransitioning = ref(false);
 
   /**
    * Обработка колбэка прогресса из сервиса
@@ -86,13 +95,24 @@ export function useDashboardActions(state) {
     } finally {
       // Небольшая задержка перед скрытием прелоадера (если загрузка успешна)
       if (!state.error.value) {
-        // Показываем "Готово!" на 800мс перед скрытием
+        // Показываем "Готово!" на 800мс перед началом перехода
+        loadingProgress.updateStep('complete', { description: 'Дашборд загружен' });
+        loadingProgress.updateProgress(100);
+        
         setTimeout(() => {
-          state.isLoading.value = false;
-          // Ещё небольшая задержка перед сбросом прогресса
+          // Начинаем переход: прелоадер начинает исчезать (fade-out)
+          isTransitioning.value = true;
+          
+          // После начала fade-out прелоадера (через 150мс) начинаем fade-in дашборда
+          setTimeout(() => {
+            state.isLoading.value = false;
+          }, 150);
+          
+          // После завершения анимации (через 400мс) сбрасываем прогресс и состояние перехода
           setTimeout(() => {
             loadingProgress.reset();
-          }, 200);
+            isTransitioning.value = false;
+          }, 400);
         }, 800);
       } else {
         state.isLoading.value = false;
@@ -218,7 +238,8 @@ export function useDashboardActions(state) {
     createTicket,
     handleTicketDragStart,
     handleTicketDrop,
-    loadingProgress
+    loadingProgress,
+    isTransitioning
   };
 }
 

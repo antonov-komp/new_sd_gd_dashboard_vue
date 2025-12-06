@@ -29,7 +29,7 @@ export const reportsConfig = {
       icon: '📊',
       route: '/reports/tickets',
       description: 'Статистика по тикетам и обращениям',
-      active: true
+      active: false
       // Дополнительные параметры (опционально)
       // category: 'tickets',
       // requiredAccess: 'basic'

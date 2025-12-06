@@ -5,29 +5,33 @@
       <h1>Дашборд - Сектор 1С</h1>
     </div>
 
-    <!-- Прелоадер -->
-    <LoadingPreloader
-      v-if="isLoading || error || currentStep"
-      :current-step="currentStep"
-      :progress="progress"
-      :step-details="stepDetails"
-      :error="error || null"
-      @retry="handleRetry"
-    />
+    <!-- Прелоадер с плавным исчезновением -->
+    <Transition name="preloader-fade">
+      <LoadingPreloader
+        v-if="isLoading || error || currentStep"
+        :current-step="currentStep"
+        :progress="progress"
+        :step-details="stepDetails"
+        :error="error || null"
+        @retry="handleRetry"
+      />
+    </Transition>
 
-    <!-- Контент дашборда -->
-    <div v-else class="dashboard-content">
-      <div class="stages-container">
-        <DashboardStage
-          v-for="stage in stages"
-          :key="stage.id"
-          :stage="stage"
-          :zero-point-tickets="zeroPointTickets[stage.id] || []"
-          @ticket-moved="handleTicketDrop"
-          @ticket-assigned="assignTicketToEmployee"
-        />
+    <!-- Контент дашборда с плавным появлением -->
+    <Transition name="dashboard-fade">
+      <div v-if="!isLoading && !error && !currentStep" class="dashboard-content">
+        <div class="stages-container">
+          <DashboardStage
+            v-for="stage in stages"
+            :key="stage.id"
+            :stage="stage"
+            :zero-point-tickets="zeroPointTickets[stage.id] || []"
+            @ticket-moved="handleTicketDrop"
+            @ticket-assigned="assignTicketToEmployee"
+          />
+        </div>
       </div>
-    </div>
+    </Transition>
   </div>
 </template>
 
@@ -114,7 +118,8 @@ export default {
       moveTicketToStage: actions.moveTicketToStage,
       createTicket: actions.createTicket,
       getEmployeeTickets: state.getEmployeeTickets,
-      handleRetry
+      handleRetry,
+      isTransitioning: actions.isTransitioning
     };
   }
 };
@@ -165,6 +170,37 @@ export default {
 }
 
 /* Стили для загрузки и ошибок теперь в компоненте LoadingPreloader */
+
+/* Анимация исчезновения прелоадера (fade-out) */
+.preloader-fade-leave-active {
+  transition: opacity 0.4s ease-out, transform 0.4s ease-out;
+}
+
+.preloader-fade-leave-from {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.preloader-fade-leave-to {
+  opacity: 0;
+  transform: scale(0.95);
+}
+
+/* Анимация появления дашборда (fade-in) */
+.dashboard-fade-enter-active {
+  transition: opacity 0.4s ease-in, transform 0.4s ease-in;
+  transition-delay: 0.15s; /* Начинаем после начала fade-out прелоадера */
+}
+
+.dashboard-fade-enter-from {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.dashboard-fade-enter-to {
+  opacity: 1;
+  transform: translateY(0);
+}
 
 /* Адаптивность */
 @media (max-width: 1024px) {

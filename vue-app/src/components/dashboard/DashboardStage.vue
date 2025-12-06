@@ -64,25 +64,30 @@ export default {
     const isDragging = ref(false);
 
     /**
-     * Подсчёт общего количества тикетов по стадии
+     * Подсчёт количества тикетов внутри сектора
      * 
-     * Сумма = тикеты в нулевой точке + тикеты у всех сотрудников
+     * Включает:
+     * - Тикеты в нулевой точке (они считаются внутри сектора)
+     * - Тикеты у сотрудников сектора 1С
      * 
-     * @returns {number} Общее количество тикетов
+     * @returns {number} Количество тикетов внутри сектора
      */
-    const totalTicketsCount = computed(() => {
-      // Тикеты в нулевой точке
+    const ticketsCountInsideSector = computed(() => {
+      // Тикеты в нулевой точке (считаются внутри сектора)
       const zeroPointCount = Array.isArray(props.zeroPointTickets) 
         ? props.zeroPointTickets.length 
         : 0;
       
-      // Тикеты у всех сотрудников в этой стадии
+      // Тикеты у сотрудников сектора 1С
       const employeesTicketsCount = Array.isArray(props.stage.employees)
         ? props.stage.employees.reduce((total, employee) => {
-            const employeeTickets = Array.isArray(employee.tickets) 
-              ? employee.tickets.length 
-              : 0;
-            return total + employeeTickets;
+            // Используем ticketsInsideSector, если доступно, иначе проверяем isFromSector1C
+            if (Array.isArray(employee.ticketsInsideSector)) {
+              return total + employee.ticketsInsideSector.length;
+            } else if (employee.isFromSector1C && Array.isArray(employee.tickets)) {
+              return total + employee.tickets.length;
+            }
+            return total;
           }, 0)
         : 0;
       
@@ -90,16 +95,58 @@ export default {
     });
 
     /**
+     * Подсчёт количества тикетов вне сектора
+     * 
+     * Включает тикеты у сотрудников других секторов (не 1С)
+     * 
+     * @returns {number} Количество тикетов вне сектора
+     */
+    const ticketsCountOutsideSector = computed(() => {
+      return Array.isArray(props.stage.employees)
+        ? props.stage.employees.reduce((total, employee) => {
+            // Используем ticketsOutsideSector, если доступно
+            if (Array.isArray(employee.ticketsOutsideSector)) {
+              return total + employee.ticketsOutsideSector.length;
+            } else if (!employee.isFromSector1C && Array.isArray(employee.tickets)) {
+              return total + employee.tickets.length;
+            }
+            return total;
+          }, 0)
+        : 0;
+    });
+
+    /**
+     * Подсчёт общего количества тикетов по стадии
+     * 
+     * Сумма = тикеты в нулевой точке + тикеты у всех сотрудников
+     * 
+     * @returns {number} Общее количество тикетов
+     */
+    const totalTicketsCount = computed(() => {
+      return ticketsCountInsideSector.value + ticketsCountOutsideSector.value;
+    });
+
+    /**
      * Название стадии с количеством тикетов
      * 
-     * Формат: "Название стадии (N)"
+     * Формат:
+     * - "Название стадии (N)" — если нет тикетов вне сектора
+     * - "Название стадии (N / M)" — если есть тикеты вне сектора (N — внутри, M — вне)
      * 
      * @returns {string} Название стадии с количеством тикетов
      */
     const stageNameWithCount = computed(() => {
       const baseName = props.stage?.name || 'Стадия';
-      const count = totalTicketsCount.value;
-      return `${baseName} (${count})`;
+      const insideCount = ticketsCountInsideSector.value;
+      const outsideCount = ticketsCountOutsideSector.value;
+      
+      if (outsideCount === 0) {
+        // Если нет тикетов вне сектора, показываем только одно число
+        return `${baseName} (${insideCount})`;
+      } else {
+        // Если есть тикеты вне сектора, показываем два числа
+        return `${baseName} (${insideCount} / ${outsideCount})`;
+      }
     });
 
     /**
@@ -145,6 +192,8 @@ export default {
 
     return {
       isDragging,
+      ticketsCountInsideSector,
+      ticketsCountOutsideSector,
       totalTicketsCount,
       stageNameWithCount,
       handleTicketDragged,

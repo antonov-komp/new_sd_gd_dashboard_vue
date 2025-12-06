@@ -13,6 +13,7 @@ import {
   parseEmployeeId, 
   isZeroPointTicket 
 } from '../utils/ticket-utils.js';
+import { SECTOR_1C_ID } from '../utils/sector-constants.js';
 
 /**
  * Группировка тикетов по этапам
@@ -48,24 +49,47 @@ export function groupTicketsByStages(tickets, employees) {
     return empId !== KEEPER_OBJECTS_ID;
   });
 
+  // Инициализируем стадии с разделением тикетов на внутри/вне сектора
+  // Используем sectorId из маппера для определения принадлежности к сектору 1С
   const stages = [
     {
       id: 'formed',
       name: 'Сформировано обращение',
       color: '#007bff',
-      employees: filteredEmployees.map(emp => ({ ...emp, tickets: [] }))
+      employees: filteredEmployees.map(emp => ({
+        ...emp,
+        // Используем sectorId из маппера (уже вычислен на основе UF_DEPARTMENT)
+        isFromSector1C: emp.sectorId === SECTOR_1C_ID,
+        tickets: [], // Все тикеты (для обратной совместимости)
+        ticketsInsideSector: [], // Тикеты внутри сектора
+        ticketsOutsideSector: [] // Тикеты вне сектора
+      }))
     },
     {
       id: 'review',
       name: 'Рассмотрение ТЗ',
       color: '#ffc107',
-      employees: filteredEmployees.map(emp => ({ ...emp, tickets: [] }))
+      employees: filteredEmployees.map(emp => ({
+        ...emp,
+        // Используем sectorId из маппера (уже вычислен на основе UF_DEPARTMENT)
+        isFromSector1C: emp.sectorId === SECTOR_1C_ID,
+        tickets: [], // Все тикеты (для обратной совместимости)
+        ticketsInsideSector: [], // Тикеты внутри сектора
+        ticketsOutsideSector: [] // Тикеты вне сектора
+      }))
     },
     {
       id: 'execution',
       name: 'Исполнение',
       color: '#28a745',
-      employees: filteredEmployees.map(emp => ({ ...emp, tickets: [] }))
+      employees: filteredEmployees.map(emp => ({
+        ...emp,
+        // Используем sectorId из маппера (уже вычислен на основе UF_DEPARTMENT)
+        isFromSector1C: emp.sectorId === SECTOR_1C_ID,
+        tickets: [], // Все тикеты (для обратной совместимости)
+        ticketsInsideSector: [], // Тикеты внутри сектора
+        ticketsOutsideSector: [] // Тикеты вне сектора
+      }))
     }
   ];
 
@@ -108,15 +132,51 @@ export function groupTicketsByStages(tickets, employees) {
             name: `Сотрудник #${employeeId}`,
             position: 'Неизвестно',
             email: '',
-            tickets: []
+            sectorId: null, // Неизвестный сектор для созданного сотрудника
+            departmentId: null,
+            isFromSector1C: false, // По умолчанию не из сектора 1С (не можем определить без данных)
+            tickets: [], // Все тикеты (для обратной совместимости)
+            ticketsInsideSector: [], // Тикеты внутри сектора
+            ticketsOutsideSector: [] // Тикеты вне сектора
           };
           stage.employees.push(employee);
           employeesMap.set(employeeId, employee); // Добавляем в Map для быстрого доступа
         }
         
-        employee.tickets.push(mapTicket(ticket));
+        const mappedTicket = mapTicket(ticket);
+        
+        // Добавляем тикет во все тикеты (для обратной совместимости)
+        employee.tickets.push(mappedTicket);
+        
+        // Разделяем тикеты на внутри/вне сектора
+        if (employee.isFromSector1C) {
+          // Сотрудник из сектора 1С — тикет внутри сектора
+          employee.ticketsInsideSector.push(mappedTicket);
+        } else {
+          // Сотрудник из другого сектора — тикет вне сектора
+          employee.ticketsOutsideSector.push(mappedTicket);
+        }
       }
     }
+  });
+
+  // Сортируем сотрудников в каждой стадии:
+  // 1. Сначала сотрудники сектора 1С (isFromSector1C === true)
+  // 2. Потом сотрудники других секторов (isFromSector1C === false)
+  // Внутри каждой группы сортируем по ID (по возрастанию)
+  stages.forEach(stage => {
+    stage.employees.sort((a, b) => {
+      // Сначала сравниваем по принадлежности к сектору 1С
+      if (a.isFromSector1C && !b.isFromSector1C) {
+        return -1; // a (сектор 1С) идёт первым
+      }
+      if (!a.isFromSector1C && b.isFromSector1C) {
+        return 1; // b (сектор 1С) идёт первым
+      }
+      // Если оба в одной группе (оба из сектора 1С или оба не из сектора 1С),
+      // сортируем по ID по возрастанию
+      return (a.id || 0) - (b.id || 0);
+    });
   });
 
   return stages;
