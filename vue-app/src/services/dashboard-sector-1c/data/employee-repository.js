@@ -65,6 +65,23 @@ export class EmployeeRepository {
       if (result && result.result) {
         if (Array.isArray(result.result)) {
           users = result.result;
+          
+          // Логирование для отладки (только в development)
+          if (import.meta.env?.MODE !== 'production') {
+            console.log('[EmployeeRepository] Loaded employees:', users.length);
+            // Логируем первого сотрудника для проверки формата данных
+            if (users.length > 0) {
+              const firstUser = users[0];
+              console.log('[EmployeeRepository] First employee sample:', {
+                ID: firstUser.ID,
+                NAME: firstUser.NAME,
+                LAST_NAME: firstUser.LAST_NAME,
+                UF_DEPARTMENT: firstUser.UF_DEPARTMENT,
+                UF_DEPARTMENT_type: typeof firstUser.UF_DEPARTMENT,
+                UF_DEPARTMENT_isArray: Array.isArray(firstUser.UF_DEPARTMENT)
+              });
+            }
+          }
         } else {
           Logger.warn('Unexpected user.get result format', 'EmployeeRepository', result);
         }

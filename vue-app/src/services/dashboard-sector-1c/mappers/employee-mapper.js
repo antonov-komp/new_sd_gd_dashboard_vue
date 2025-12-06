@@ -12,16 +12,28 @@ import { Logger } from '../utils/logger.js';
  * @returns {object} Сотрудник во внутреннем формате
  */
 export function mapEmployee(bitrixUser) {
+  // Определяем сектор из исходных данных Bitrix24 (до маппинга)
   const sectorId = getEmployeeSectorId(bitrixUser);
   
-  // Логирование для отладки определения сектора
+  // Логирование для отладки определения сектора (всегда, независимо от уровня логирования)
+  // Используем console.log для гарантированного вывода
   if (import.meta.env?.MODE !== 'production') {
-    Logger.debug(`Employee ${bitrixUser.ID} mapped`, 'EmployeeMapper', {
+    const logData = {
+      employeeId: bitrixUser.ID,
       name: `${bitrixUser.NAME || ''} ${bitrixUser.LAST_NAME || ''}`.trim(),
       UF_DEPARTMENT: bitrixUser.UF_DEPARTMENT,
+      UF_DEPARTMENT_type: typeof bitrixUser.UF_DEPARTMENT,
+      UF_DEPARTMENT_isArray: Array.isArray(bitrixUser.UF_DEPARTMENT),
       sectorId: sectorId,
-      isFromSector1C: sectorId === 366
-    });
+      isFromSector1C: sectorId === 366,
+      SECTOR_1C_ID: 366
+    };
+    
+    // Выводим в консоль напрямую для гарантированного отображения
+    console.log('[EmployeeMapper] Employee mapped:', logData);
+    
+    // Также используем Logger для структурированного логирования
+    Logger.debug(`Employee ${bitrixUser.ID} mapped`, 'EmployeeMapper', logData);
   }
   
   return {

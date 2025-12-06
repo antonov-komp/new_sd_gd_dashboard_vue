@@ -36,6 +36,7 @@ import {
   calculateProgress 
 } from './utils/progress-utils.js';
 import { Logger } from './utils/logger.js';
+import { clearSectorCache } from './utils/sector-helper.js';
 
 /**
  * Сервис для работы с дашбордом сектора 1С
@@ -150,6 +151,11 @@ export class DashboardSector1CService {
           description: `Загрузка данных ${uniqueEmployeeIds.length} сотрудников...`
         }));
       }
+      
+      // Очищаем кеш секторов перед загрузкой новых данных
+      // Это гарантирует, что секторы будут определены заново из свежих данных
+      clearSectorCache();
+      
       const bitrixUsers = await EmployeeRepository.getEmployeesByIds(uniqueEmployeeIds);
       const employees = mapEmployees(bitrixUsers);
       

@@ -24,22 +24,30 @@
     <div class="tickets-list">
       <!-- Тикеты внутри сектора (для сотрудников сектора 1С) -->
       <template v-if="employee.isFromSector1C">
-        <transition-group name="ticket" tag="div">
-          <TicketCard
-            v-for="ticket in ticketsToDisplay"
-            :key="ticket.id"
-            :ticket="ticket"
-            :draggable="true"
-            @click="$emit('ticket-clicked', ticket)"
-            @drag-start="handleTicketDragStart"
-          />
-        </transition-group>
+        <div
+          v-memo="[ticketsToDisplay.length, ticketsToDisplay.map(t => t.id).join(',')]"
+        >
+          <transition-group name="ticket" tag="div">
+            <TicketCard
+              v-for="ticket in ticketsToDisplay"
+              :key="ticket.id"
+              :ticket="ticket"
+              :draggable="true"
+              @click="$emit('ticket-clicked', ticket)"
+              @drag-start="handleTicketDragStart"
+            />
+          </transition-group>
+        </div>
       </template>
       
       <!-- Тикеты для сотрудников других секторов (с разделением) -->
       <template v-else>
         <!-- Тикеты внутри сектора (пусто для сотрудников других секторов) -->
-        <div v-if="ticketsInsideSector.length > 0" class="tickets-section tickets-inside-sector">
+        <div
+          v-if="ticketsInsideSector.length > 0"
+          v-memo="[ticketsInsideSector.length, ticketsInsideSector.map(t => t.id).join(',')]"
+          class="tickets-section tickets-inside-sector"
+        >
           <transition-group name="ticket" tag="div">
             <TicketCard
               v-for="ticket in ticketsInsideSector"
@@ -53,7 +61,11 @@
         </div>
         
         <!-- Тикеты вне сектора (отображаются в конце) -->
-        <div v-if="ticketsOutsideSector.length > 0" class="tickets-section tickets-outside-sector">
+        <div
+          v-if="ticketsOutsideSector.length > 0"
+          v-memo="[ticketsOutsideSector.length, ticketsOutsideSector.map(t => t.id).join(',')]"
+          class="tickets-section tickets-outside-sector"
+        >
           <div class="section-header">
             <span class="section-badge">Вне сектора</span>
             <span class="section-count">{{ ticketsOutsideSector.length }}</span>

@@ -18,6 +18,49 @@ import { LoggerConfig } from './logger-config.js';
  */
 export class Logger {
   /**
+   * Получение цвета для уровня логирования
+   * 
+   * @param {string} level - Уровень логирования
+   * @returns {string} Цвет в формате CSS
+   * @private
+   */
+  static getLevelColor(level) {
+    const colors = {
+      ERROR: '#dc3545',
+      WARN: '#ffc107',
+      INFO: '#17a2b8',
+      DEBUG: '#6c757d'
+    };
+    
+    return colors[level] || '#6c757d';
+  }
+
+  /**
+   * Форматирование сообщения с улучшенным выводом для DevTools
+   * 
+   * @param {string} level - Уровень логирования
+   * @param {string} message - Сообщение
+   * @param {string} context - Контекст
+   * @returns {object} Объект с отформатированным сообщением и стилями
+   * @private
+   */
+  static formatMessage(level, message, context = '') {
+    const timestamp = new Date().toISOString();
+    const levelColor = this.getLevelColor(level);
+    
+    // Форматирование для DevTools с цветами
+    const formatted = `%c[${timestamp}] %c[${level}] %c[${context || 'Unknown'}] %c${message}`;
+    const styles = [
+      'color: #6c757d; font-weight: normal', // timestamp
+      `color: ${levelColor}; font-weight: bold`, // level
+      'color: #007bff; font-weight: normal', // context
+      'color: #212529; font-weight: normal' // message
+    ];
+    
+    return { formatted, styles };
+  }
+
+  /**
    * Основной метод логирования
    * 
    * @param {string} level - Уровень логирования (ERROR, WARN, INFO, DEBUG)
@@ -31,51 +74,34 @@ export class Logger {
       return;
     }
     
-    // Форматируем сообщение
-    const timestamp = new Date().toISOString();
-    const contextStr = context ? `[${context}]` : '';
-    const formattedMessage = `[${timestamp}] [${level}] ${contextStr} ${message}`;
+    // Форматируем сообщение с улучшенным выводом
+    const formatted = this.formatMessage(level, message, context);
     
     // Выводим в консоль в зависимости от уровня
+    const args = [formatted.formatted, ...formatted.styles];
+    if (data !== null && data !== undefined) {
+      args.push(data);
+    }
+    
     switch (level) {
       case 'ERROR':
-        if (data !== null && data !== undefined) {
-          console.error(formattedMessage, data);
-        } else {
-          console.error(formattedMessage);
-        }
+        console.error(...args);
         break;
         
       case 'WARN':
-        if (data !== null && data !== undefined) {
-          console.warn(formattedMessage, data);
-        } else {
-          console.warn(formattedMessage);
-        }
+        console.warn(...args);
         break;
         
       case 'INFO':
-        if (data !== null && data !== undefined) {
-          console.info(formattedMessage, data);
-        } else {
-          console.info(formattedMessage);
-        }
+        console.info(...args);
         break;
         
       case 'DEBUG':
-        if (data !== null && data !== undefined) {
-          console.log(formattedMessage, data);
-        } else {
-          console.log(formattedMessage);
-        }
+        console.log(...args);
         break;
         
       default:
-        if (data !== null && data !== undefined) {
-          console.log(formattedMessage, data);
-        } else {
-          console.log(formattedMessage);
-        }
+        console.log(...args);
     }
   }
   

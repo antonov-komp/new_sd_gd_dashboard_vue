@@ -13,7 +13,7 @@ import {
   parseEmployeeId, 
   isZeroPointTicket 
 } from '../utils/ticket-utils.js';
-import { SECTOR_1C_ID } from '../utils/sector-constants.js';
+import { SECTOR_IDS, SECTOR_1C_ID } from '../utils/sector-constants.js';
 import { Logger } from '../utils/logger.js';
 
 /**
@@ -59,8 +59,9 @@ export function groupTicketsByStages(tickets, employees) {
       color: '#007bff',
       employees: filteredEmployees.map(emp => ({
         ...emp,
-        // Используем sectorId из маппера (уже вычислен на основе UF_DEPARTMENT)
-        isFromSector1C: emp.sectorId === SECTOR_1C_ID,
+        // Используем sectorId напрямую (уже определён в маппере)
+        // Это более эффективно, чем вызов функции
+        isFromSector1C: emp.sectorId === SECTOR_IDS.SECTOR_1C,
         tickets: [], // Все тикеты (для обратной совместимости)
         ticketsInsideSector: [], // Тикеты внутри сектора
         ticketsOutsideSector: [] // Тикеты вне сектора
@@ -72,8 +73,9 @@ export function groupTicketsByStages(tickets, employees) {
       color: '#ffc107',
       employees: filteredEmployees.map(emp => ({
         ...emp,
-        // Используем sectorId из маппера (уже вычислен на основе UF_DEPARTMENT)
-        isFromSector1C: emp.sectorId === SECTOR_1C_ID,
+        // Используем sectorId напрямую (уже определён в маппере)
+        // Это более эффективно, чем вызов функции
+        isFromSector1C: emp.sectorId === SECTOR_IDS.SECTOR_1C,
         tickets: [], // Все тикеты (для обратной совместимости)
         ticketsInsideSector: [], // Тикеты внутри сектора
         ticketsOutsideSector: [] // Тикеты вне сектора
@@ -85,8 +87,9 @@ export function groupTicketsByStages(tickets, employees) {
       color: '#28a745',
       employees: filteredEmployees.map(emp => ({
         ...emp,
-        // Используем sectorId из маппера (уже вычислен на основе UF_DEPARTMENT)
-        isFromSector1C: emp.sectorId === SECTOR_1C_ID,
+        // Используем sectorId напрямую (уже определён в маппере)
+        // Это более эффективно, чем вызов функции
+        isFromSector1C: emp.sectorId === SECTOR_IDS.SECTOR_1C,
         tickets: [], // Все тикеты (для обратной совместимости)
         ticketsInsideSector: [], // Тикеты внутри сектора
         ticketsOutsideSector: [] // Тикеты вне сектора

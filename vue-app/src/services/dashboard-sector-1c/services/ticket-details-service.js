@@ -13,6 +13,7 @@
 
 import { TicketRepository } from '../data/ticket-repository.js';
 import { Logger } from '../utils/logger.js';
+import { processAdditionalFields } from '../utils/ticket-field-processor.js';
 
 /**
  * ID смарт-процесса сектора 1С
@@ -33,12 +34,14 @@ export class TicketDetailsService {
    * @param {object} options - Опции получения данных
    * @param {Array<string>} options.select - Список полей для получения (по умолчанию ['*'] - все поля)
    * @param {boolean} options.useOriginalUfNames - Использовать оригинальные имена пользовательских полей (по умолчанию true)
-   * @returns {Promise<object>} Полные данные тикета
+   * @param {boolean} options.useCache - Использовать кеш для обработки полей (по умолчанию true)
+   * @returns {Promise<import('../types/ticket-types.js').TicketDetails>} Полные данные тикета
    */
   static async getTicketDetails(ticketId, options = {}) {
     const {
       select = ['*'],
-      useOriginalUfNames = true
+      useOriginalUfNames = true,
+      useCache = true
     } = options;
 
     try {
@@ -49,8 +52,8 @@ export class TicketDetailsService {
         throw new Error(`Тикет с ID ${ticketId} не найден`);
       }
 
-      // Обрабатываем дополнительные поля
-      const additionalFields = this.processAdditionalFields(ticketData);
+      // Использование оптимизированного процессора с кешированием
+      const additionalFields = processAdditionalFields(ticketData, ticketId, useCache);
 
       // Формируем структурированный ответ
       return {
@@ -78,59 +81,5 @@ export class TicketDetailsService {
     }
   }
 
-  /**
-   * Обработка дополнительных полей тикета
-   * 
-   * Извлекает и структурирует дополнительные пользовательские поля (UF_*)
-   * из данных тикета.
-   * 
-   * @param {object} ticketData - Данные тикета из Bitrix24
-   * @returns {object} Структурированные дополнительные поля
-   */
-  static processAdditionalFields(ticketData) {
-    const userFields = this.extractUserFields(ticketData);
-    
-    // Структурируем дополнительные поля
-    const additionalFields = {
-      // Пример: поле типа продукта
-      typeProduct: userFields.UF_CRM_7_TYPE_PRODUCT || 
-                   userFields.uf_crm_7_type_product || 
-                   userFields.ufCrm7TypeProduct || 
-                   null,
-      
-      // Добавьте здесь другие дополнительные поля по мере необходимости
-      // ...
-      
-      // Все пользовательские поля (для расширяемости)
-      all: userFields
-    };
-
-    return additionalFields;
-  }
-
-  /**
-   * Получение списка всех дополнительных полей
-   * 
-   * Извлекает все поля, начинающиеся с UF_ (пользовательские поля).
-   * 
-   * @param {object} ticketData - Данные тикета из Bitrix24
-   * @returns {object} Объект с дополнительными полями
-   */
-  static extractUserFields(ticketData) {
-    const userFields = {};
-
-    // Проходим по всем ключам объекта
-    for (const key in ticketData) {
-      if (ticketData.hasOwnProperty(key)) {
-        // Проверяем, начинается ли ключ с UF_
-        const lowerKey = key.toLowerCase();
-        if (lowerKey.startsWith('uf_')) {
-          userFields[key] = ticketData[key];
-        }
-      }
-    }
-
-    return userFields;
-  }
 }
 

@@ -6,13 +6,20 @@
 
 // Реэкспорт констант секторов для удобства использования
 export {
+  // Старые константы (для обратной совместимости)
   SECTOR_1C_ID,
   SECTOR_HARDWARE_ID,
   SECTOR_BITRIX24_ID,
   SECTOR_PDM_ID,
   KEEPER_USER_ID,
   ALL_SECTOR_IDS,
-  OTHER_SECTOR_IDS
+  OTHER_SECTOR_IDS,
+  // Новые константы
+  SECTOR_IDS,
+  SECTOR_METADATA,
+  // Новые функции
+  isSectorId,
+  getSectorMetadata
 } from './sector-constants.js';
 
 /**

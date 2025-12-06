@@ -4,7 +4,11 @@
       <h3>Нулевая точка</h3>
     </div>
 
-    <div class="zero-point-tickets">
+    <!-- Оптимизация списка тикетов с v-memo -->
+    <div
+      v-memo="[tickets.length, tickets.map(t => t.id).join(',')]"
+      class="zero-point-tickets"
+    >
       <TicketCard
         v-for="ticket in tickets"
         :key="ticket.id"
@@ -13,32 +17,34 @@
         @drag-start="handleTicketDragStart(ticket)"
         @click="$emit('ticket-clicked', ticket)"
       />
-      
-      <div v-if="tickets.length === 0" class="empty-state">
-        <p>Нет неразобранных тикетов в стадии</p>
-      </div>
+    </div>
+    
+    <!-- Fallback с v-once для статического контента -->
+    <div v-if="!hasTickets" v-once class="empty-state">
+      <p>Нет неразобранных тикетов в стадии</p>
     </div>
   </div>
 </template>
 
 <script>
+import { computed } from 'vue';
 import TicketCard from './TicketCard.vue';
 
 /**
- * Компонент нулевой точки
+ * Компонент нулевой точки (Неразобранное)
  * 
- * Отображает входящие тикеты для этапа (тикеты без назначенного сотрудника)
- * Позволяет перетаскивать тикеты из нулевой точки на сотрудников
+ * Отображает тикеты с ответственным 1051 (Хранитель объектов) или без назначенного сотрудника.
+ * Если тикетов нет, показывает fallback-сообщение "Нет неразобранных тикетов в стадии".
  * 
  * Используется в:
  * - DashboardStage.vue (для каждого этапа)
  * 
+ * После TASK-012:
+ * - Убраны иконка и счётчик из заголовка
+ * - Убран блок описания
+ * - Обновлён fallback для пустого состояния
+ * 
  * @component
- * @prop {Array} tickets - Массив тикетов без назначенного сотрудника
- * @prop {string} stageId - ID этапа
- * @emits {Object} ticket-dragged - Тикет начал перетаскиваться
- * @emits {Object} ticket-assigned - Тикет назначен сотруднику
- * @emits {Object} ticket-clicked - Тикет кликнут
  */
 export default {
   name: 'ZeroPoint',
@@ -47,15 +53,25 @@ export default {
   },
   props: {
     /**
-     * Массив тикетов без назначенного сотрудника
+     * Список тикетов нулевой точки
+     * 
+     * Тикеты без назначенного сотрудника или с ответственным 1051 (Хранитель объектов).
+     * 
      * @type {Array<Object>}
+     * @property {number} ticket.id - ID тикета
+     * @property {string} ticket.title - Название тикета
+     * @property {number} ticket.assignedById - ID ответственного (null или 1051)
      */
     tickets: {
       type: Array,
+      required: true,
       default: () => []
     },
     /**
      * ID этапа
+     * 
+     * Используется для идентификации этапа, к которому относится нулевая точка.
+     * 
      * @type {string}
      */
     stageId: {
@@ -63,8 +79,42 @@ export default {
       required: true
     }
   },
-  emits: ['ticket-dragged', 'ticket-assigned', 'ticket-clicked'],
+  emits: {
+    /**
+     * Событие начала перетаскивания тикета
+     * 
+     * @param {Object} ticket - Тикет, который начал перетаскиваться
+     */
+    'ticket-dragged': (ticket) => typeof ticket === 'object' && ticket !== null,
+    /**
+     * Событие назначения тикета сотруднику
+     * 
+     * @param {Object} data - Данные назначения
+     * @param {Object} data.ticket - Тикет
+     * @param {number} data.employeeId - ID сотрудника
+     * @param {string} data.stageId - ID этапа
+     */
+    'ticket-assigned': (data) => typeof data === 'object' && data !== null,
+    /**
+     * Событие клика по тикету
+     * 
+     * @param {Object} ticket - Тикет, по которому кликнули
+     */
+    'ticket-clicked': (ticket) => typeof ticket === 'object' && ticket !== null
+  },
   setup(props, { emit }) {
+    /**
+     * Есть ли тикеты в нулевой точке
+     * 
+     * Computed свойство для оптимизации проверки наличия тикетов.
+     * Используется вместо прямого `tickets.length === 0` в template.
+     * 
+     * @returns {boolean} true, если есть тикеты
+     */
+    const hasTickets = computed(() => {
+      return Array.isArray(props.tickets) && props.tickets.length > 0;
+    });
+
     /**
      * Обработка начала перетаскивания тикета
      * 
@@ -75,6 +125,7 @@ export default {
     };
 
     return {
+      hasTickets,
       handleTicketDragStart
     };
   }

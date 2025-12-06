@@ -8,6 +8,8 @@ import { ref } from 'vue';
 import { DashboardSector1CService } from '@/services/dashboard-sector-1c/index.js';
 import { useNotifications } from './useNotifications.js';
 import { useLoadingProgress } from './useLoadingProgress.js';
+import { useTransition } from './useTransition.js';
+import { PRELOADER_TRANSITION } from '@/services/dashboard-sector-1c/utils/transition-config.js';
 import { handleErrorWithNotification } from '@/services/dashboard-sector-1c/utils/error-handler.js';
 import { canMoveTicket, validateTicketData } from '@/services/dashboard-sector-1c/utils/validation.js';
 import { normalizeProgressData } from '@/services/dashboard-sector-1c/utils/progress-utils.js';
@@ -21,14 +23,7 @@ import { normalizeProgressData } from '@/services/dashboard-sector-1c/utils/prog
 export function useDashboardActions(state) {
   const notifications = useNotifications();
   const loadingProgress = useLoadingProgress();
-  
-  /**
-   * Состояние перехода от прелоадера к дашборду
-   * Используется для синхронизации анимаций fade-out прелоадера и fade-in дашборда
-   * 
-   * @type {import('vue').Ref<boolean>}
-   */
-  const isTransitioning = ref(false);
+  const { isTransitioning, executeTransition } = useTransition();
 
   /**
    * Обработка колбэка прогресса из сервиса
@@ -95,25 +90,31 @@ export function useDashboardActions(state) {
     } finally {
       // Небольшая задержка перед скрытием прелоадера (если загрузка успешна)
       if (!state.error.value) {
-        // Показываем "Готово!" на 800мс перед началом перехода
+        // Показываем "Готово!" перед началом перехода
         loadingProgress.updateStep('complete', { description: 'Дашборд загружен' });
         loadingProgress.updateProgress(100);
         
+        // Используем конфигурацию для тайминга показа "Готово!"
+        const readyDisplayTime = PRELOADER_TRANSITION.readyDisplayTime || 800;
+        
         setTimeout(() => {
-          // Начинаем переход: прелоадер начинает исчезать (fade-out)
-          isTransitioning.value = true;
+          // Выполняем transition с таймингами из конфигурации
+          executeTransition(
+            () => {
+              // Начало fade-out прелоадера (isTransitioning устанавливается в executeTransition)
+            },
+            () => {
+              // Начало fade-in дашборда
+              state.isLoading.value = false;
+            },
+            PRELOADER_TRANSITION
+          );
           
-          // После начала fade-out прелоадера (через 150мс) начинаем fade-in дашборда
-          setTimeout(() => {
-            state.isLoading.value = false;
-          }, 150);
-          
-          // После завершения анимации (через 400мс) сбрасываем прогресс и состояние перехода
+          // Сброс прогресса после завершения fade-out
           setTimeout(() => {
             loadingProgress.reset();
-            isTransitioning.value = false;
-          }, 400);
-        }, 800);
+          }, PRELOADER_TRANSITION.fadeOutDuration);
+        }, readyDisplayTime);
       } else {
         state.isLoading.value = false;
       }
