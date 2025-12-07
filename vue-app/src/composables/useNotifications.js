@@ -1,83 +1,97 @@
-/**
- * Композабл для работы с уведомлениями Bitrix24
- * 
- * Обёртка над BX.UI.Notification для удобного использования в компонентах
- */
+import { ref } from 'vue';
 
-import { Logger } from '@/services/dashboard-sector-1c/utils/logger.js';
+const notifications = ref([]);
+let notificationIdCounter = 0;
 
 /**
- * Композабл для уведомлений
- * 
- * @returns {object} Объект с методами для показа уведомлений
+ * Composable для управления уведомлениями
  */
 export function useNotifications() {
   /**
-   * Показ уведомления
+   * Показать уведомление
    * 
-   * @param {string} message - Текст уведомления
-   * @param {string} type - Тип уведомления ('success', 'error', 'info', 'warning')
-   * @param {number} duration - Длительность показа в миллисекундах (по умолчанию 5000)
+   * @param {string} message Текст уведомления
+   * @param {string} type Тип (success, error, warning, info)
+   * @param {number} duration Длительность в мс (0 = не скрывать автоматически)
+   * @returns {number} ID уведомления
    */
-  const notify = (message, type = 'info', duration = 5000) => {
-    if (typeof BX !== 'undefined' && BX.UI && BX.UI.Notification) {
-      BX.UI.Notification.Center.notify({
-        content: message,
-        autoHideDelay: duration
-      });
-    } else {
-      // Fallback для окружений без Bitrix24
-      Logger.info(`[${type.toUpperCase()}] ${message}`, 'useNotifications');
+  const showNotification = (message, type = 'info', duration = 3000) => {
+    const id = ++notificationIdCounter;
+    const notification = {
+      id,
+      message,
+      type,
+      duration,
+      timestamp: Date.now()
+    };
+
+    notifications.value.push(notification);
+
+    // Автоматическое скрытие
+    if (duration > 0) {
+      setTimeout(() => {
+        removeNotification(id);
+      }, duration);
+    }
+
+    return id;
+  };
+
+  /**
+   * Удалить уведомление
+   * 
+   * @param {number} id ID уведомления
+   */
+  const removeNotification = (id) => {
+    const index = notifications.value.findIndex(n => n.id === id);
+    if (index > -1) {
+      notifications.value.splice(index, 1);
     }
   };
 
   /**
-   * Показ уведомления об успехе
-   * 
-   * @param {string} message - Текст уведомления
-   * @param {number} duration - Длительность показа
+   * Очистить все уведомления
+   */
+  const clearNotifications = () => {
+    notifications.value = [];
+  };
+
+  /**
+   * Успешное уведомление
    */
   const success = (message, duration = 3000) => {
-    notify(message, 'success', duration);
+    return showNotification(message, 'success', duration);
   };
 
   /**
-   * Показ уведомления об ошибке
-   * 
-   * @param {string} message - Текст уведомления
-   * @param {number} duration - Длительность показа
+   * Уведомление об ошибке
    */
   const error = (message, duration = 5000) => {
-    notify(message, 'error', duration);
+    return showNotification(message, 'error', duration);
   };
 
   /**
-   * Показ информационного уведомления
-   * 
-   * @param {string} message - Текст уведомления
-   * @param {number} duration - Длительность показа
-   */
-  const info = (message, duration = 4000) => {
-    notify(message, 'info', duration);
-  };
-
-  /**
-   * Показ предупреждения
-   * 
-   * @param {string} message - Текст уведомления
-   * @param {number} duration - Длительность показа
+   * Предупреждение
    */
   const warning = (message, duration = 4000) => {
-    notify(message, 'warning', duration);
+    return showNotification(message, 'warning', duration);
+  };
+
+  /**
+   * Информационное уведомление
+   */
+  const info = (message, duration = 3000) => {
+    return showNotification(message, 'info', duration);
   };
 
   return {
-    notify,
+    notifications,
+    showNotification,
+    removeNotification,
+    clearNotifications,
     success,
     error,
-    info,
-    warning
+    warning,
+    info
   };
 }
-
-

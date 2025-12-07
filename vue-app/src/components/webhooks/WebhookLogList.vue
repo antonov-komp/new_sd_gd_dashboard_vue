@@ -1,37 +1,81 @@
 <template>
   <div class="webhook-log-list">
-    <!-- Состояние загрузки -->
-    <div v-if="loading" class="loading-state">
-      <p>Загрузка логов...</p>
-    </div>
-
-    <!-- Состояние ошибки -->
-    <div v-else-if="error" class="error-state">
-      <p class="error-message">{{ error }}</p>
-    </div>
-
     <!-- Таблица логов -->
-    <div v-else-if="logs.length > 0" class="logs-table-container">
+    <div v-if="logs.length > 0" class="logs-table-container">
       <table class="logs-table">
         <thead>
           <tr>
-            <th>Дата и время</th>
-            <th>Тип события</th>
-            <th>Категория</th>
-            <th>IP</th>
+            <th class="checkbox-header">
+              <input
+                type="checkbox"
+                :checked="allSelected"
+                @change="handleSelectAll"
+                @click.stop
+                class="checkbox-input"
+                title="Выбрать все"
+              />
+            </th>
+            <th 
+              @click="handleSort('timestamp')"
+              class="sortable"
+              :class="{ 'sort-asc': sortBy === 'timestamp' && sortOrder === 'asc', 'sort-desc': sortBy === 'timestamp' && sortOrder === 'desc' }"
+            >
+              Дата и время
+              <span class="sort-icon">{{ getSortIcon('timestamp') }}</span>
+            </th>
+            <th 
+              @click="handleSort('event')"
+              class="sortable"
+              :class="{ 'sort-asc': sortBy === 'event' && sortOrder === 'asc', 'sort-desc': sortBy === 'event' && sortOrder === 'desc' }"
+            >
+              Тип события
+              <span class="sort-icon">{{ getSortIcon('event') }}</span>
+            </th>
+            <th 
+              @click="handleSort('category')"
+              class="sortable"
+              :class="{ 'sort-asc': sortBy === 'category' && sortOrder === 'asc', 'sort-desc': sortBy === 'category' && sortOrder === 'desc' }"
+            >
+              Категория
+              <span class="sort-icon">{{ getSortIcon('category') }}</span>
+            </th>
+            <th 
+              @click="handleSort('ip')"
+              class="sortable"
+              :class="{ 'sort-asc': sortBy === 'ip' && sortOrder === 'asc', 'sort-desc': sortBy === 'ip' && sortOrder === 'desc' }"
+            >
+              IP
+              <span class="sort-icon">{{ getSortIcon('ip') }}</span>
+            </th>
             <th>Детали</th>
             <th>Действия</th>
           </tr>
         </thead>
         <tbody>
           <tr
-            v-for="log in logs"
+            v-for="log in sortedLogs"
             :key="getLogId(log)"
             @click="handleLogClick(log)"
             class="log-row"
+            :class="{ 'row-selected': isSelected(log) }"
           >
+            <td @click.stop>
+              <input
+                type="checkbox"
+                :checked="isSelected(log)"
+                @change="handleSelectLog(log, $event)"
+                class="checkbox-input"
+              />
+            </td>
             <td>{{ formatTimestamp(log.timestamp) }}</td>
             <td>
+              <span 
+                class="status-indicator" 
+                :class="getStatusClass(log)"
+                :title="getStatusTitle(log)"
+              >
+                {{ getStatusIcon(log) }}
+              </span>
               <span class="event-badge" :class="getEventClass(log.event)">
                 {{ log.event }}
               </span>
@@ -83,14 +127,12 @@
       </div>
     </div>
 
-    <!-- Пустое состояние -->
-    <div v-else class="empty-state">
-      <p>Логи не найдены</p>
-    </div>
   </div>
 </template>
 
 <script>
+import { ref, computed } from 'vue';
+
 export default {
   name: 'WebhookLogList',
   props: {
@@ -109,10 +151,103 @@ export default {
     pagination: {
       type: Object,
       default: null
+    },
+    selectedLogs: {
+      type: Array,
+      default: () => []
     }
   },
-  emits: ['select-log', 'page-change'],
+  emits: ['select-log', 'page-change', 'update:selectedLogs'],
   setup(props, { emit }) {
+    // Состояние сортировки
+    const sortBy = ref('timestamp');
+    const sortOrder = ref('desc'); // 'asc' | 'desc'
+    
+    // Обработчик клика по заголовку колонки
+    const handleSort = (column) => {
+      if (sortBy.value === column) {
+        // Если уже сортируем по этой колонке, меняем порядок
+        sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc';
+      } else {
+        // Новая колонка - сортируем по убыванию
+        sortBy.value = column;
+        sortOrder.value = 'desc';
+      }
+    };
+    
+    // Вычисляемое свойство для отсортированных логов
+    const sortedLogs = computed(() => {
+      if (!props.logs || props.logs.length === 0) {
+        return [];
+      }
+      
+      const logs = [...props.logs]; // Копия массива
+      
+      return logs.sort((a, b) => {
+        let aValue, bValue;
+        
+        switch (sortBy.value) {
+          case 'timestamp':
+            aValue = new Date(a.timestamp || 0).getTime();
+            bValue = new Date(b.timestamp || 0).getTime();
+            break;
+          case 'event':
+            aValue = (a.event || '').toLowerCase();
+            bValue = (b.event || '').toLowerCase();
+            break;
+          case 'category':
+            aValue = (a.category || '').toLowerCase();
+            bValue = (b.category || '').toLowerCase();
+            break;
+          case 'ip':
+            aValue = (a.ip || '').toLowerCase();
+            bValue = (b.ip || '').toLowerCase();
+            break;
+          default:
+            return 0;
+        }
+        
+        if (aValue < bValue) {
+          return sortOrder.value === 'asc' ? -1 : 1;
+        }
+        if (aValue > bValue) {
+          return sortOrder.value === 'asc' ? 1 : -1;
+        }
+        return 0;
+      });
+    });
+    
+    // Получить класс для иконки сортировки
+    const getSortIcon = (column) => {
+      if (sortBy.value !== column) {
+        return '↕️'; // Нейтральная иконка
+      }
+      return sortOrder.value === 'asc' ? '↑' : '↓';
+    };
+    
+    // Получить класс статуса для лога
+    const getStatusClass = (log) => {
+      if (log.category === 'errors') {
+        return 'status-error';
+      }
+      return 'status-success';
+    };
+    
+    // Получить иконку статуса
+    const getStatusIcon = (log) => {
+      if (log.category === 'errors') {
+        return '❌';
+      }
+      return '✅';
+    };
+    
+    // Получить title для статуса
+    const getStatusTitle = (log) => {
+      if (log.category === 'errors') {
+        return 'Ошибка обработки';
+      }
+      return 'Успешно обработано';
+    };
     const getLogId = (log) => {
       return `${log.timestamp}_${log.event}_${log.ip || 'unknown'}`;
     };
@@ -167,14 +302,65 @@ export default {
       }
     };
 
+    // Проверка, выбран ли лог
+    const isSelected = (log) => {
+      return props.selectedLogs.some(selected => getLogId(selected) === getLogId(log));
+    };
+
+    // Обработка выбора/снятия выбора лога
+    const handleSelectLog = (log, event) => {
+      event.stopPropagation();
+      const selected = [...props.selectedLogs];
+      const logId = getLogId(log);
+      const index = selected.findIndex(l => getLogId(l) === logId);
+      
+      if (event.target.checked) {
+        if (index === -1) {
+          selected.push(log);
+        }
+      } else {
+        if (index !== -1) {
+          selected.splice(index, 1);
+        }
+      }
+      
+      emit('update:selectedLogs', selected);
+    };
+
+    // Выбор всех логов
+    const handleSelectAll = (event) => {
+      if (event.target.checked) {
+        emit('update:selectedLogs', [...props.logs]);
+      } else {
+        emit('update:selectedLogs', []);
+      }
+    };
+
+    // Проверка, выбраны ли все логи
+    const allSelected = computed(() => {
+      return props.logs.length > 0 && props.logs.every(log => isSelected(log));
+    });
+
     return {
+      sortBy,
+      sortOrder,
+      sortedLogs,
+      handleSort,
+      getSortIcon,
+      getStatusClass,
+      getStatusIcon,
+      getStatusTitle,
       getLogId,
       formatTimestamp,
       getCategoryLabel,
       getCategoryClass,
       getEventClass,
       handleLogClick,
-      handlePageChange
+      handlePageChange,
+      isSelected,
+      handleSelectLog,
+      handleSelectAll,
+      allSelected
     };
   }
 };
@@ -190,6 +376,27 @@ export default {
 .empty-state {
   padding: 40px;
   text-align: center;
+  color: #666;
+}
+
+.empty-icon {
+  font-size: 64px;
+  margin-bottom: 20px;
+}
+
+.empty-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 10px 0;
+  color: #333;
+}
+
+.empty-description {
+  font-size: 14px;
+  margin: 0;
+  max-width: 400px;
+  margin-left: auto;
+  margin-right: auto;
   color: #666;
 }
 
@@ -221,6 +428,44 @@ export default {
   font-size: 14px;
   color: #333;
   border-bottom: 2px solid #ddd;
+  position: relative;
+}
+
+.checkbox-header {
+  width: 40px;
+  text-align: center;
+}
+
+.checkbox-input {
+  cursor: pointer;
+  width: 18px;
+  height: 18px;
+}
+
+.sortable {
+  cursor: pointer;
+  user-select: none;
+  padding-right: 25px;
+  transition: background-color 0.2s;
+}
+
+.sortable:hover {
+  background-color: #f0f0f0;
+}
+
+.sort-icon {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+.sort-asc .sort-icon,
+.sort-desc .sort-icon {
+  opacity: 1;
+  font-weight: bold;
 }
 
 .logs-table td {
@@ -236,6 +481,33 @@ export default {
 
 .log-row:hover {
   background: #f9f9f9;
+}
+
+.log-row.row-selected {
+  background: #e3f2fd;
+}
+
+.log-row.row-selected:hover {
+  background: #bbdefb;
+}
+
+.status-indicator {
+  display: inline-block;
+  margin-right: 8px;
+  font-size: 16px;
+  vertical-align: middle;
+}
+
+.status-success {
+  color: #28a745;
+}
+
+.status-error {
+  color: #dc3545;
+}
+
+.status-warning {
+  color: #ffc107;
 }
 
 .event-badge {

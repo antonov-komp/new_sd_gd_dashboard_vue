@@ -15,9 +15,21 @@ const routes = [
     component: IndexPage
   },
   {
+    // Старый маршрут - редирект на новый для обратной совместимости
     path: '/webhook-logs',
     name: 'webhook-logs',
-    component: WebhookLogsPage
+    redirect: '/admin/webhook-logs'
+  },
+  {
+    // Новый маршрут согласно admin-config.js
+    path: '/admin/webhook-logs',
+    name: 'admin-webhook-logs',
+    component: WebhookLogsPage,
+    meta: {
+      requiresAuth: true,
+      title: 'Логи вебхуков',
+      adminOnly: true
+    }
   },
   {
     path: '/dashboard/sector-1c',

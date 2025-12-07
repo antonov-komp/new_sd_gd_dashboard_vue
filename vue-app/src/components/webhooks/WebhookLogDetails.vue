@@ -2,33 +2,62 @@
   <div v-if="log" class="webhook-log-details">
     <div class="details-header">
       <h3>Детали лога вебхука</h3>
-      <button @click="handleClose" class="btn-close">×</button>
+      <div class="header-actions">
+        <button 
+          @click="copyFullPayload" 
+          class="btn-copy"
+          title="Копировать весь payload"
+        >
+          📋 Копировать JSON
+        </button>
+        <button @click="handleClose" class="btn-close">×</button>
+      </div>
     </div>
 
     <div class="details-content">
+      <!-- Сообщение об успешном копировании -->
+      <div v-if="copySuccess" class="copy-success-message">
+        ✅ Скопировано в буфер обмена!
+      </div>
+      
+      <!-- Сообщение об ошибке -->
+      <div v-if="copyError" class="copy-error-message">
+        ❌ {{ copyError }}
+      </div>
+
       <!-- Основная информация -->
       <div class="details-section">
         <h4>Основная информация</h4>
         <div class="info-grid">
-          <div class="info-item">
-            <label>Дата и время:</label>
-            <span>{{ formatTimestamp(log.timestamp) }}</span>
-          </div>
-          <div class="info-item">
-            <label>Тип события:</label>
-            <span class="event-badge" :class="getEventClass(log.event)">
-              {{ log.event }}
-            </span>
-          </div>
-          <div class="info-item">
-            <label>Категория:</label>
-            <span class="category-badge" :class="getCategoryClass(log.category)">
-              {{ getCategoryLabel(log.category) }}
-            </span>
-          </div>
-          <div class="info-item">
-            <label>IP адрес:</label>
-            <span>{{ log.ip || 'N/A' }}</span>
+          <div 
+            v-for="(value, key) in mainInfo" 
+            :key="key"
+            class="info-item"
+          >
+            <label>{{ formatKey(key) }}:</label>
+            <div class="info-value-wrapper">
+              <span v-if="key === 'event'">
+                <span class="event-badge" :class="getEventClass(value)">
+                  {{ value }}
+                </span>
+              </span>
+              <span v-else-if="key === 'category'">
+                <span class="category-badge" :class="getCategoryClass(value)">
+                  {{ getCategoryLabel(value) }}
+                </span>
+              </span>
+              <span v-else-if="key === 'timestamp'">
+                {{ formatTimestamp(value) }}
+              </span>
+              <span v-else>{{ value || 'N/A' }}</span>
+              <button 
+                @click="copyField(key, value)"
+                class="btn-copy-field"
+                title="Копировать значение"
+              >
+                📋
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -50,17 +79,63 @@
 
       <!-- Полный payload -->
       <div class="details-section">
-        <h4>Полный payload</h4>
+        <div class="section-header">
+          <h4>Полный payload</h4>
+          <div class="section-actions">
+            <span v-if="payloadSize > MAX_DISPLAY_SIZE" class="size-warning">
+              Большой JSON ({{ formatBytes(payloadSize) }})
+            </span>
+            <button 
+              v-if="payloadSize > MAX_DISPLAY_SIZE && !showFullPayload"
+              @click="showFullPayload = true"
+              class="btn-show-more"
+            >
+              Показать полностью
+            </button>
+            <button 
+              @click="copyFullPayload"
+              class="btn-copy-section"
+              title="Копировать весь payload"
+            >
+              📋 Копировать
+            </button>
+          </div>
+        </div>
         <div class="json-container">
-          <pre class="json-content">{{ formatJson(log.payload) }}</pre>
+          <pre class="json-content" v-if="!isPayloadTooLarge">{{ formattedPayload }}</pre>
+          <div v-else class="payload-too-large">
+            <p>⚠️ Payload слишком большой для отображения ({{ formatBytes(payloadSize) }})</p>
+            <p>Используйте кнопку "Копировать" для получения данных или экспортируйте логи.</p>
+            <button @click="copyFullPayload" class="btn-copy-section">
+              📋 Копировать payload
+            </button>
+          </div>
         </div>
       </div>
 
       <!-- Метаданные (если есть) -->
       <div v-if="log.metadata" class="details-section">
-        <h4>Метаданные</h4>
+        <div class="section-header">
+          <h4>Метаданные</h4>
+          <div class="section-actions">
+            <span v-if="metadataSize > MAX_DISPLAY_SIZE" class="size-warning">
+              Большой JSON ({{ formatBytes(metadataSize) }})
+            </span>
+            <button 
+              v-if="metadataSize > MAX_DISPLAY_SIZE && !showFullMetadata"
+              @click="showFullMetadata = true"
+              class="btn-show-more"
+            >
+              Показать полностью
+            </button>
+          </div>
+        </div>
         <div class="json-container">
-          <pre class="json-content">{{ formatJson(log.metadata) }}</pre>
+          <pre class="json-content" v-if="!isMetadataTooLarge">{{ formattedMetadata }}</pre>
+          <div v-else class="payload-too-large">
+            <p>⚠️ Metadata слишком большой для отображения ({{ formatBytes(metadataSize) }})</p>
+            <p>Используйте экспорт для получения данных.</p>
+          </div>
         </div>
       </div>
     </div>
@@ -72,6 +147,8 @@
 </template>
 
 <script>
+import { ref, computed, watch } from 'vue';
+
 export default {
   name: 'WebhookLogDetails',
   props: {
@@ -82,6 +159,100 @@ export default {
   },
   emits: ['close'],
   setup(props, { emit }) {
+    const copySuccess = ref(false);
+    const copyError = ref(null);
+    const showFullPayload = ref(false);
+    const showFullMetadata = ref(false);
+    const MAX_DISPLAY_SIZE = 50000; // Максимальный размер для отображения (50KB)
+    const MAX_SAFE_SIZE = 200000; // Максимальный безопасный размер (200KB) - больше не рендерим в DOM
+    
+    // Проверка, слишком ли большой payload для отображения
+    const isPayloadTooLarge = computed(() => {
+      return payloadSize.value > MAX_SAFE_SIZE;
+    });
+    
+    // Проверка, слишком ли большой metadata для отображения
+    const isMetadataTooLarge = computed(() => {
+      return metadataSize.value > MAX_SAFE_SIZE;
+    });
+    
+    // Копирование текста в буфер обмена
+    const copyToClipboard = async (text) => {
+      copySuccess.value = false;
+      copyError.value = null;
+      
+      try {
+        // Проверка поддержки Clipboard API
+        if (!navigator.clipboard) {
+          throw new Error('Clipboard API не поддерживается');
+        }
+        
+        await navigator.clipboard.writeText(text);
+        copySuccess.value = true;
+        
+        // Скрыть сообщение об успехе через 2 секунды
+        setTimeout(() => {
+          copySuccess.value = false;
+        }, 2000);
+      } catch (err) {
+        console.error('Failed to copy:', err);
+        copyError.value = err.message;
+        
+        // Fallback для старых браузеров
+        try {
+          const textArea = document.createElement('textarea');
+          textArea.value = text;
+          textArea.style.position = 'fixed';
+          textArea.style.left = '-999999px';
+          document.body.appendChild(textArea);
+          textArea.select();
+          document.execCommand('copy');
+          document.body.removeChild(textArea);
+          copySuccess.value = true;
+          setTimeout(() => {
+            copySuccess.value = false;
+          }, 2000);
+        } catch (fallbackErr) {
+          copyError.value = 'Не удалось скопировать';
+        }
+      }
+    };
+    
+    // Копирование всего JSON payload
+    const copyFullPayload = () => {
+      if (!props.log || !props.log.payload) {
+        return;
+      }
+      try {
+        const jsonString = safeStringify(props.log.payload, 2);
+        copyToClipboard(jsonString);
+      } catch (e) {
+        console.error('[WebhookLogDetails] Error copying payload:', e);
+        copyError.value = 'Ошибка при копировании payload';
+      }
+    };
+    
+    // Копирование конкретного поля
+    const copyField = (key, value) => {
+      try {
+        const text = `${key}: ${typeof value === 'object' ? safeStringify(value, 2) : value}`;
+        copyToClipboard(text);
+      } catch (e) {
+        console.error('[WebhookLogDetails] Error copying field:', e);
+        copyError.value = 'Ошибка при копировании поля';
+      }
+    };
+    
+    // Основная информация для отображения
+    const mainInfo = computed(() => {
+      if (!props.log) return {};
+      return {
+        timestamp: props.log.timestamp,
+        event: props.log.event,
+        category: props.log.category,
+        ip: props.log.ip
+      };
+    });
     const formatTimestamp = (timestamp) => {
       if (!timestamp) return 'N/A';
       try {
@@ -135,25 +306,174 @@ export default {
         return 'N/A';
       }
       if (typeof value === 'object') {
-        return JSON.stringify(value, null, 2);
+        try {
+          return safeStringify(value, 2);
+        } catch (e) {
+          return '[Ошибка форматирования объекта]';
+        }
       }
       return String(value);
     };
 
-    const formatJson = (obj) => {
+    // Мемоизация для оптимизации рендеринга (используем WeakMap для избежания утечек памяти)
+    const formatJsonMemo = new WeakMap();
+    
+    // Функция для безопасного JSON.stringify с защитой от циклических ссылок
+    const safeStringify = (obj, space = 2) => {
+      const seen = new WeakSet();
+      return JSON.stringify(obj, (key, value) => {
+        if (typeof value === 'object' && value !== null) {
+          if (seen.has(value)) {
+            return '[Circular]';
+          }
+          seen.add(value);
+        }
+        return value;
+      }, space);
+    };
+    
+    const formatJson = (obj, maxSize = null, showFull = false) => {
       if (!obj) return 'N/A';
+      
       try {
-        return JSON.stringify(obj, null, 2);
+        // Проверка кеша (используем сам объект как ключ через WeakMap)
+        if (formatJsonMemo.has(obj) && !showFull) {
+          const cached = formatJsonMemo.get(obj);
+          if (cached.maxSize === maxSize && cached.showFull === showFull) {
+            return cached.result;
+          }
+        }
+        
+        // Безопасное преобразование в JSON
+        const jsonString = safeStringify(obj, 2);
+        const size = new Blob([jsonString]).size;
+        
+        let result;
+        if (maxSize && size > maxSize && !showFull) {
+          // Обрезка большого JSON
+          const truncated = jsonString.substring(0, maxSize);
+          result = truncated + '\n\n... [JSON обрезан, нажмите "Показать полностью" для просмотра]';
+        } else {
+          result = jsonString;
+        }
+        
+        // Кеширование (только для небольших объектов, чтобы не забивать память)
+        if (size < 100000) { // Кешируем только объекты меньше 100KB
+          formatJsonMemo.set(obj, {
+            result,
+            maxSize,
+            showFull,
+            size
+          });
+        }
+        
+        return result;
       } catch (e) {
-        return String(obj);
+        console.error('[WebhookLogDetails] Error formatting JSON:', e);
+        return `[Ошибка форматирования JSON: ${e.message}]`;
       }
     };
+    
+    // Размеры JSON (с защитой от ошибок)
+    const payloadSize = computed(() => {
+      if (!props.log?.payload) return 0;
+      try {
+        // Используем безопасный stringify с таймаутом для очень больших объектов
+        const startTime = performance.now();
+        const jsonString = safeStringify(props.log.payload);
+        const elapsed = performance.now() - startTime;
+        
+        // Если stringify занял больше 100ms, считаем объект слишком большим
+        if (elapsed > 100) {
+          console.warn('[WebhookLogDetails] Payload stringify took too long:', elapsed, 'ms');
+          return MAX_SAFE_SIZE + 1;
+        }
+        
+        return new Blob([jsonString]).size;
+      } catch (e) {
+        console.warn('[WebhookLogDetails] Error calculating payload size:', e);
+        // Если не удалось вычислить размер, возвращаем большое значение для безопасности
+        return MAX_SAFE_SIZE + 1;
+      }
+    });
+    
+    const metadataSize = computed(() => {
+      if (!props.log?.metadata) return 0;
+      try {
+        const jsonString = safeStringify(props.log.metadata);
+        return new Blob([jsonString]).size;
+      } catch (e) {
+        console.warn('[WebhookLogDetails] Error calculating metadata size:', e);
+        return 0;
+      }
+    });
+    
+    // Форматированные JSON с ограничением размера (ленивое вычисление)
+    const formattedPayload = computed(() => {
+      if (!props.log?.payload) return 'N/A';
+      
+      // Если payload слишком большой, не форматируем его
+      if (isPayloadTooLarge.value) {
+        return '';
+      }
+      
+      try {
+        return formatJson(
+          props.log.payload, 
+          showFullPayload.value ? null : MAX_DISPLAY_SIZE,
+          showFullPayload.value
+        );
+      } catch (e) {
+        console.error('[WebhookLogDetails] Error formatting payload:', e);
+        return '[Ошибка форматирования payload]';
+      }
+    });
+    
+    const formattedMetadata = computed(() => {
+      if (!props.log?.metadata) return 'N/A';
+      
+      // Если metadata слишком большой, не форматируем его
+      if (isMetadataTooLarge.value) {
+        return '';
+      }
+      
+      try {
+        return formatJson(
+          props.log.metadata, 
+          showFullMetadata.value ? null : MAX_DISPLAY_SIZE,
+          showFullMetadata.value
+        );
+      } catch (e) {
+        console.error('[WebhookLogDetails] Error formatting metadata:', e);
+        return '[Ошибка форматирования metadata]';
+      }
+    });
+    
+    // Форматирование байт
+    const formatBytes = (bytes) => {
+      if (bytes < 1024) return `${bytes} B`;
+      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    };
+    
+    // Сброс состояния при смене лога
+    watch(() => props.log, () => {
+      showFullPayload.value = false;
+      showFullMetadata.value = false;
+      // WeakMap очищается автоматически при удалении ссылок на объекты
+    }, { immediate: true });
 
     const handleClose = () => {
       emit('close');
     };
 
     return {
+      copySuccess,
+      copyError,
+      copyToClipboard,
+      copyFullPayload,
+      copyField,
+      mainInfo,
       formatTimestamp,
       getCategoryLabel,
       getCategoryClass,
@@ -161,6 +481,16 @@ export default {
       formatKey,
       formatValue,
       formatJson,
+      formattedPayload,
+      formattedMetadata,
+      payloadSize,
+      metadataSize,
+      showFullPayload,
+      showFullMetadata,
+      MAX_DISPLAY_SIZE,
+      isPayloadTooLarge,
+      isMetadataTooLarge,
+      formatBytes,
       handleClose
     };
   }
@@ -194,6 +524,12 @@ export default {
   border-radius: 8px 8px 0 0;
 }
 
+.header-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
 .details-header h3 {
   margin: 0;
   font-size: 20px;
@@ -218,6 +554,91 @@ export default {
 
 .btn-close:hover {
   background: #e0e0e0;
+}
+
+.btn-copy,
+.btn-copy-section,
+.btn-copy-field {
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.2s;
+}
+
+.btn-copy:hover,
+.btn-copy-section:hover,
+.btn-copy-field:hover {
+  background: #0056b3;
+}
+
+.btn-copy-field {
+  padding: 4px 8px;
+  font-size: 11px;
+  margin-left: 8px;
+}
+
+.copy-success-message {
+  background: #d4edda;
+  color: #155724;
+  padding: 10px;
+  border-radius: 4px;
+  margin-bottom: 15px;
+}
+
+.copy-error-message {
+  background: #f8d7da;
+  color: #721c24;
+  padding: 10px;
+  border-radius: 4px;
+  margin-bottom: 15px;
+}
+
+.info-value-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.section-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.size-warning {
+  font-size: 12px;
+  color: #ff9800;
+  font-weight: 500;
+}
+
+.btn-show-more {
+  padding: 6px 12px;
+  background: #ff9800;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-show-more:hover {
+  background: #f57c00;
+}
+
+.section-header h4 {
+  margin: 0;
 }
 
 .details-content {
@@ -349,6 +770,16 @@ export default {
 
 .btn-close-details:hover {
   background: #1976d2;
+}
+
+.payload-too-large {
+  padding: 20px;
+  text-align: center;
+  color: #ff9800;
+}
+
+.payload-too-large p {
+  margin-bottom: 10px;
 }
 
 </style>

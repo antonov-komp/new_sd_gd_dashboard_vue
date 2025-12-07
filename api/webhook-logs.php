@@ -66,26 +66,46 @@ try {
     // Чтение логов
     $allLogs = [];
     
-    if ($logDir && is_dir($logDir)) {
-        // Чтение конкретного файла
-        $logFile = $logDir . $date . ($hour !== null ? '-' . str_pad($hour, 2, '0', STR_PAD_LEFT) : '') . '.json';
-        if (file_exists($logFile)) {
-            $logs = json_decode(file_get_contents($logFile), true) ?? [];
-            $allLogs = array_merge($allLogs, $logs);
+    // Функция для чтения файлов за дату
+    $readLogsForDate = function($dir, $date, $hour = null) {
+        $logs = [];
+        
+        if ($hour !== null) {
+            // Чтение конкретного файла за час
+            $logFile = $dir . $date . '-' . str_pad($hour, 2, '0', STR_PAD_LEFT) . '.json';
+            if (file_exists($logFile)) {
+                $fileLogs = json_decode(file_get_contents($logFile), true) ?? [];
+                $logs = array_merge($logs, $fileLogs);
+            }
+        } else {
+            // Чтение всех файлов за дату (все часы)
+            $pattern = $dir . $date . '-*.json';
+            $files = glob($pattern);
+            if ($files) {
+                foreach ($files as $logFile) {
+                    $fileLogs = json_decode(file_get_contents($logFile), true) ?? [];
+                    $logs = array_merge($logs, $fileLogs);
+                }
+            }
         }
+        
+        return $logs;
+    };
+    
+    if ($logDir && is_dir($logDir)) {
+        // Чтение конкретной категории
+        $logs = $readLogsForDate($logDir, $date, $hour);
+        $allLogs = array_merge($allLogs, $logs);
     } else {
         // Чтение всех категорий
         $categories = ['tasks', 'smart-processes', 'errors'];
         foreach ($categories as $cat) {
             $catDir = __DIR__ . '/../logs/webhooks/' . $cat . '/';
             if (is_dir($catDir)) {
-                $logFile = $catDir . $date . ($hour !== null ? '-' . str_pad($hour, 2, '0', STR_PAD_LEFT) : '') . '.json';
-                if (file_exists($logFile)) {
-                    $logs = json_decode(file_get_contents($logFile), true) ?? [];
-                    foreach ($logs as $log) {
-                        $log['category'] = $cat;
-                        $allLogs[] = $log;
-                    }
+                $logs = $readLogsForDate($catDir, $date, $hour);
+                foreach ($logs as $log) {
+                    $log['category'] = $cat;
+                    $allLogs[] = $log;
                 }
             }
         }
