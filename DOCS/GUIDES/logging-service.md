@@ -487,3 +487,4 @@ vue-app/src/
 - [Архитектура дашборда сектора 1С](/DOCS/ARCHITECTURE/dashboard-sector-1c.md)
 - [Задача TASK-014](/DOCS/TASKS/TASK-014-logging-service-dashboard-sector-1c.md)
 
+

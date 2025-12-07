@@ -125,3 +125,4 @@ export function isZeroPointTicket(ticket, keeperId = KEEPER_OBJECTS_ID) {
   return employeeId === null || employeeId === keeperId;
 }
 
+
