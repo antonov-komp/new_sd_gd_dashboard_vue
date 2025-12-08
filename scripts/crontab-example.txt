@@ -1,0 +1,18 @@
+# Пример настройки cron для автоматического создания слепков
+# 
+# Скопируйте эти строки в crontab: crontab -e
+# 
+# ВАЖНО: Замените /var/www/back на путь к вашему проекту
+# ВАЖНО: Замените www-data на пользователя веб-сервера (если необходимо)
+
+# Автоматическое создание слепков состояния сектора 1С
+# Слепок начала недели (понедельник 00:00)
+0 0 * * 1 cd /var/www/back && php api/create-snapshot-week-start.php >> logs/snapshots/cron-week-start.log 2>&1
+
+# Слепок конца недели (воскресенье 23:59)
+59 23 * * 0 cd /var/www/back && php api/create-snapshot-week-end.php >> logs/snapshots/cron-week-end.log 2>&1
+
+# Альтернативный вариант с указанием полного пути к PHP:
+# 0 0 * * 1 cd /var/www/back && /usr/bin/php api/create-snapshot-week-start.php >> logs/snapshots/cron-week-start.log 2>&1
+# 59 23 * * 0 cd /var/www/back && /usr/bin/php api/create-snapshot-week-end.php >> logs/snapshots/cron-week-end.log 2>&1
+

@@ -195,7 +195,13 @@ export class TicketRepository {
         if (batchTickets.length > 0) {
           allTickets.push(...batchTickets);
           start += batchTickets.length;
-          hasMore = batchTickets.length === limit;
+          
+          // Проверяем наличие поля next в ответе для определения, есть ли ещё данные
+          // Bitrix24 API возвращает поле next в result.result.next, если есть ещё данные
+          // Если получили меньше limit, значит это последняя страница
+          // Если получили ровно limit, проверяем наличие next
+          const hasNext = result?.result?.next !== null && result?.result?.next !== undefined && result?.result?.next !== '';
+          hasMore = batchTickets.length === limit && hasNext;
           
           // Обновляем оценку общего количества
           if (hasMore) {

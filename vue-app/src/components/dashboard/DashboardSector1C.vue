@@ -4,6 +4,16 @@
     <div class="dashboard-header">
       <BackButton variant="header" />
       <h1>Дашборд - Сектор 1С</h1>
+      <div class="header-actions">
+        <button 
+          @click="navigateToGraphState"
+          class="btn-navigate-graph-state"
+          title="Перейти к графику состояния сектора"
+        >
+          <span class="icon">📊</span>
+          <span>График состояния</span>
+        </button>
+      </div>
     </div>
 
     <!-- Прелоадер с плавным исчезновением -->
@@ -48,6 +58,7 @@ import DashboardStage from './DashboardStage.vue';
 import LoadingPreloader from './LoadingPreloader.vue';
 import LoggerControl from './LoggerControl.vue';
 import BackButton from './BackButton.vue';
+import { useRouter } from 'vue-router';
 import { useDashboardState } from '@/composables/useDashboardState.js';
 import { useDashboardActions } from '@/composables/useDashboardActions.js';
 import { 
@@ -92,6 +103,7 @@ export default {
     BackButton
   },
   setup() {
+    const router = useRouter();
     // Используем композаблы для состояния и действий
     const state = useDashboardState();
     const actions = useDashboardActions(state);
@@ -113,6 +125,13 @@ export default {
      */
     const handleRetry = () => {
       actions.loadSectorData(false); // Не используем кеш при повторе
+    };
+
+    /**
+     * Переход к дашборду графика состояния
+     */
+    const navigateToGraphState = () => {
+      router.push({ name: 'dashboard-graph-state' });
     };
 
     // Извлекаем loadingProgress для удобства доступа
@@ -174,7 +193,8 @@ export default {
       dashboardFadeInTransition,
       transitionDelay,
       preloaderFadeOutTransform,
-      dashboardFadeInTransform
+      dashboardFadeInTransform,
+      navigateToGraphState
     };
   }
 };
@@ -208,6 +228,35 @@ export default {
   background: white;
   border-radius: 4px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.header-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.btn-navigate-graph-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background-color: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-navigate-graph-state:hover {
+  background-color: #2563eb;
+}
+
+.btn-navigate-graph-state .icon {
+  font-size: 18px;
 }
 
 .dashboard-header h1 {

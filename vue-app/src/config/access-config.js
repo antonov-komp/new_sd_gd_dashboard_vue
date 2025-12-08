@@ -26,6 +26,7 @@ export const accessConfig = {
   allowedDepartmentIds: [
     369,    // Битрикс24 отдел
     366,    // Сектор 1С
+    7,     // Голова ИТ отдела
   ],
   
   /**
