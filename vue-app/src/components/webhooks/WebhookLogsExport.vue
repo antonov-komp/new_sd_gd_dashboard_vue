@@ -177,6 +177,16 @@ import {
   generateExportFilename,
   validateExportData 
 } from '@/utils/export-utils.js';
+import { 
+  isValidWebhookLogEntry,
+  normalizeWebhookLogEntry 
+} from '@/types/webhook-logs.js';
+import { 
+  formatTimestamp,
+  formatEventType,
+  formatCategory,
+  formatEventDetails 
+} from '@/utils/webhook-formatters.js';
 
 export default {
   name: 'WebhookLogsExport',
@@ -266,11 +276,24 @@ export default {
       estimatedSize.value = validation.estimatedSize;
     };
 
-    // Получение данных для экспорта
+    // Получение данных для экспорта с нормализацией и валидацией
     const getDataToExport = () => {
-      return exportScope.value === 'selected' 
+      let logsToExport = exportScope.value === 'selected' 
         ? props.selectedLogs 
         : props.logs;
+      
+      // Нормализация и валидация логов перед экспортом
+      const normalizedLogs = logsToExport
+        .map(log => normalizeWebhookLogEntry(log))
+        .filter(log => {
+          if (!isValidWebhookLogEntry(log)) {
+            console.warn('[WebhookLogsExport] Skipping invalid log:', log);
+            return false;
+          }
+          return true;
+        });
+      
+      return normalizedLogs;
     };
 
     // Обработка экспорта
@@ -279,23 +302,40 @@ export default {
         exporting.value = true;
         exportProgress.value = 0;
         
-        const dataToExport = getDataToExport();
+        let dataToExport = getDataToExport();
         
         if (dataToExport.length === 0) {
-          throw new Error('Нет данных для экспорта');
+          throw new Error('Нет валидных данных для экспорта');
         }
+        
+        // Форматирование данных для экспорта
+        const exportData = dataToExport.map(log => ({
+          timestamp: log.timestamp,
+          event: log.event,
+          category: log.category,
+          ip: log.ip || null,
+          details: log.details || null,
+          payload: log.payload || null,
+          // Добавляем отформатированные поля для удобства
+          formatted: {
+            timestamp: formatTimestamp(log.timestamp),
+            event: formatEventType(log.event),
+            category: formatCategory(log.category),
+            details: formatEventDetails(log.details)
+          }
+        }));
 
         emit('export-start', {
           format: exportFormat.value,
           scope: exportScope.value,
-          count: dataToExport.length
+          count: exportData.length
         });
 
         // Генерация имени файла
         const filename = generateExportFilename(
           exportFormat.value,
           props.filters,
-          dataToExport.length
+          exportData.length
         );
 
         // Callback для отслеживания прогресса
@@ -305,11 +345,11 @@ export default {
 
         // Экспорт в зависимости от формата
         if (exportFormat.value === 'csv') {
-          await exportToCSV(dataToExport, filename, {
+          await exportToCSV(exportData, filename, {
             onProgress
           });
         } else {
-          await exportToJSON(dataToExport, filename, {
+          await exportToJSON(exportData, filename, {
             pretty: jsonPretty.value,
             onProgress
           });
@@ -318,7 +358,7 @@ export default {
         emit('export-complete', {
           format: exportFormat.value,
           filename,
-          count: dataToExport.length
+          count: exportData.length
         });
 
         // Закрытие модального окна через небольшую задержку
@@ -329,7 +369,7 @@ export default {
         }, 500);
 
       } catch (error) {
-        console.error('Ошибка экспорта:', error);
+        console.error('[WebhookLogsExport] Export error:', error);
         emit('export-error', error);
         exporting.value = false;
         exportProgress.value = 0;

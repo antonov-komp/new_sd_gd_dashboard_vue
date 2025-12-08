@@ -1,5 +1,5 @@
 <template>
-  <div v-if="log" class="webhook-log-details">
+  <div v-if="validatedLog" class="webhook-log-details">
     <div class="details-header">
       <h3>Детали лога вебхука</h3>
       <div class="header-actions">
@@ -63,11 +63,11 @@
       </div>
 
       <!-- Детали события -->
-      <div v-if="log.details && Object.keys(log.details).length > 0" class="details-section">
+      <div v-if="validatedDetails && Object.keys(validatedDetails).length > 0" class="details-section">
         <h4>Детали события</h4>
         <div class="info-grid">
           <div
-            v-for="(value, key) in log.details"
+            v-for="(value, key) in validatedDetails"
             :key="key"
             class="info-item"
           >
@@ -148,6 +148,17 @@
 
 <script>
 import { ref, computed, watch } from 'vue';
+import { 
+  isValidWebhookLogEntry,
+  isValidEventDetails,
+  normalizeWebhookLogEntry 
+} from '@/types/webhook-logs.js';
+import { 
+  formatTimestamp as formatTimestampUtil,
+  formatEventType,
+  formatCategory,
+  formatEventDetails 
+} from '@/utils/webhook-formatters.js';
 
 export default {
   name: 'WebhookLogDetails',
@@ -165,6 +176,36 @@ export default {
     const showFullMetadata = ref(false);
     const MAX_DISPLAY_SIZE = 50000; // Максимальный размер для отображения (50KB)
     const MAX_SAFE_SIZE = 200000; // Максимальный безопасный размер (200KB) - больше не рендерим в DOM
+    
+    // Валидация и нормализация лога
+    const validatedLog = computed(() => {
+      if (!props.log) {
+        return null;
+      }
+      
+      const normalized = normalizeWebhookLogEntry(props.log);
+      
+      if (!isValidWebhookLogEntry(normalized)) {
+        console.error('[WebhookLogDetails] Invalid log entry:', props.log);
+        return null;
+      }
+      
+      return normalized;
+    });
+
+    // Проверка валидности деталей
+    const validatedDetails = computed(() => {
+      if (!validatedLog.value || !validatedLog.value.details) {
+        return null;
+      }
+      
+      if (!isValidEventDetails(validatedLog.value.details)) {
+        console.warn('[WebhookLogDetails] Invalid event details:', validatedLog.value.details);
+        return null;
+      }
+      
+      return validatedLog.value.details;
+    });
     
     // Проверка, слишком ли большой payload для отображения
     const isPayloadTooLarge = computed(() => {
@@ -220,11 +261,11 @@ export default {
     
     // Копирование всего JSON payload
     const copyFullPayload = () => {
-      if (!props.log || !props.log.payload) {
+      if (!validatedLog.value || !validatedLog.value.payload) {
         return;
       }
       try {
-        const jsonString = safeStringify(props.log.payload, 2);
+        const jsonString = JSON.stringify(validatedLog.value.payload, null, 2);
         copyToClipboard(jsonString);
       } catch (e) {
         console.error('[WebhookLogDetails] Error copying payload:', e);
@@ -245,38 +286,28 @@ export default {
     
     // Основная информация для отображения
     const mainInfo = computed(() => {
-      if (!props.log) return {};
+      if (!validatedLog.value) {
+        return {};
+      }
+      
+      const log = validatedLog.value;
+      
       return {
-        timestamp: props.log.timestamp,
-        event: props.log.event,
-        category: props.log.category,
-        ip: props.log.ip
+        timestamp: log.timestamp,
+        event: log.event,
+        category: log.category,
+        ip: log.ip || 'N/A'
       };
     });
+    
     const formatTimestamp = (timestamp) => {
-      if (!timestamp) return 'N/A';
-      try {
-        const date = new Date(timestamp);
-        return date.toLocaleString('ru-RU', {
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit'
-        });
-      } catch (e) {
-        return timestamp;
-      }
+      if (!timestamp) return '—';
+      return formatTimestampUtil(timestamp, 'long');
     };
 
     const getCategoryLabel = (category) => {
-      const labels = {
-        'tasks': 'Задачи',
-        'smart-processes': 'Смарт-процессы',
-        'errors': 'Ошибки'
-      };
-      return labels[category] || category;
+      if (!category) return '—';
+      return formatCategory(category);
     };
 
     const getCategoryClass = (category) => {
@@ -294,24 +325,47 @@ export default {
     };
 
     const formatKey = (key) => {
-      // Преобразование snake_case в читаемый формат
-      return key
-        .split('_')
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(' ');
+      const keyMap = {
+        'timestamp': 'Дата и время',
+        'event': 'Тип события',
+        'category': 'Категория',
+        'ip': 'IP адрес',
+        'task_id': 'ID задачи',
+        'task_title': 'Название задачи',
+        'entity_id': 'ID сущности',
+        'title': 'Название',
+        'comment_text': 'Текст комментария'
+      };
+      
+      return keyMap[key] || key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ');
     };
 
     const formatValue = (value) => {
       if (value === null || value === undefined) {
         return 'N/A';
       }
+      
+      if (typeof value === 'boolean') {
+        return value ? 'Да' : 'Нет';
+      }
+      
       if (typeof value === 'object') {
+        // Для массивов
+        if (Array.isArray(value)) {
+          if (value.length === 0) {
+            return 'Пусто';
+          }
+          return value.join(', ');
+        }
+        
+        // Для объектов - форматируем как JSON
         try {
           return safeStringify(value, 2);
         } catch (e) {
-          return '[Ошибка форматирования объекта]';
+          return '[Не удалось сериализовать]';
         }
       }
+      
       return String(value);
     };
 
@@ -376,31 +430,23 @@ export default {
     
     // Размеры JSON (с защитой от ошибок)
     const payloadSize = computed(() => {
-      if (!props.log?.payload) return 0;
+      if (!validatedLog.value || !validatedLog.value.payload) {
+        return 0;
+      }
+      
       try {
-        // Используем безопасный stringify с таймаутом для очень больших объектов
-        const startTime = performance.now();
-        const jsonString = safeStringify(props.log.payload);
-        const elapsed = performance.now() - startTime;
-        
-        // Если stringify занял больше 100ms, считаем объект слишком большим
-        if (elapsed > 100) {
-          console.warn('[WebhookLogDetails] Payload stringify took too long:', elapsed, 'ms');
-          return MAX_SAFE_SIZE + 1;
-        }
-        
+        const jsonString = JSON.stringify(validatedLog.value.payload);
         return new Blob([jsonString]).size;
       } catch (e) {
-        console.warn('[WebhookLogDetails] Error calculating payload size:', e);
-        // Если не удалось вычислить размер, возвращаем большое значение для безопасности
-        return MAX_SAFE_SIZE + 1;
+        console.error('[WebhookLogDetails] Error calculating payload size:', e);
+        return 0;
       }
     });
     
     const metadataSize = computed(() => {
-      if (!props.log?.metadata) return 0;
+      if (!validatedLog.value?.metadata) return 0;
       try {
-        const jsonString = safeStringify(props.log.metadata);
+        const jsonString = safeStringify(validatedLog.value.metadata);
         return new Blob([jsonString]).size;
       } catch (e) {
         console.warn('[WebhookLogDetails] Error calculating metadata size:', e);
@@ -410,7 +456,9 @@ export default {
     
     // Форматированные JSON с ограничением размера (ленивое вычисление)
     const formattedPayload = computed(() => {
-      if (!props.log?.payload) return 'N/A';
+      if (!validatedLog.value || !validatedLog.value.payload) {
+        return '{}';
+      }
       
       // Если payload слишком большой, не форматируем его
       if (isPayloadTooLarge.value) {
@@ -418,19 +466,15 @@ export default {
       }
       
       try {
-        return formatJson(
-          props.log.payload, 
-          showFullPayload.value ? null : MAX_DISPLAY_SIZE,
-          showFullPayload.value
-        );
+        return JSON.stringify(validatedLog.value.payload, null, 2);
       } catch (e) {
         console.error('[WebhookLogDetails] Error formatting payload:', e);
-        return '[Ошибка форматирования payload]';
+        return '[Ошибка форматирования]';
       }
     });
     
     const formattedMetadata = computed(() => {
-      if (!props.log?.metadata) return 'N/A';
+      if (!validatedLog.value?.metadata) return 'N/A';
       
       // Если metadata слишком большой, не форматируем его
       if (isMetadataTooLarge.value) {
@@ -439,7 +483,7 @@ export default {
       
       try {
         return formatJson(
-          props.log.metadata, 
+          validatedLog.value.metadata, 
           showFullMetadata.value ? null : MAX_DISPLAY_SIZE,
           showFullMetadata.value
         );
@@ -457,9 +501,17 @@ export default {
     };
     
     // Сброс состояния при смене лога
-    watch(() => props.log, () => {
+    watch(() => props.log, (newLog) => {
       showFullPayload.value = false;
       showFullMetadata.value = false;
+      
+      if (newLog) {
+        const normalized = normalizeWebhookLogEntry(newLog);
+        if (!isValidWebhookLogEntry(normalized)) {
+          console.error('[WebhookLogDetails] Invalid log entry received:', newLog);
+          // Можно показать сообщение об ошибке пользователю
+        }
+      }
       // WeakMap очищается автоматически при удалении ссылок на объекты
     }, { immediate: true });
 
@@ -468,6 +520,8 @@ export default {
     };
 
     return {
+      validatedLog,
+      validatedDetails,
       copySuccess,
       copyError,
       copyToClipboard,

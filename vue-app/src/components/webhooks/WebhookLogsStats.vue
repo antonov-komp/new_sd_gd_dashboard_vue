@@ -80,6 +80,14 @@
 
 <script>
 import { computed } from 'vue';
+import { 
+  isValidWebhookLogEntry,
+  normalizeWebhookLogEntry 
+} from '@/types/webhook-logs.js';
+import { 
+  formatCategory,
+  formatEventType 
+} from '@/utils/webhook-formatters.js';
 
 export default {
   name: 'WebhookLogsStats',
@@ -95,26 +103,37 @@ export default {
     }
   },
   setup(props) {
+    // Нормализованные и валидированные логи
+    const normalizedLogs = computed(() => {
+      if (!props.logs || !Array.isArray(props.logs)) {
+        return [];
+      }
+      
+      return props.logs
+        .map(log => normalizeWebhookLogEntry(log))
+        .filter(log => isValidWebhookLogEntry(log));
+    });
+    
     // Основные метрики
-    const totalEvents = computed(() => props.logs.length);
+    const totalEvents = computed(() => normalizedLogs.value.length);
     
     const tasksCount = computed(() => 
-      props.logs.filter(log => log.category === 'tasks').length
+      normalizedLogs.value.filter(log => log.category === 'tasks').length
     );
     
     const smartProcessesCount = computed(() => 
-      props.logs.filter(log => log.category === 'smart-processes').length
+      normalizedLogs.value.filter(log => log.category === 'smart-processes').length
     );
     
     const errorsCount = computed(() => 
-      props.logs.filter(log => log.category === 'errors').length
+      normalizedLogs.value.filter(log => log.category === 'errors').length
     );
     
     // Средний размер payload
     const averagePayloadSize = computed(() => {
-      if (props.logs.length === 0) return 0;
+      if (normalizedLogs.value.length === 0) return 0;
       
-      const totalSize = props.logs.reduce((sum, log) => {
+      const totalSize = normalizedLogs.value.reduce((sum, log) => {
         try {
           const payloadSize = JSON.stringify(log.payload || {}).length;
           return sum + payloadSize;
@@ -123,19 +142,76 @@ export default {
         }
       }, 0);
       
-      return Math.round(totalSize / props.logs.length);
+      return Math.round(totalSize / normalizedLogs.value.length);
     });
     
     // Уникальные IP
     const uniqueIpsCount = computed(() => {
       const ips = new Set();
-      props.logs.forEach(log => {
+      normalizedLogs.value.forEach(log => {
         if (log.ip) {
           ips.add(log.ip);
         }
       });
       return ips.size;
     });
+    
+    // Статистика по категориям, событиям и датам
+    const stats = computed(() => {
+      const statsData = {
+        total: normalizedLogs.value.length,
+        byCategory: {},
+        byEvent: {},
+        byDate: {}
+      };
+      
+      normalizedLogs.value.forEach(log => {
+        // Статистика по категориям
+        if (log.category) {
+          statsData.byCategory[log.category] = (statsData.byCategory[log.category] || 0) + 1;
+        }
+        
+        // Статистика по типам событий
+        if (log.event) {
+          statsData.byEvent[log.event] = (statsData.byEvent[log.event] || 0) + 1;
+        }
+        
+        // Статистика по датам
+        if (log.timestamp) {
+          try {
+            const date = new Date(log.timestamp);
+            const dateKey = date.toISOString().split('T')[0]; // YYYY-MM-DD
+            statsData.byDate[dateKey] = (statsData.byDate[dateKey] || 0) + 1;
+          } catch (e) {
+            console.warn('[WebhookLogsStats] Invalid timestamp:', log.timestamp);
+          }
+        }
+      });
+      
+      return statsData;
+    });
+    
+    // Методы форматирования
+    const getCategoryLabel = (category) => {
+      return formatCategory(category);
+    };
+    
+    const getEventLabel = (event) => {
+      return formatEventType(event);
+    };
+    
+    const formatDate = (dateString) => {
+      try {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('ru-RU', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        });
+      } catch (e) {
+        return dateString;
+      }
+    };
     
     // Процент от общего
     const getPercentage = (value, total) => {
@@ -173,17 +249,22 @@ export default {
     };
     
     return {
+      normalizedLogs,
       totalEvents,
       tasksCount,
       smartProcessesCount,
       errorsCount,
       averagePayloadSize,
       uniqueIpsCount,
+      stats,
       getPercentage,
       formatBytes,
       totalEventsChange,
       getChangeClass,
-      formatChange
+      formatChange,
+      getCategoryLabel,
+      getEventLabel,
+      formatDate
     };
   }
 };

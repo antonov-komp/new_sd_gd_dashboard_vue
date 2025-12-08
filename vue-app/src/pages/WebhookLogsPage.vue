@@ -178,6 +178,14 @@ import { Bitrix24BxApi } from '@/services/bitrix24-bx-api.js';
 import { WebhookLogsApiService } from '@/services/webhook-logs-api.js';
 import { useUrlFilters } from '@/composables/useUrlFilters.js';
 import { searchInLogs } from '@/utils/log-search.js';
+import { 
+  normalizeWebhookLogEntries,
+  isValidWebhookLogEntry 
+} from '@/types/webhook-logs.js';
+import { 
+  validateFilters,
+  validatePagination 
+} from '@/utils/webhook-validators.js';
 // Ленивая загрузка тяжёлых компонентов
 const WebhookLogsDashboard = defineAsyncComponent(() => 
   import('@/components/webhooks/WebhookLogsDashboard.vue')
@@ -312,12 +320,21 @@ export default {
       clearNewLogs
     } = useRealtime('/api/webhook-realtime.php', {
       autoConnect: false, // Ручное управление
-      enableSound: false,
-      onNewLogs: (newLogs) => {
-        console.log('[WebhookLogsPage] New logs received:', newLogs.length);
-        // Можно показать уведомление
-        if (newLogs.length > 0) {
-          showSuccess(`Получено ${newLogs.length} новых событий`);
+      enableSound: true,
+      validateLogs: true, // Включить валидацию новых логов
+      onNewLogs: (newLogsData) => {
+        console.log('[WebhookLogsPage] New logs received:', newLogsData.length);
+        
+        // Валидация новых логов уже выполнена в composable
+        // Просто добавляем их в начало списка
+        if (newLogsData.length > 0) {
+          logs.value.unshift(...newLogsData);
+          
+          // Обновление пагинации
+          pagination.value.total += newLogsData.length;
+          
+          // Уведомление
+          showSuccess(`Получено ${newLogsData.length} новых событий`);
         }
       }
     });
@@ -510,8 +527,14 @@ export default {
           dateTo: filters.value.dateTo || null
         };
         
+        // Валидация фильтров перед запросом
+        if (!validateFilters(apiFilters)) {
+          throw new Error('Некорректные параметры фильтрации');
+        }
+        
         console.log('[WebhookLogsPage] Loading logs with filters:', apiFilters);
         
+        // Использование обновлённого API сервиса
         const result = await WebhookLogsApiService.getLogs(
           apiFilters,
           pagination.value.page,
@@ -523,16 +546,73 @@ export default {
         console.log('[WebhookLogsPage] Logs count:', result?.logs?.length || 0);
         console.log('[WebhookLogsPage] Pagination:', result?.pagination);
 
-        logs.value = result.logs || [];
-        pagination.value = result.pagination || pagination.value;
+        // Валидация ответа
+        if (!result.success) {
+          throw new Error(result.error || 'Ошибка загрузки логов');
+        }
         
-        console.log('[WebhookLogsPage] Logs after assignment:', logs.value.length);
+        // Валидация пагинации
+        if (!validatePagination(result.pagination)) {
+          console.warn('[WebhookLogsPage] Invalid pagination format, using defaults');
+          pagination.value = {
+            page: pagination.value.page,
+            limit: pagination.value.limit,
+            total: result.logs.length,
+            pages: Math.ceil(result.logs.length / pagination.value.limit)
+          };
+        } else {
+          pagination.value = result.pagination;
+        }
+        
+        // Нормализация и валидация логов
+        const normalizedLogs = normalizeWebhookLogEntries(result.logs);
+        
+        // Фильтрация невалидных записей
+        const validLogs = normalizedLogs.filter(log => isValidWebhookLogEntry(log));
+        
+        if (validLogs.length !== normalizedLogs.length) {
+          console.warn(
+            '[WebhookLogsPage] Filtered out invalid logs:',
+            normalizedLogs.length - validLogs.length
+          );
+        }
+        
+        logs.value = validLogs;
+        
+        // Уведомление об успехе
+        if (forceRefresh) {
+          showSuccess('Логи обновлены');
+        }
       } catch (err) {
-        console.error('Error loading logs:', err);
-        error.value = err.message || 'Ошибка загрузки логов';
+        handleApiError(err);
       } finally {
         loading.value = false;
         isLoadingLogs = false;
+      }
+    };
+    
+    // Обработка ошибок API
+    const handleApiError = (err) => {
+      console.error('[WebhookLogsPage] API Error:', err);
+      
+      // Обработка разных типов ошибок
+      if (err.status === 403) {
+        error.value = 'Доступ запрещён';
+        showError('У вас нет доступа к логам вебхуков');
+      } else if (err.status === 404) {
+        error.value = 'Логи не найдены';
+        showError('Логи для указанных фильтров не найдены');
+      } else if (err.status >= 500) {
+        error.value = 'Ошибка сервера';
+        showError('Произошла ошибка на сервере. Попробуйте позже.');
+      } else {
+        error.value = err.message || 'Неизвестная ошибка';
+        showError(error.value);
+      }
+      
+      // Очистка данных при критической ошибке
+      if (err.status >= 500) {
+        logs.value = [];
       }
     };
     
@@ -547,6 +627,12 @@ export default {
     
     // Обработка обновления фильтров
     const handleFiltersUpdate = (newFilters) => {
+      // Валидация новых фильтров
+      if (!validateFilters(newFilters)) {
+        showError('Некорректные параметры фильтрации');
+        return;
+      }
+      
       // Создаём простые копии фильтров (избегаем реактивных объектов)
       const oldFilters = {
         category: filters.value.category,
@@ -580,8 +666,11 @@ export default {
         return; // Фильтры не изменились, ничего не делаем
       }
       
+      // Обновление фильтров
       updateFilters(newFiltersSimple); // Обновляем URL и реактивные фильтры
-      pagination.value.page = 1; // Сброс на первую страницу
+      
+      // Сброс пагинации на первую страницу
+      pagination.value.page = 1;
       
       // Инвалидация кеша при изменении фильтров (только если фильтры действительно изменились)
       if (filtersChanged) {
@@ -592,7 +681,7 @@ export default {
         }
       }
       
-      // Загрузка логов (только если не загружаем уже)
+      // Загрузка логов с новыми фильтрами
       if (!isLoadingLogs) {
         isLoadingLogs = true;
         loadLogs(true).finally(() => {

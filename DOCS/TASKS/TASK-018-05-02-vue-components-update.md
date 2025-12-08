@@ -1572,3 +1572,4 @@ npm run test vue-app/src/components/webhooks/
    - Конфигурируемые компоненты
    - Плагинная архитектура для форматтеров
 
+

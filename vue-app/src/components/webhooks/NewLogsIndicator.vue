@@ -20,12 +20,26 @@
 </template>
 
 <script>
+import { computed } from 'vue';
+import { 
+  isValidWebhookLogEntry,
+  normalizeWebhookLogEntry 
+} from '@/types/webhook-logs.js';
+import { 
+  formatEventType,
+  formatCategory 
+} from '@/utils/webhook-formatters.js';
+
 export default {
   name: 'NewLogsIndicator',
   props: {
     count: {
       type: Number,
       default: 0
+    },
+    newLogs: {
+      type: Array,
+      default: () => []
     }
   },
   emits: ['apply', 'dismiss'],
@@ -46,8 +60,43 @@ export default {
       return many;
     };
 
+    // Превью новых логов
+    const newLogsPreview = computed(() => {
+      if (!props.newLogs || !Array.isArray(props.newLogs) || props.newLogs.length === 0) {
+        return [];
+      }
+      
+      // Нормализация и валидация новых логов
+      const normalizedLogs = props.newLogs
+        .map(log => normalizeWebhookLogEntry(log))
+        .filter(log => isValidWebhookLogEntry(log))
+        .slice(0, 5); // Показываем только первые 5 для превью
+      
+      return normalizedLogs.map(log => ({
+        ...log,
+        formatted: {
+          event: formatEventType(log.event),
+          category: formatCategory(log.category)
+        }
+      }));
+    });
+
     const handleApply = () => {
-      emit('apply');
+      if (!props.newLogs || props.newLogs.length === 0) {
+        return;
+      }
+      
+      // Валидация новых логов перед применением
+      const validLogs = props.newLogs
+        .map(log => normalizeWebhookLogEntry(log))
+        .filter(log => isValidWebhookLogEntry(log));
+      
+      if (validLogs.length === 0) {
+        console.warn('[NewLogsIndicator] No valid logs to apply');
+        return;
+      }
+      
+      emit('apply', validLogs);
     };
 
     const handleDismiss = () => {
@@ -56,6 +105,7 @@ export default {
 
     return {
       pluralize,
+      newLogsPreview,
       handleApply,
       handleDismiss
     };

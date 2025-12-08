@@ -77,20 +77,18 @@
                 {{ getStatusIcon(log) }}
               </span>
               <span class="event-badge" :class="getEventClass(log.event)">
-                {{ log.event }}
+                {{ formatEvent(log.event) }}
               </span>
             </td>
             <td>
               <span class="category-badge" :class="getCategoryClass(log.category)">
-                {{ getCategoryLabel(log.category) }}
+                {{ formatCategoryLabel(log.category) }}
               </span>
             </td>
             <td>{{ log.ip || 'N/A' }}</td>
             <td>
               <div class="details-preview">
-                <span v-if="log.details?.task_id">Задача #{{ log.details.task_id }}</span>
-                <span v-else-if="log.details?.entity_id">Элемент #{{ log.details.entity_id }}</span>
-                <span v-else>-</span>
+                {{ formatDetailsPreview(log.details) }}
               </div>
             </td>
             <td>
@@ -131,7 +129,17 @@
 </template>
 
 <script>
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
+import { 
+  isValidWebhookLogEntry,
+  normalizeWebhookLogEntry 
+} from '@/types/webhook-logs.js';
+import { 
+  formatTimestamp as formatTimestampUtil,
+  formatEventType,
+  formatCategory,
+  formatEventDetails 
+} from '@/utils/webhook-formatters.js';
 
 export default {
   name: 'WebhookLogList',
@@ -159,6 +167,24 @@ export default {
   },
   emits: ['select-log', 'page-change', 'update:selectedLogs'],
   setup(props, { emit }) {
+    // Валидация и нормализация логов при получении props
+    const validatedLogs = computed(() => {
+      if (!props.logs || !Array.isArray(props.logs)) {
+        console.warn('[WebhookLogList] Invalid logs prop:', props.logs);
+        return [];
+      }
+      
+      return props.logs
+        .map(log => normalizeWebhookLogEntry(log))
+        .filter(log => {
+          if (!isValidWebhookLogEntry(log)) {
+            console.warn('[WebhookLogList] Invalid log entry:', log);
+            return false;
+          }
+          return true;
+        });
+    });
+    
     // Состояние сортировки
     const sortBy = ref('timestamp');
     const sortOrder = ref('desc'); // 'asc' | 'desc'
@@ -177,17 +203,18 @@ export default {
     
     // Вычисляемое свойство для отсортированных логов
     const sortedLogs = computed(() => {
-      if (!props.logs || props.logs.length === 0) {
+      if (!validatedLogs.value || validatedLogs.value.length === 0) {
         return [];
       }
       
-      const logs = [...props.logs]; // Копия массива
+      const logs = [...validatedLogs.value]; // Копия массива
       
       return logs.sort((a, b) => {
         let aValue, bValue;
         
         switch (sortBy.value) {
           case 'timestamp':
+            // Используем ISO 8601 формат для сравнения
             aValue = new Date(a.timestamp || 0).getTime();
             bValue = new Date(b.timestamp || 0).getTime();
             break;
@@ -252,30 +279,27 @@ export default {
       return `${log.timestamp}_${log.event}_${log.ip || 'unknown'}`;
     };
 
+    // Обновить методы форматирования
     const formatTimestamp = (timestamp) => {
-      if (!timestamp) return 'N/A';
-      try {
-        const date = new Date(timestamp);
-        return date.toLocaleString('ru-RU', {
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit'
-        });
-      } catch (e) {
-        return timestamp;
-      }
+      if (!timestamp) return '—';
+      return formatTimestampUtil(timestamp, 'short');
     };
 
-    const getCategoryLabel = (category) => {
-      const labels = {
-        'tasks': 'Задачи',
-        'smart-processes': 'Смарт-процессы',
-        'errors': 'Ошибки'
-      };
-      return labels[category] || category;
+    const formatEvent = (event) => {
+      if (!event) return '—';
+      return formatEventType(event);
+    };
+
+    const formatCategoryLabel = (category) => {
+      if (!category) return '—';
+      return formatCategory(category);
+    };
+    
+    const formatDetailsPreview = (details) => {
+      if (!details || typeof details !== 'object') {
+        return '—';
+      }
+      return formatEventDetails(details);
     };
 
     const getCategoryClass = (category) => {
@@ -338,10 +362,23 @@ export default {
 
     // Проверка, выбраны ли все логи
     const allSelected = computed(() => {
-      return props.logs.length > 0 && props.logs.every(log => isSelected(log));
+      return validatedLogs.value.length > 0 && validatedLogs.value.every(log => isSelected(log));
     });
+    
+    // Обработка ошибок валидации
+    watch(() => props.logs, (newLogs) => {
+      if (newLogs && Array.isArray(newLogs)) {
+        const invalidCount = newLogs.filter(log => !isValidWebhookLogEntry(log)).length;
+        if (invalidCount > 0) {
+          console.warn(
+            `[WebhookLogList] Received ${invalidCount} invalid log entries out of ${newLogs.length}`
+          );
+        }
+      }
+    }, { immediate: true });
 
     return {
+      validatedLogs,
       sortBy,
       sortOrder,
       sortedLogs,
@@ -352,7 +389,9 @@ export default {
       getStatusTitle,
       getLogId,
       formatTimestamp,
-      getCategoryLabel,
+      formatEvent,
+      formatCategoryLabel,
+      formatDetailsPreview,
       getCategoryClass,
       getEventClass,
       handleLogClick,

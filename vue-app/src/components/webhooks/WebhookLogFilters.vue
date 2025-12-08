@@ -22,6 +22,11 @@
       </button>
     </div>
     
+    <!-- Ошибка валидации -->
+    <div v-if="validationError" class="validation-error">
+      ⚠️ {{ validationError }}
+    </div>
+    
     <!-- Быстрые фильтры -->
     <div class="quick-filters">
       <span class="quick-filters-label">Быстрые фильтры:</span>
@@ -43,13 +48,16 @@
         <select
           id="category-filter"
           v-model="localFilters.category"
-          @change="handleFilterChange"
+          @change="handleCategoryChange(localFilters.category)"
           class="filter-select"
         >
-          <option :value="null">Все категории</option>
-          <option value="tasks">Задачи</option>
-          <option value="smart-processes">Смарт-процессы</option>
-          <option value="errors">Ошибки</option>
+          <option 
+            v-for="option in categoryOptions" 
+            :key="option.value" 
+            :value="option.value"
+          >
+            {{ option.label }}
+          </option>
         </select>
       </div>
 
@@ -59,19 +67,16 @@
         <select
           id="event-filter"
           v-model="localFilters.event"
-          @change="handleFilterChange"
+          @change="handleEventChange(localFilters.event)"
           class="filter-select"
         >
-          <option :value="null">Все события</option>
-          <option value="ONTASKADD">Создание задачи</option>
-          <option value="ONTASKUPDATE">Обновление задачи</option>
-          <option value="ONTASKDELETE">Удаление задачи</option>
-          <option value="ONTASKCOMMENTADD">Добавление комментария</option>
-          <option value="ONTASKCOMMENTUPDATE">Обновление комментария</option>
-          <option value="ONTASKCOMMENTDELETE">Удаление комментария</option>
-          <option value="ONCRMDYNAMICITEMADD">Добавление элемента</option>
-          <option value="ONCRMDYNAMICITEMUPDATE">Изменение элемента</option>
-          <option value="ONCRMDYNAMICITEMDELETE">Удаление элемента</option>
+          <option 
+            v-for="option in eventOptions" 
+            :key="option.value" 
+            :value="option.value"
+          >
+            {{ option.label }}
+          </option>
         </select>
       </div>
 
@@ -82,7 +87,7 @@
           id="date-from-filter"
           v-model="localFilters.dateFrom"
           type="date"
-          @change="handleFilterChange"
+          @change="handleDateChange(localFilters.dateFrom, 'dateFrom')"
           class="filter-input"
         />
       </div>
@@ -94,7 +99,7 @@
           id="date-to-filter"
           v-model="localFilters.dateTo"
           type="date"
-          @change="handleFilterChange"
+          @change="handleDateChange(localFilters.dateTo, 'dateTo')"
           class="filter-input"
         />
       </div>
@@ -144,6 +149,8 @@
 <script>
 import { ref, watch, computed, onMounted } from 'vue';
 import { useLocalStorage } from '@/composables/useLocalStorage.js';
+import { validateFilters } from '@/utils/webhook-validators.js';
+import { formatCategory, formatEventType } from '@/utils/webhook-formatters.js';
 
 export default {
   name: 'WebhookLogFilters',
@@ -155,6 +162,9 @@ export default {
   },
   emits: ['update:filters', 'reset'],
   setup(props, { emit }) {
+    // Состояние для ошибок валидации
+    const validationError = ref(null);
+    
     // Загрузка сохранённых фильтров
     const savedFilters = useLocalStorage('webhook-filters', {
       category: null,
@@ -165,6 +175,20 @@ export default {
       ip: null,
       status: null
     });
+    
+    // Валидация и эмит фильтров
+    const validateAndEmit = (newFilters) => {
+      validationError.value = null;
+      
+      if (!validateFilters(newFilters)) {
+        validationError.value = 'Некорректные параметры фильтрации';
+        console.error('[WebhookLogFilters] Validation error:', validationError.value);
+        return false;
+      }
+      
+      emit('update:filters', newFilters);
+      return true;
+    };
     
     // Локальное состояние фильтров
     const today = new Date().toISOString().split('T')[0];
@@ -279,29 +303,13 @@ export default {
     
     const getFilterValue = (key, value) => {
       if (key === 'category') {
-        const categoryLabels = {
-          tasks: 'Задачи',
-          'smart-processes': 'Смарт-процессы',
-          errors: 'Ошибки'
-        };
-        return categoryLabels[value] || value;
+        return formatCategory(value) || value;
       }
       if (key === 'hour') {
         return `${String(value).padStart(2, '0')}:00`;
       }
       if (key === 'event') {
-        const eventLabels = {
-          ONTASKADD: 'Создание задачи',
-          ONTASKUPDATE: 'Обновление задачи',
-          ONTASKDELETE: 'Удаление задачи',
-          ONTASKCOMMENTADD: 'Добавление комментария',
-          ONTASKCOMMENTUPDATE: 'Обновление комментария',
-          ONTASKCOMMENTDELETE: 'Удаление комментария',
-          ONCRMDYNAMICITEMADD: 'Добавление элемента',
-          ONCRMDYNAMICITEMUPDATE: 'Изменение элемента',
-          ONCRMDYNAMICITEMDELETE: 'Удаление элемента'
-        };
-        return eventLabels[value] || value;
+        return formatEventType(value) || value;
       }
       if (key === 'status') {
         const statusLabels = {
@@ -313,6 +321,39 @@ export default {
       }
       return value;
     };
+    
+    // Обновить computed свойства для опций
+    const categoryOptions = computed(() => {
+      return [
+        { value: null, label: 'Все категории' },
+        { value: 'tasks', label: formatCategory('tasks') },
+        { value: 'smart-processes', label: formatCategory('smart-processes') },
+        { value: 'errors', label: formatCategory('errors') }
+      ];
+    });
+    
+    const eventOptions = computed(() => {
+      // Можно получать из API или использовать статический список
+      const events = [
+        'ONTASKADD',
+        'ONTASKUPDATE',
+        'ONTASKDELETE',
+        'ONTASKCOMMENTADD',
+        'ONTASKCOMMENTUPDATE',
+        'ONTASKCOMMENTDELETE',
+        'ONCRMDYNAMICITEMADD',
+        'ONCRMDYNAMICITEMUPDATE',
+        'ONCRMDYNAMICITEMDELETE'
+      ];
+      
+      return [
+        { value: null, label: 'Все события' },
+        ...events.map(event => ({
+          value: event,
+          label: formatEventType(event)
+        }))
+      ];
+    });
     
     const clearFilter = (key) => {
       if (key === 'hour') {
@@ -327,8 +368,70 @@ export default {
       activeQuickFilter.value = null;
     };
 
+    // Обработчики изменения фильтров с валидацией
+    const handleCategoryChange = (category) => {
+      const newFilters = {
+        ...localFilters.value,
+        category: category || null
+      };
+      
+      if (validateAndEmit(newFilters)) {
+        localFilters.value.category = category;
+      }
+    };
+    
+    const handleEventChange = (event) => {
+      const newFilters = {
+        ...localFilters.value,
+        event: event || null
+      };
+      
+      if (validateAndEmit(newFilters)) {
+        localFilters.value.event = event;
+      }
+    };
+    
+    const handleDateChange = (date, type) => {
+      // Валидация формата даты
+      if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        console.error('[WebhookLogFilters] Invalid date format:', date);
+        validationError.value = 'Некорректный формат даты';
+        return;
+      }
+      
+      const newFilters = {
+        ...localFilters.value,
+        [type]: date || null
+      };
+      
+      if (validateAndEmit(newFilters)) {
+        localFilters.value[type] = date;
+      }
+    };
+    
+    const handleHourChange = (hour) => {
+      // Валидация часа
+      if (hour !== null && hour !== undefined) {
+        const hourNum = parseInt(hour, 10);
+        if (isNaN(hourNum) || hourNum < 0 || hourNum > 23) {
+          console.error('[WebhookLogFilters] Invalid hour:', hour);
+          validationError.value = 'Некорректный час (должен быть от 0 до 23)';
+          return;
+        }
+      }
+      
+      const newFilters = {
+        ...localFilters.value,
+        hour: hour !== null && hour !== undefined ? parseInt(hour, 10) : null
+      };
+      
+      if (validateAndEmit(newFilters)) {
+        localFilters.value.hour = hour !== null && hour !== undefined ? parseInt(hour, 10) : null;
+      }
+    };
+    
     const handleFilterChange = () => {
-      emit('update:filters', { ...localFilters.value });
+      validateAndEmit({ ...localFilters.value });
     };
 
     const handleReset = () => {
@@ -361,10 +464,17 @@ export default {
       getFilterValue,
       clearFilter,
       handleFilterChange,
+      handleCategoryChange,
+      handleEventChange,
+      handleDateChange,
+      handleHourChange,
       handleReset,
       quickFilters,
       activeQuickFilter,
-      applyQuickFilter
+      applyQuickFilter,
+      categoryOptions,
+      eventOptions,
+      validationError
     };
   }
 };
@@ -538,6 +648,16 @@ export default {
 
 .btn-reset:hover {
   background: #5a6268;
+}
+
+.validation-error {
+  padding: 10px;
+  background: #ffebee;
+  color: #c62828;
+  border-radius: 4px;
+  margin-bottom: 15px;
+  font-size: 14px;
+  border-left: 4px solid #dc3545;
 }
 
 @media (max-width: 768px) {

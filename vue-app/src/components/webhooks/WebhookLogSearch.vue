@@ -38,6 +38,15 @@
 <script>
 import { ref, watch } from 'vue';
 import { debounce } from '@/utils/debounce.js';
+import { 
+  isValidWebhookLogEntry,
+  normalizeWebhookLogEntry 
+} from '@/types/webhook-logs.js';
+import { 
+  formatEventType,
+  formatCategory,
+  formatEventDetails 
+} from '@/utils/webhook-formatters.js';
 
 export default {
   name: 'WebhookLogSearch',
@@ -113,6 +122,108 @@ export default {
       return 'записей';
     };
     
+    // Функция поиска для работы с новой структурой данных
+    const performSearch = (query, logs) => {
+      if (!query || !logs || !Array.isArray(logs)) {
+        return [];
+      }
+      
+      const searchQuery = query.toLowerCase().trim();
+      
+      if (searchQuery.length === 0) {
+        return logs;
+      }
+      
+      // Нормализация и валидация логов перед поиском
+      const normalizedLogs = logs
+        .map(log => normalizeWebhookLogEntry(log))
+        .filter(log => isValidWebhookLogEntry(log));
+      
+      return normalizedLogs.filter(log => {
+        // Поиск по типу события
+        if (log.event && log.event.toLowerCase().includes(searchQuery)) {
+          return true;
+        }
+        
+        // Поиск по категории
+        if (log.category && log.category.toLowerCase().includes(searchQuery)) {
+          return true;
+        }
+        
+        // Поиск по IP адресу
+        if (log.ip && log.ip.toLowerCase().includes(searchQuery)) {
+          return true;
+        }
+        
+        // Поиск по деталям события
+        if (log.details && typeof log.details === 'object') {
+          // Поиск по ID задачи
+          if (log.details.task_id && String(log.details.task_id).includes(searchQuery)) {
+            return true;
+          }
+          
+          // Поиск по названию задачи
+          if (log.details.task_title && log.details.task_title.toLowerCase().includes(searchQuery)) {
+            return true;
+          }
+          
+          // Поиск по ID сущности
+          if (log.details.entity_id && String(log.details.entity_id).includes(searchQuery)) {
+            return true;
+          }
+          
+          // Поиск по названию сущности
+          if (log.details.title && log.details.title.toLowerCase().includes(searchQuery)) {
+            return true;
+          }
+          
+          // Поиск по тексту комментария
+          if (log.details.comment_text && log.details.comment_text.toLowerCase().includes(searchQuery)) {
+            return true;
+          }
+        }
+        
+        // Поиск по payload (если он есть)
+        if (log.payload && typeof log.payload === 'object') {
+          try {
+            const payloadString = JSON.stringify(log.payload).toLowerCase();
+            if (payloadString.includes(searchQuery)) {
+              return true;
+            }
+          } catch (e) {
+            // Игнорируем ошибки сериализации
+          }
+        }
+        
+        return false;
+      });
+    };
+    
+    // Форматирование результатов поиска
+    const formatSearchResult = (log) => {
+      const parts = [];
+      
+      // Тип события
+      if (log.event) {
+        parts.push(formatEventType(log.event));
+      }
+      
+      // Категория
+      if (log.category) {
+        parts.push(formatCategory(log.category));
+      }
+      
+      // Детали
+      if (log.details) {
+        const detailsText = formatEventDetails(log.details);
+        if (detailsText !== '—') {
+          parts.push(detailsText);
+        }
+      }
+      
+      return parts.join(' • ');
+    };
+    
     // Экспорт метода для внешнего использования
     return {
       searchQuery,
@@ -122,7 +233,9 @@ export default {
       handleSearch,
       clearSearch,
       setResultsCount,
-      getResultsText
+      getResultsText,
+      performSearch,
+      formatSearchResult
     };
   }
 };

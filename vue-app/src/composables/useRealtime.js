@@ -1,8 +1,15 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { RealtimeService } from '@/services/realtime-service.js';
+import { 
+  normalizeWebhookLogEntries,
+  isValidWebhookLogEntry 
+} from '@/types/webhook-logs.js';
 
 /**
  * Composable для работы с реальным временем
+ * 
+ * Обновлён для работы с новым рефакторенным SSE endpoint
+ * Использует типизированные интерфейсы и валидацию данных
  * 
  * @param {string} url URL SSE endpoint
  * @param {Object} options Опции
@@ -12,7 +19,8 @@ export function useRealtime(url, options = {}) {
   const {
     autoConnect = false,
     enableSound = false,
-    onNewLogs = null
+    onNewLogs = null,
+    validateLogs = true // Валидация новых логов
   } = options;
 
   const service = new RealtimeService(url, options);
@@ -32,10 +40,37 @@ export function useRealtime(url, options = {}) {
   // Обработчики событий
   const handleStateChange = (data) => {
     connectionState.value = data.state;
+    if (data.state === 'connected') {
+      reconnectAttempts.value = 0;
+      error.value = null;
+    }
   };
 
   const handleNewLogs = (data) => {
-    const logs = data.logs || [];
+    let logs = data.logs || [];
+    
+    // Валидация и нормализация логов
+    if (validateLogs) {
+      logs = normalizeWebhookLogEntries(logs);
+      
+      // Фильтруем невалидные записи
+      const validLogs = logs.filter(log => isValidWebhookLogEntry(log));
+      
+      if (validLogs.length !== logs.length) {
+        console.warn(
+          '[useRealtime] Filtered out invalid logs:',
+          logs.length - validLogs.length
+        );
+      }
+      
+      logs = validLogs;
+    }
+    
+    if (logs.length === 0) {
+      return; // Нет валидных логов
+    }
+    
+    // Добавление новых логов
     newLogs.value.push(...logs);
     newLogsCount.value += logs.length;
     lastUpdateTime.value = new Date().toISOString();
@@ -105,37 +140,13 @@ export function useRealtime(url, options = {}) {
   // Звуковое уведомление
   const playNotificationSound = () => {
     try {
-      // Простое звуковое уведомление через Web Audio API
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-      
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-      
-      oscillator.frequency.value = 800;
-      oscillator.type = 'sine';
-      
-      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
-      
-      oscillator.start(audioContext.currentTime);
-      oscillator.stop(audioContext.currentTime + 0.1);
+      const audio = new Audio('/sounds/notification.mp3');
+      audio.volume = 0.3;
+      audio.play().catch(err => {
+        console.warn('[useRealtime] Failed to play sound:', err);
+      });
     } catch (err) {
-      console.warn('[useRealtime] Sound notification not available:', err);
-    }
-  };
-
-  // Остановка при неактивной вкладке
-  const handleVisibilityChange = () => {
-    if (document.hidden) {
-      // Вкладка неактивна - можно приостановить обновления
-      // (опционально, можно оставить подключение)
-    } else {
-      // Вкладка активна - переподключение если нужно
-      if (connectionState.value === 'disconnected' && autoConnect) {
-        connect();
-      }
+      console.warn('[useRealtime] Sound not available:', err);
     }
   };
 
@@ -143,18 +154,12 @@ export function useRealtime(url, options = {}) {
   if (autoConnect) {
     onMounted(() => {
       connect();
-      document.addEventListener('visibilitychange', handleVisibilityChange);
-    });
-  } else {
-    onMounted(() => {
-      document.addEventListener('visibilitychange', handleVisibilityChange);
     });
   }
 
   // Отключение при размонтировании
   onUnmounted(() => {
     disconnect();
-    document.removeEventListener('visibilitychange', handleVisibilityChange);
   });
 
   return {
@@ -163,13 +168,13 @@ export function useRealtime(url, options = {}) {
     isConnected,
     isConnecting,
     hasError,
-    hasNewLogs,
     newLogs,
     newLogsCount,
+    hasNewLogs,
     lastUpdateTime,
     error,
     reconnectAttempts,
-
+    
     // Методы
     connect,
     disconnect,

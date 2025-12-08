@@ -15,8 +15,8 @@
       <span class="status-text">{{ statusText }}</span>
     </div>
     
-    <div v-if="hasError" class="error-message">
-      ⚠️ {{ error }}
+    <div v-if="hasError && displayError" class="error-message">
+      ⚠️ {{ displayError }}
     </div>
   </div>
 </template>
@@ -62,13 +62,43 @@ export default {
     });
 
     const statusText = computed(() => {
-      const texts = {
-        'connected': 'Подключено',
-        'connecting': 'Подключение...',
-        'disconnected': 'Отключено',
-        'error': 'Ошибка'
+      switch (props.connectionState) {
+        case 'connected':
+          return 'Подключено';
+        case 'connecting':
+          return 'Подключение...';
+        case 'disconnected':
+          return 'Отключено';
+        case 'error':
+          return 'Ошибка соединения';
+        default:
+          return 'Неизвестное состояние';
+      }
+    });
+    
+    const connectionStatusText = computed(() => statusText.value);
+    
+    const connectionStatusClass = computed(() => {
+      return {
+        'status-connected': props.connectionState === 'connected',
+        'status-connecting': props.connectionState === 'connecting',
+        'status-disconnected': props.connectionState === 'disconnected',
+        'status-error': props.connectionState === 'error'
       };
-      return texts[props.connectionState] || 'Неизвестно';
+    });
+    
+    const displayError = computed(() => {
+      if (props.error) {
+        // Форматирование ошибки для отображения
+        if (typeof props.error === 'string') {
+          return props.error;
+        }
+        if (props.error.message) {
+          return props.error.message;
+        }
+        return 'Неизвестная ошибка';
+      }
+      return null;
     });
 
     const handleToggle = () => {
@@ -81,6 +111,9 @@ export default {
       hasError,
       statusClass,
       statusText,
+      connectionStatusText,
+      connectionStatusClass,
+      displayError,
       handleToggle
     };
   }
