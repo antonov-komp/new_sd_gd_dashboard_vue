@@ -128,3 +128,4 @@ Vue.js → useRealtime → /api/webhook-realtime.php → logs/webhooks/ → SSE 
 3. Добавить интерфейс для работы с хранилищем (для возможной миграции на БД)
 
 
+
