@@ -32,3 +32,4 @@ export default {
   timeout: 30000 // 30 секунд
 };
 
+

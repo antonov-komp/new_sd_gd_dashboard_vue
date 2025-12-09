@@ -287,3 +287,4 @@ function getBaseUrl() {
     return $protocol . '://' . $host . $scriptPath;
 }
 
+
