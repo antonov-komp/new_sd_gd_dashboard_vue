@@ -26,6 +26,18 @@ export class RealtimeService {
   }
 
   /**
+   * Обновление опций сервиса
+   * 
+   * @param {Object} newOptions Новые опции
+   */
+  updateOptions(newOptions) {
+    this.options = {
+      ...this.options,
+      ...newOptions
+    };
+  }
+
+  /**
    * Подключение к SSE endpoint
    */
   connect() {
@@ -40,19 +52,33 @@ export class RealtimeService {
 
     try {
       // Добавление параметров к URL
-      const urlWithParams = new URL(this.url, window.location.origin);
-      if (this.options.lastTimestamp) {
-        urlWithParams.searchParams.set('last_timestamp', this.options.lastTimestamp);
+      let urlString = this.url;
+      
+      // Если URL не начинается с http:// или https://, добавляем базовый URL
+      if (!urlString.startsWith('http://') && !urlString.startsWith('https://')) {
+        const urlWithParams = new URL(urlString, window.location.origin);
+        if (this.options.lastTimestamp) {
+          urlWithParams.searchParams.set('last_timestamp', this.options.lastTimestamp);
+        }
+        urlString = urlWithParams.toString();
+      } else {
+        // Если это полный URL, добавляем параметры через URLSearchParams
+        const url = new URL(urlString);
+        if (this.options.lastTimestamp) {
+          url.searchParams.set('last_timestamp', this.options.lastTimestamp);
+        }
+        urlString = url.toString();
       }
 
-      this.eventSource = new EventSource(urlWithParams.toString());
+      console.log('[RealtimeService] Connecting to:', urlString);
+      this.eventSource = new EventSource(urlString);
 
       // Обработка открытия соединения
       this.eventSource.onopen = () => {
-        this.connectionState = 'connected';
-        this.reconnectAttempts = 0;
+        console.log('[RealtimeService] EventSource opened');
+        // Не устанавливаем состояние 'connected' сразу, ждем события 'connected' от сервера
+        // Это позволяет серверу отправить начальное событие перед установкой состояния
         this.notifyListeners('open', { timestamp: new Date().toISOString() });
-        this.notifyListeners('state-change', { state: this.connectionState });
       };
 
       // Обработка сообщений
@@ -67,8 +93,16 @@ export class RealtimeService {
 
       // Обработка кастомных событий
       this.eventSource.addEventListener('connected', (event) => {
-        const data = JSON.parse(event.data);
-        this.notifyListeners('connected', data);
+        try {
+          const data = JSON.parse(event.data);
+          console.log('[RealtimeService] Connected event received:', data);
+          this.connectionState = 'connected';
+          this.reconnectAttempts = 0;
+          this.notifyListeners('connected', data);
+          this.notifyListeners('state-change', { state: this.connectionState });
+        } catch (error) {
+          console.error('[RealtimeService] Error parsing connected event:', error);
+        }
       });
 
       this.eventSource.addEventListener('new_logs', (event) => {
@@ -118,19 +152,42 @@ export class RealtimeService {
       // Обработка ошибок соединения
       this.eventSource.onerror = (error) => {
         console.error('[RealtimeService] Connection error:', error);
-        this.connectionState = 'error';
-        this.notifyListeners('error', { error, type: 'connection' });
-        this.notifyListeners('state-change', { state: this.connectionState });
+        console.error('[RealtimeService] EventSource readyState:', this.eventSource?.readyState);
+        
+        // readyState: 0 = CONNECTING, 1 = OPEN, 2 = CLOSED
+        if (this.eventSource?.readyState === EventSource.CLOSED) {
+          // Соединение закрыто - это может быть нормально, если сервер закрыл соединение
+          console.log('[RealtimeService] EventSource closed by server');
+          this.connectionState = 'disconnected';
+          this.notifyListeners('state-change', { state: this.connectionState });
+          
+          if (!this.isManualDisconnect) {
+            this.reconnect();
+          }
+        } else if (this.eventSource?.readyState === EventSource.CONNECTING) {
+          // Все еще пытается подключиться - не устанавливаем ошибку сразу
+          console.log('[RealtimeService] Still connecting...');
+        } else {
+          // Другая ошибка
+          this.connectionState = 'error';
+          this.notifyListeners('error', { 
+            error, 
+            type: 'connection',
+            message: 'Failed to connect to realtime stream',
+            readyState: this.eventSource?.readyState
+          });
+          this.notifyListeners('state-change', { state: this.connectionState });
 
-        // Закрытие текущего соединения
-        if (this.eventSource) {
-          this.eventSource.close();
-          this.eventSource = null;
-        }
+          // Закрытие текущего соединения
+          if (this.eventSource) {
+            this.eventSource.close();
+            this.eventSource = null;
+          }
 
-        // Автоматическое переподключение
-        if (!this.isManualDisconnect) {
-          this.reconnect();
+          // Автоматическое переподключение
+          if (!this.isManualDisconnect) {
+            this.reconnect();
+          }
         }
       };
 

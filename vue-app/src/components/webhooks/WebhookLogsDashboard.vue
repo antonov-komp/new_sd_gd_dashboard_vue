@@ -25,6 +25,7 @@
       <div v-if="showStats" class="dashboard-section">
         <WebhookLogsStats
           :logs="normalizedLogs"
+          :total-count="pagination?.total || null"
           :previous-period-stats="previousPeriodStats"
         />
       </div>
@@ -82,6 +83,10 @@ export default {
       type: Array,
       required: true,
       default: () => []
+    },
+    pagination: {
+      type: Object,
+      default: null
     },
     previousPeriodStats: {
       type: Object,

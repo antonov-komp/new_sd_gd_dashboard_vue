@@ -40,6 +40,7 @@
       <!-- Дашборд -->
       <WebhookLogsDashboard
         :logs="logs"
+        :pagination="pagination"
         :previous-period-stats="previousPeriodStats"
       />
 
@@ -756,17 +757,21 @@ export default {
     
     // Переключение автообновления
     const handleToggleAutoUpdate = (enabled) => {
+      console.log('[WebhookLogsPage] Toggle auto-update:', enabled);
       autoUpdateEnabled.value = enabled;
       if (enabled) {
         // Установка lastTimestamp на последний лог
+        let lastTimestamp = null;
         if (logs.value.length > 0) {
           const lastLog = logs.value[0];
           if (lastLog.timestamp) {
-            // Обновление lastTimestamp в сервисе через опции
-            // (это можно сделать через метод сервиса, если он есть)
+            lastTimestamp = lastLog.timestamp;
+            console.log('[WebhookLogsPage] Using lastTimestamp:', lastTimestamp);
           }
         }
-        connect();
+        
+        // Подключение с lastTimestamp
+        connect({ lastTimestamp });
       } else {
         disconnect();
       }

@@ -97,6 +97,10 @@ export default {
       required: true,
       default: () => []
     },
+    totalCount: {
+      type: Number,
+      default: null
+    },
     previousPeriodStats: {
       type: Object,
       default: null
@@ -115,7 +119,24 @@ export default {
     });
     
     // Основные метрики
-    const totalEvents = computed(() => normalizedLogs.value.length);
+    /**
+     * Общее количество событий
+     * 
+     * Использует totalCount из pagination, если передан (реальное количество всех событий),
+     * иначе использует длину массива логов (для обратной совместимости).
+     * 
+     * Это исправляет проблему, когда показывается только 50 событий из-за пагинации,
+     * хотя реальное количество событий может быть больше (например, 124).
+     */
+    const totalEvents = computed(() => {
+      // Если передан totalCount, используем его (реальное количество всех событий)
+      if (props.totalCount !== null && props.totalCount !== undefined) {
+        return props.totalCount;
+      }
+      
+      // Fallback: используем длину массива (для обратной совместимости)
+      return normalizedLogs.value.length;
+    });
     
     const tasksCount = computed(() => 
       normalizedLogs.value.filter(log => log.category === 'tasks').length

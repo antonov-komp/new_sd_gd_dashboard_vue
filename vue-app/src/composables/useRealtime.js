@@ -87,7 +87,9 @@ export function useRealtime(url, options = {}) {
   };
 
   const handleError = (data) => {
-    error.value = data.message || 'Connection error';
+    const errorMessage = data.message || data.error?.message || 'Connection error';
+    error.value = errorMessage;
+    connectionState.value = 'error';
     console.error('[useRealtime] Error:', data);
   };
 
@@ -102,8 +104,14 @@ export function useRealtime(url, options = {}) {
   };
 
   // Подключение
-  const connect = () => {
+  const connect = (connectOptions = {}) => {
     error.value = null;
+    
+    // Обновление опций сервиса, если переданы
+    if (connectOptions.lastTimestamp !== undefined) {
+      service.updateOptions({ lastTimestamp: connectOptions.lastTimestamp });
+    }
+    
     service.on('state-change', handleStateChange);
     service.on('new_logs', handleNewLogs);
     service.on('error', handleError);
