@@ -123,7 +123,7 @@ export class DashboardSector1CService {
             }
           ));
         }
-      });
+      }, useCache);
 
       // Шаг 2: Фильтруем тикеты по тегу сектора 1С
       if (onProgress) {

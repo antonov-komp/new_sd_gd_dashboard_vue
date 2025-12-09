@@ -43,9 +43,10 @@ export class TicketRepository {
    * 
    * @param {Array<string>} stageIds - Массив ID стадий для загрузки
    * @param {Function|null} onProgress - Колбэк для отслеживания прогресса (опционально)
+   * @param {boolean} useCache - Использовать кеш (по умолчанию true)
    * @returns {Promise<Array>} Массив всех тикетов
    */
-  static async getAllTickets(stageIds, onProgress = null) {
+  static async getAllTickets(stageIds, onProgress = null, useCache = true) {
     const allTickets = [];
     const totalStages = stageIds.length;
     
@@ -65,7 +66,7 @@ export class TicketRepository {
         }
         
         try {
-          const stageTickets = await this.getTicketsByStage(stageId, true, onProgress ? (batchProgress) => {
+          const stageTickets = await this.getTicketsByStage(stageId, useCache, onProgress ? (batchProgress) => {
             // Используем утилиту для расчёта прогресса в диапазоне
             const stageProgress = calculateProgress(
               (i / totalStages) * 100,  // базовый прогресс
@@ -149,6 +150,19 @@ export class TicketRepository {
       const cacheKey = CacheManager.getTicketsCacheKey(stageId);
       const cached = CacheManager.get(cacheKey);
       if (cached !== null) {
+        try {
+          const diagnostics = getDiagnosticsService();
+          if (diagnostics && isDiagnosticsEnabled()) {
+            diagnostics.logTicketsLoading(
+              stageId,
+              cached.length,
+              cached.length,
+              null
+            );
+          }
+        } catch (diagError) {
+          Logger.warn('Diagnostics logging error (cache hit) in getTicketsByStage', 'TicketRepository', diagError);
+        }
         if (onProgress) {
           onProgress(normalizeProgressData({
             step: 'loading_tickets',
