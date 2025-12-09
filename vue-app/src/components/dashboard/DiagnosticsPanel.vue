@@ -34,17 +34,25 @@
         <h3>🔍 Фильтрация по сектору 1С</h3>
         <div class="metrics-grid">
           <div class="metric-card">
-            <div class="metric-label">Всего тикетов</div>
+            <div class="metric-label">Всего тикетов загружено</div>
             <div class="metric-value">{{ metrics.filtering.total }}</div>
           </div>
-          <div class="metric-card">
-            <div class="metric-label">Отфильтровано</div>
+          <div class="metric-card" style="border-left-color: #28a745;">
+            <div class="metric-label">Прошло фильтр (тег 1С)</div>
             <div class="metric-value">{{ metrics.filtering.filtered }}</div>
           </div>
-          <div class="metric-card">
-            <div class="metric-label">Отклонено</div>
+          <div class="metric-card" style="border-left-color: #dc3545;">
+            <div class="metric-label">Отклонено (нет тега 1С)</div>
             <div class="metric-value">{{ metrics.filtering.rejected.length }}</div>
+            <div v-if="metrics.filtering.total > 0" class="metric-detail">
+              {{ Math.round((metrics.filtering.rejected.length / metrics.filtering.total) * 100) }}% от всех
+            </div>
           </div>
+        </div>
+        
+        <div v-if="metrics.filtering.rejected.length > 0" class="warning-box">
+          <strong>⚠️ Внимание:</strong> {{ metrics.filtering.rejected.length }} тикетов не имеют тега сектора 1С (UF_CRM_7_TYPE_PRODUCT = '1C') 
+          и поэтому не отображаются в дашборде. Эти тикеты есть в Bitrix24, но не попали в интерфейс.
         </div>
         
         <div v-if="metrics.filtering.tagValueExamples.length > 0" class="examples-box">
@@ -82,11 +90,21 @@
         <h3>📦 Группировка по стадиям</h3>
         <div v-for="(stageData, stageId) in metrics.grouping.distributionByStages" :key="stageId" class="stage-distribution">
           <h4>{{ getStageName(stageId) }}</h4>
-          <div class="metric-card">
-            <div class="metric-label">Всего тикетов в стадии</div>
-            <div class="metric-value">{{ stageData.total }}</div>
+          <div class="metrics-grid">
+            <div class="metric-card">
+              <div class="metric-label">Всего тикетов в стадии</div>
+              <div class="metric-value">{{ stageData.total || 0 }}</div>
+            </div>
+            <div class="metric-card" style="border-left-color: #28a745;">
+              <div class="metric-label">Внутри сектора 1С</div>
+              <div class="metric-value">{{ stageData.insideSector || 0 }}</div>
+            </div>
+            <div class="metric-card" style="border-left-color: #ffc107;">
+              <div class="metric-label">Вне сектора 1С</div>
+              <div class="metric-value">{{ stageData.outsideSector || 0 }}</div>
+            </div>
           </div>
-          <div v-if="Object.keys(stageData.employees).length > 0" class="employees-list">
+          <div v-if="Object.keys(stageData.employees || {}).length > 0" class="employees-list">
             <div v-for="(count, empId) in stageData.employees" :key="empId" class="employee-item">
               Сотрудник #{{ empId }}: {{ count }} тикетов
             </div>
@@ -507,6 +525,16 @@ export default {
   text-align: center;
   color: #28a745;
   font-weight: bold;
+}
+
+.warning-box {
+  margin-top: 15px;
+  padding: 12px;
+  background: #fff3cd;
+  border-left: 4px solid #ffc107;
+  border-radius: 4px;
+  color: #856404;
+  font-size: 13px;
 }
 
 /* Адаптивность */

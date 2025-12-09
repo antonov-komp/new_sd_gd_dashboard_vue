@@ -209,6 +209,35 @@ export function groupTicketsByStages(tickets, employees) {
   try {
     const diagnostics = getDiagnosticsService();
     if (diagnostics && isDiagnosticsEnabled()) {
+      // Считаем тикеты внутри/вне сектора для каждой стадии
+      const stageStats = {};
+      stages.forEach(stage => {
+        let insideSector = 0;
+        let outsideSector = 0;
+        
+        stage.employees.forEach(emp => {
+          insideSector += (emp.ticketsInsideSector || []).length;
+          outsideSector += (emp.ticketsOutsideSector || []).length;
+        });
+        
+        stageStats[stage.id] = {
+          insideSector,
+          outsideSector,
+          total: insideSector + outsideSector
+        };
+      });
+      
+      // Добавляем статистику в метрики группировки
+      const groupingMetrics = diagnostics.metrics.grouping;
+      Object.keys(stageStats).forEach(stageId => {
+        if (!groupingMetrics.distributionByStages[stageId]) {
+          groupingMetrics.distributionByStages[stageId] = { employees: {}, total: 0 };
+        }
+        groupingMetrics.distributionByStages[stageId].insideSector = stageStats[stageId].insideSector;
+        groupingMetrics.distributionByStages[stageId].outsideSector = stageStats[stageId].outsideSector;
+        groupingMetrics.distributionByStages[stageId].total = stageStats[stageId].total;
+      });
+      
       diagnostics.logGrouping(stages, ticketsNotInColumn, unknownStages);
     }
   } catch (diagError) {
