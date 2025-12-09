@@ -22,6 +22,7 @@ import {
   normalizeProgressData,
   calculateProgress 
 } from '../utils/progress-utils.js';
+import { getDiagnosticsService, isDiagnosticsEnabled } from '../utils/diagnostics-service.js';
 
 /**
  * ID смарт-процесса сектора 1С
@@ -202,6 +203,22 @@ export class TicketRepository {
           // Если получили ровно limit, проверяем наличие next
           const hasNext = result?.result?.next !== null && result?.result?.next !== undefined && result?.result?.next !== '';
           hasMore = batchTickets.length === limit && hasNext;
+          
+          // Логирование диагностики (только если включена)
+          try {
+            const diagnostics = getDiagnosticsService();
+            if (diagnostics && isDiagnosticsEnabled()) {
+              diagnostics.logTicketsLoading(
+                stageId,
+                batchTickets.length,
+                allTickets.length,
+                result?.result?.next || null
+              );
+            }
+          } catch (diagError) {
+            // Игнорируем ошибки диагностики, чтобы не ломать основной процесс
+            Logger.warn('Diagnostics logging error', 'TicketRepository', diagError);
+          }
           
           // Обновляем оценку общего количества
           if (hasMore) {

@@ -37,6 +37,7 @@ import {
 } from './utils/progress-utils.js';
 import { Logger } from './utils/logger.js';
 import { clearSectorCache } from './utils/sector-helper.js';
+import { getDiagnosticsService, isDiagnosticsEnabled } from './utils/diagnostics-service.js';
 
 /**
  * Сервис для работы с дашбордом сектора 1С
@@ -61,6 +62,19 @@ export class DashboardSector1CService {
    * @returns {Promise<object>} Данные сектора (stages, employees, zeroPointTickets)
    */
   static async getSectorData(useCache = true, onProgress = null) {
+    // Сбрасываем диагностику перед загрузкой (если включена)
+    try {
+      if (isDiagnosticsEnabled()) {
+        const diagnostics = getDiagnosticsService();
+        if (diagnostics) {
+          diagnostics.reset();
+        }
+      }
+    } catch (diagError) {
+      // Игнорируем ошибки диагностики, чтобы не ломать основной процесс
+      Logger.warn('Error resetting diagnostics', 'DashboardSector1CService', diagError);
+    }
+    
     // Начало загрузки - устанавливаем начальный этап
     if (onProgress) {
       onProgress(createProgressDetails('cache_check', 0, {

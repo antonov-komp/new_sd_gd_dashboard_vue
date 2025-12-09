@@ -7,6 +7,8 @@
  * Использует мемоизацию для оптимизации повторных фильтраций
  */
 
+import { getDiagnosticsService, isDiagnosticsEnabled } from '../utils/diagnostics-service.js';
+
 /**
  * Глобальный тег определения сектора 1С
  * Пользовательское поле UF_CRM_7_TYPE_PRODUCT
@@ -110,6 +112,36 @@ export function filterBySector(tickets) {
 
   // Фильтруем тикеты
   const filtered = tickets.filter(isTicketInSector);
+  
+  // Логирование диагностики (только если включена)
+  try {
+    const diagnostics = getDiagnosticsService();
+    if (diagnostics && isDiagnosticsEnabled()) {
+      // Собираем отфильтрованные тикеты
+      const rejected = tickets.filter(t => !isTicketInSector(t));
+      
+      // Собираем примеры значений тега
+      const tagValueExamples = [];
+      const seenValues = new Set();
+      tickets.forEach(ticket => {
+        const tagValue = getTicketTagValue(ticket);
+        if (tagValue && !seenValues.has(String(tagValue))) {
+          seenValues.add(String(tagValue));
+          tagValueExamples.push({
+            value: tagValue,
+            type: typeof tagValue,
+            isArray: Array.isArray(tagValue),
+            ticketId: ticket.id || ticket.ID
+          });
+        }
+      });
+      
+      diagnostics.logFiltering(tickets.length, filtered.length, rejected, tagValueExamples);
+    }
+  } catch (diagError) {
+    // Игнорируем ошибки диагностики, чтобы не ломать основной процесс
+    console.warn('Diagnostics logging error in filterBySector:', diagError);
+  }
 
   // Сохраняем в кеш
   filterCache.set(cacheKey, filtered);

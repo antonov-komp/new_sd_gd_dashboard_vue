@@ -15,6 +15,7 @@ import {
 } from '../utils/ticket-utils.js';
 import { SECTOR_IDS, SECTOR_1C_ID } from '../utils/sector-constants.js';
 import { Logger } from '../utils/logger.js';
+import { getDiagnosticsService, isDiagnosticsEnabled } from '../utils/diagnostics-service.js';
 
 /**
  * Группировка тикетов по этапам
@@ -108,59 +109,80 @@ export function groupTicketsByStages(tickets, employees) {
     employeesMapByStage.set(stage.id, employeesMap);
   });
 
+  // Собираем проблемные тикеты для диагностики
+  const ticketsNotInColumn = [];
+  const unknownStages = [];
+  
   // Распределяем тикеты по этапам и сотрудникам
   tickets.forEach(ticket => {
     // Обрабатываем как верхний, так и нижний регистр полей
     const stageId = mapStageId(ticket.stageId || ticket.STAGE_ID || '');
     const stage = stagesMap.get(stageId);
     
-    if (stage) {
-      // Используем утилиты для извлечения и парсинга ID
-      const assignedById = getAssignedById(ticket);
-      const employeeId = parseEmployeeId(assignedById);
+    if (!stage) {
+      // Тикет с неизвестной стадией
+      unknownStages.push({
+        id: ticket.id || ticket.ID,
+        title: ticket.title || ticket.TITLE || 'Без названия',
+        stageId: ticket.stageId || ticket.STAGE_ID,
+        assignedById: getAssignedById(ticket)
+      });
+      return;
+    }
+    
+    // Используем утилиты для извлечения и парсинга ID
+    const assignedById = getAssignedById(ticket);
+    const employeeId = parseEmployeeId(assignedById);
+    
+    // Пропускаем тикеты с ответственным 1051 (они попадают в нулевую точку)
+    if (employeeId === KEEPER_OBJECTS_ID) {
+      return; // Пропускаем этот тикет
+    }
+    
+    if (employeeId) {
+      // Оптимизация: используем Map для быстрого поиска сотрудника
+      const employeesMap = employeesMapByStage.get(stageId);
+      let employee = employeesMap.get(employeeId);
       
-      // Пропускаем тикеты с ответственным 1051 (они попадают в нулевую точку)
-      if (employeeId === KEEPER_OBJECTS_ID) {
-        return; // Пропускаем этот тикет
+      // Если сотрудника нет в списке (не был загружен), создаём его
+      if (!employee) {
+        employee = {
+          id: employeeId,
+          name: `Сотрудник #${employeeId}`,
+          position: 'Неизвестно',
+          email: '',
+          sectorId: null, // Неизвестный сектор для созданного сотрудника
+          departmentId: null,
+          isFromSector1C: false, // По умолчанию не из сектора 1С (не можем определить без данных)
+          tickets: [], // Все тикеты (для обратной совместимости)
+          ticketsInsideSector: [], // Тикеты внутри сектора
+          ticketsOutsideSector: [] // Тикеты вне сектора
+        };
+        stage.employees.push(employee);
+        employeesMap.set(employeeId, employee); // Добавляем в Map для быстрого доступа
       }
       
-      if (employeeId) {
-        // Оптимизация: используем Map для быстрого поиска сотрудника
-        const employeesMap = employeesMapByStage.get(stageId);
-        let employee = employeesMap.get(employeeId);
-        
-        // Если сотрудника нет в списке (не был загружен), создаём его
-        if (!employee) {
-          employee = {
-            id: employeeId,
-            name: `Сотрудник #${employeeId}`,
-            position: 'Неизвестно',
-            email: '',
-            sectorId: null, // Неизвестный сектор для созданного сотрудника
-            departmentId: null,
-            isFromSector1C: false, // По умолчанию не из сектора 1С (не можем определить без данных)
-            tickets: [], // Все тикеты (для обратной совместимости)
-            ticketsInsideSector: [], // Тикеты внутри сектора
-            ticketsOutsideSector: [] // Тикеты вне сектора
-          };
-          stage.employees.push(employee);
-          employeesMap.set(employeeId, employee); // Добавляем в Map для быстрого доступа
-        }
-        
-        const mappedTicket = mapTicket(ticket);
-        
-        // Добавляем тикет во все тикеты (для обратной совместимости)
-        employee.tickets.push(mappedTicket);
-        
-        // Разделяем тикеты на внутри/вне сектора
-        if (employee.isFromSector1C) {
-          // Сотрудник из сектора 1С — тикет внутри сектора
-          employee.ticketsInsideSector.push(mappedTicket);
-        } else {
-          // Сотрудник из другого сектора — тикет вне сектора
-          employee.ticketsOutsideSector.push(mappedTicket);
-        }
+      const mappedTicket = mapTicket(ticket);
+      
+      // Добавляем тикет во все тикеты (для обратной совместимости)
+      employee.tickets.push(mappedTicket);
+      
+      // Разделяем тикеты на внутри/вне сектора
+      if (employee.isFromSector1C) {
+        // Сотрудник из сектора 1С — тикет внутри сектора
+        employee.ticketsInsideSector.push(mappedTicket);
+      } else {
+        // Сотрудник из другого сектора — тикет вне сектора
+        employee.ticketsOutsideSector.push(mappedTicket);
       }
+    } else {
+      // Тикет без employeeId (не попал в колонку)
+      ticketsNotInColumn.push({
+        id: ticket.id || ticket.ID,
+        title: ticket.title || ticket.TITLE || 'Без названия',
+        stageId: stageId,
+        assignedById: assignedById
+      });
     }
   });
 
@@ -182,6 +204,17 @@ export function groupTicketsByStages(tickets, employees) {
       return (a.id || 0) - (b.id || 0);
     });
   });
+
+  // Логирование диагностики (только если включена)
+  try {
+    const diagnostics = getDiagnosticsService();
+    if (diagnostics && isDiagnosticsEnabled()) {
+      diagnostics.logGrouping(stages, ticketsNotInColumn, unknownStages);
+    }
+  } catch (diagError) {
+    // Игнорируем ошибки диагностики, чтобы не ломать основной процесс
+    Logger.warn('Diagnostics logging error in groupTicketsByStages', 'TicketGrouper', diagError);
+  }
 
   return stages;
 }
@@ -222,6 +255,17 @@ export function getZeroPointTickets(tickets) {
       }
     });
 
+  // Логирование диагностики (только если включена)
+  try {
+    const diagnostics = getDiagnosticsService();
+    if (diagnostics && isDiagnosticsEnabled()) {
+      diagnostics.logZeroPoint(zeroPointTickets);
+    }
+  } catch (diagError) {
+    // Игнорируем ошибки диагностики, чтобы не ломать основной процесс
+    Logger.warn('Diagnostics logging error in getZeroPointTickets', 'TicketGrouper', diagError);
+  }
+
   return zeroPointTickets;
 }
 
@@ -237,18 +281,48 @@ export function extractUniqueEmployeeIds(tickets) {
   }
 
   const employeeIds = new Set();
+  const ticketsWithoutAssignedById = [];
+  const ticketsWithAssignedById1051 = [];
 
   tickets.forEach(ticket => {
     // Используем утилиты для извлечения и парсинга ID
     const assignedById = getAssignedById(ticket);
     const employeeId = parseEmployeeId(assignedById);
     
+    // Собираем проблемные тикеты для диагностики
+    if (!assignedById || assignedById === null || assignedById === undefined) {
+      ticketsWithoutAssignedById.push({
+        id: ticket.id || ticket.ID,
+        title: ticket.title || ticket.TITLE || 'Без названия',
+        stageId: ticket.stageId || ticket.STAGE_ID
+      });
+    } else if (employeeId === KEEPER_OBJECTS_ID) {
+      ticketsWithAssignedById1051.push({
+        id: ticket.id || ticket.ID,
+        title: ticket.title || ticket.TITLE || 'Без названия',
+        stageId: ticket.stageId || ticket.STAGE_ID
+      });
+    }
+    
     if (employeeId) {
       employeeIds.add(employeeId);
     }
   });
 
-  return Array.from(employeeIds);
+  const uniqueIds = Array.from(employeeIds);
+  
+  // Логирование диагностики (только если включена)
+  try {
+    const diagnostics = getDiagnosticsService();
+    if (diagnostics && isDiagnosticsEnabled()) {
+      diagnostics.logEmployees(uniqueIds, ticketsWithoutAssignedById, ticketsWithAssignedById1051);
+    }
+  } catch (diagError) {
+    // Игнорируем ошибки диагностики, чтобы не ломать основной процесс
+    Logger.warn('Diagnostics logging error in extractUniqueEmployeeIds', 'TicketGrouper', diagError);
+  }
+
+  return uniqueIds;
 }
 
 

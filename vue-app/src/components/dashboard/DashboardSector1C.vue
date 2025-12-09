@@ -6,6 +6,24 @@
       <h1>Дашборд - Сектор 1С</h1>
       <div class="header-actions">
         <button 
+          v-if="isDiagnosticsEnabled"
+          @click="clearCache"
+          class="btn-clear-cache"
+          title="Сбросить кеш сектора и тикетов"
+        >
+          <span class="icon">♻️</span>
+          <span>Сбросить кеш</span>
+        </button>
+        <button 
+          v-if="!isDiagnosticsEnabled"
+          @click="enableDiagnostics"
+          class="btn-enable-diagnostics"
+          title="Включить диагностический режим"
+        >
+          <span class="icon">🔍</span>
+          <span>Диагностика</span>
+        </button>
+        <button 
           @click="navigateToGraphState"
           class="btn-navigate-graph-state"
           title="Перейти к графику состояния сектора"
@@ -49,6 +67,9 @@
 
     <!-- Компонент управления логированием (только в режиме разработки) -->
     <LoggerControl :show-control="showLoggerControl" />
+
+    <!-- Панель диагностики (только при включённом режиме) -->
+    <DiagnosticsPanel :is-enabled="isDiagnosticsEnabled" />
   </div>
 </template>
 
@@ -58,7 +79,8 @@ import DashboardStage from './DashboardStage.vue';
 import LoadingPreloader from './LoadingPreloader.vue';
 import LoggerControl from './LoggerControl.vue';
 import BackButton from './BackButton.vue';
-import { useRouter } from 'vue-router';
+import DiagnosticsPanel from './DiagnosticsPanel.vue';
+import { useRouter, useRoute } from 'vue-router';
 import { useDashboardState } from '@/composables/useDashboardState.js';
 import { useDashboardActions } from '@/composables/useDashboardActions.js';
 import { 
@@ -66,6 +88,9 @@ import {
   getDashboardFadeInTransition, 
   PRELOADER_TRANSITION 
 } from '@/services/dashboard-sector-1c/utils/transition-config.js';
+import { isDiagnosticsEnabled, getDiagnosticsService } from '@/services/dashboard-sector-1c/utils/diagnostics-service.js';
+import { CacheManager } from '@/services/dashboard-sector-1c/cache/cache-manager.js';
+import { clearSectorCache } from '@/services/dashboard-sector-1c/utils/sector-helper.js';
 
 /**
  * Главный компонент дашборда сектора 1С
@@ -100,16 +125,76 @@ export default {
     DashboardStage,
     LoadingPreloader,
     LoggerControl,
-    BackButton
+    BackButton,
+    DiagnosticsPanel
   },
   setup() {
     const router = useRouter();
+    const route = useRoute();
     // Используем композаблы для состояния и действий
     const state = useDashboardState();
     const actions = useDashboardActions(state);
 
+    // Проверка, включён ли диагностический режим
+    const isDiagnosticsEnabledFlag = computed(() => {
+      const enabled = isDiagnosticsEnabled(route);
+      // Отладочный вывод (можно убрать после проверки)
+      if (import.meta.env?.MODE !== 'production') {
+        console.log('[Diagnostics] Enabled:', enabled, 'Route query:', route.query, 'Hash:', window.location.hash);
+      }
+      return enabled;
+    });
+
+    /**
+     * Включение диагностического режима
+     */
+    const enableDiagnostics = () => {
+      // Добавляем query-параметр в URL
+      router.push({
+        name: 'dashboard-sector-1c',
+        query: {
+          ...route.query,
+          diagnostics: 'true'
+        }
+      });
+      
+      // Также устанавливаем в localStorage для надёжности
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('dashboard-sector-1c-diagnostics', 'true');
+      }
+      
+      // Перезагружаем данные с диагностикой
+      const diagnostics = getDiagnosticsService();
+      if (diagnostics) {
+        diagnostics.reset();
+      }
+      actions.loadSectorData(false); // Не используем кеш
+    };
+
+    /**
+     * Сброс кеша тикетов/сектора и повторная загрузка без кеша
+     */
+    const clearCache = () => {
+      CacheManager.invalidateTicketsCache();
+      CacheManager.invalidateEmployeesCache();
+      clearSectorCache();
+      const diagnostics = getDiagnosticsService();
+      if (diagnostics) {
+        diagnostics.reset();
+      }
+      actions.loadSectorData(false);
+    };
+
     // Загрузка данных при монтировании компонента
     onMounted(() => {
+      // Сбрасываем диагностику перед загрузкой (если включена)
+      if (isDiagnosticsEnabledFlag.value) {
+        const diagnostics = getDiagnosticsService();
+        if (diagnostics) {
+          diagnostics.reset();
+        }
+      }
+      
       actions.loadSectorData();
     });
 
@@ -194,7 +279,12 @@ export default {
       transitionDelay,
       preloaderFadeOutTransform,
       dashboardFadeInTransform,
-      navigateToGraphState
+      navigateToGraphState,
+      
+      // Диагностика
+      isDiagnosticsEnabled: isDiagnosticsEnabledFlag,
+      enableDiagnostics,
+      clearCache
     };
   }
 };
@@ -256,6 +346,52 @@ export default {
 }
 
 .btn-navigate-graph-state .icon {
+  font-size: 18px;
+}
+
+.btn-enable-diagnostics {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background-color: #ffc107;
+  color: #333;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-enable-diagnostics:hover {
+  background-color: #ffb300;
+}
+
+.btn-enable-diagnostics .icon {
+  font-size: 18px;
+}
+
+.btn-clear-cache {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background-color: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-clear-cache:hover {
+  background-color: #dc2626;
+}
+
+.btn-clear-cache .icon {
   font-size: 18px;
 }
 
