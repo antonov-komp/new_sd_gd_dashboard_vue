@@ -61,6 +61,9 @@
             <li v-for="(example, idx) in metrics.filtering.tagValueExamples.slice(0, 10)" :key="idx">
               <code>{{ JSON.stringify(example.value) }}</code>
               <span class="example-type">({{ example.type }}{{ example.isArray ? ', массив' : '' }})</span>
+              <span v-if="example.normalized && example.normalized.length" class="normalized">
+                → нормализовано: {{ example.normalized.join(', ') }}
+              </span>
             </li>
           </ul>
         </div>

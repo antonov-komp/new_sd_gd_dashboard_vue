@@ -191,7 +191,7 @@ export class TicketRepository {
           },
           select: ['*'],
           order: { id: 'DESC' },
-          start: start,
+          start: start, // Используем start как смещение (0, 50, 100, ...)
           useOriginalUfNames: 'Y' // Использовать оригинальные имена пользовательских полей
         });
 
@@ -212,21 +212,55 @@ export class TicketRepository {
           start += batchTickets.length;
           
           // Проверяем наличие поля next в ответе для определения, есть ли ещё данные
-          // Bitrix24 API возвращает поле next в result.result.next, если есть ещё данные
-          // Если получили меньше limit, значит это последняя страница
-          // Если получили ровно limit, проверяем наличие next
-          const hasNext = result?.result?.next !== null && result?.result?.next !== undefined && result?.result?.next !== '';
+          // Bitrix24 API для смарт-процессов может возвращать next в разных форматах:
+          // - result.result.next (строка или число)
+          // - result.next (на верхнем уровне)
+          // - Если получили меньше limit, значит это последняя страница
+          // - Если получили ровно limit, проверяем наличие next
+          
+          // Проверяем наличие поля next в разных местах ответа
+          // Bitrix24 для смарт-процессов может возвращать next в result.result.next
+          const nextValue = result?.result?.next ?? result?.next;
+          
+          // hasNext = есть ли поле next (не null, не undefined, не пустая строка, не 0)
+          const hasNext = nextValue !== null && 
+                         nextValue !== undefined && 
+                         nextValue !== '' && 
+                         String(nextValue) !== '0';
+          
+          // Продолжаем загрузку, если:
+          // 1. Получили полный батч (limit) И есть next - точно есть ещё данные
+          // 2. Если получили меньше limit - это последняя страница (даже если есть next)
           hasMore = batchTickets.length === limit && hasNext;
+          
+          // Детальное логирование для диагностики
+          if (isDiagnosticsEnabled()) {
+            Logger.debug(`[Pagination] Stage: ${stageId}, Batch: ${batchTickets.length}, Total: ${allTickets.length}, Start: ${start}, NextValue: ${nextValue}, HasNext: ${hasNext}, HasMore: ${hasMore}`, 'TicketRepository');
+          }
           
           // Логирование диагностики (только если включена)
           try {
             const diagnostics = getDiagnosticsService();
             if (diagnostics && isDiagnosticsEnabled()) {
+              // Логируем полную структуру ответа для диагностики
+              Logger.debug(`[Pagination Debug] Stage: ${stageId}, Batch: ${batchTickets.length}, Total: ${allTickets.length}`, 'TicketRepository', {
+                resultStructure: {
+                  hasResult: !!result?.result,
+                  resultIsArray: Array.isArray(result?.result),
+                  hasItems: !!result?.result?.items,
+                  hasData: !!result?.result?.data,
+                  hasNext: !!nextValue,
+                  nextValue: nextValue,
+                  nextType: typeof nextValue,
+                  resultKeys: result?.result ? Object.keys(result.result) : []
+                }
+              });
+              
               diagnostics.logTicketsLoading(
                 stageId,
                 batchTickets.length,
                 allTickets.length,
-                result?.result?.next || null
+                nextValue || null
               );
             }
           } catch (diagError) {

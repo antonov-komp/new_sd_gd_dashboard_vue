@@ -14,6 +14,7 @@ import { getDiagnosticsService, isDiagnosticsEnabled } from '../utils/diagnostic
  * Пользовательское поле UF_CRM_7_TYPE_PRODUCT
  */
 const SECTOR_TAG = '1C';
+const ALT_SECTOR_TAGS = ['1С']; // Кириллица "С" в некоторых данных
 
 /**
  * Кеш для мемоизации результатов фильтрации
@@ -43,27 +44,67 @@ function getTicketTagValue(ticket) {
 }
 
 /**
+ * Нормализация значения тега:
+ * - Приводим к строке
+ * - Тримим
+ * - Переводим в верхний регистр
+ * - Заменяем кириллическую "С" на латинскую "C" для варианта "1C"
+ */
+function normalizeTagString(value) {
+  if (value === null || value === undefined) return null;
+  const str = String(value).trim().toUpperCase().replace(/С/g, 'C'); // Кириллица -> латиница
+  return str || null;
+}
+
+/**
+ * Приведение значения UF_CRM_7_TYPE_PRODUCT к массиву нормализованных строк.
+ * Поддерживаются:
+ * - строки (в т.ч. с разделителями запятая/точка с запятой)
+ * - массивы
+ * - объекты с полем value
+ */
+function normalizeTagValue(rawValue) {
+  if (!rawValue) return [];
+
+  // Если массив — нормализуем каждый элемент
+  if (Array.isArray(rawValue)) {
+    return rawValue
+      .map(normalizeTagString)
+      .filter(Boolean);
+  }
+
+  // Если объект с value — берем value
+  if (typeof rawValue === 'object' && rawValue.value !== undefined) {
+    const normalized = normalizeTagString(rawValue.value);
+    return normalized ? [normalized] : [];
+  }
+
+  // Строка — разбиваем по запятой/точке с запятой
+  const asString = normalizeTagString(rawValue);
+  if (!asString) return [];
+
+  return asString
+    .split(/[;,]/)
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+/**
  * Проверка, соответствует ли тикет сектору 1С
  * 
  * @param {object} ticket - Тикет из Bitrix24
  * @returns {boolean} true, если тикет принадлежит сектору 1С
  */
 function isTicketInSector(ticket) {
-  const tagValue = getTicketTagValue(ticket);
-  
-  if (!tagValue) {
+  const rawValue = getTicketTagValue(ticket);
+  const normalizedValues = normalizeTagValue(rawValue);
+
+  if (normalizedValues.length === 0) {
     return false;
   }
-  
-  // Проверяем точное совпадение или если значение является массивом/объектом
-  if (Array.isArray(tagValue)) {
-    return tagValue.includes(SECTOR_TAG);
-  }
-  if (typeof tagValue === 'object' && tagValue !== null) {
-    return tagValue.value === SECTOR_TAG || tagValue === SECTOR_TAG;
-  }
-  
-  return tagValue === SECTOR_TAG;
+
+  // Совпадение по "1C" или альтернативным вариантам ("1С")
+  return normalizedValues.some(val => val === SECTOR_TAG || ALT_SECTOR_TAGS.includes(val));
 }
 
 /**
@@ -120,15 +161,18 @@ export function filterBySector(tickets) {
       // Собираем отфильтрованные тикеты
       const rejected = tickets.filter(t => !isTicketInSector(t));
       
-      // Собираем примеры значений тега
+      // Собираем примеры значений тега (сырые и нормализованные)
       const tagValueExamples = [];
       const seenValues = new Set();
       tickets.forEach(ticket => {
         const tagValue = getTicketTagValue(ticket);
-        if (tagValue && !seenValues.has(String(tagValue))) {
-          seenValues.add(String(tagValue));
+        const normalized = normalizeTagValue(tagValue);
+        const rawString = tagValue === null || tagValue === undefined ? '' : String(tagValue);
+        if (tagValue !== undefined && tagValue !== null && !seenValues.has(rawString)) {
+          seenValues.add(rawString);
           tagValueExamples.push({
             value: tagValue,
+            normalized,
             type: typeof tagValue,
             isArray: Array.isArray(tagValue),
             ticketId: ticket.id || ticket.ID
