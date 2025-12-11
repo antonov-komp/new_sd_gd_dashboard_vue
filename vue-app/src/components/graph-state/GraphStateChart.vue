@@ -92,12 +92,26 @@
     
     <!-- График -->
     <div v-else-if="filteredChartData" class="chart-container">
-      <component
-        :is="chartComponent"
-        :data="filteredChartData"
-        :options="chartOptions"
-        :height="300"
-      />
+      <div class="chart-wrapper">
+        <div class="chart-canvas-container">
+          <component
+            :is="chartComponent"
+            :data="filteredChartData"
+            :options="chartOptions"
+          />
+        </div>
+        
+        <!-- Названия стадий (только для столбчатого графика) -->
+        <div v-if="chartType === 'bar'" class="bar-chart-stage-labels">
+          <div
+            v-for="stage in stages"
+            :key="stage.id"
+            class="stage-label-item"
+          >
+            {{ getStageLabelWithCount(stage.id) }}
+          </div>
+        </div>
+      </div>
     </div>
     
     <!-- Нет данных -->
@@ -106,47 +120,23 @@
       <p class="no-data-hint">Создайте слепки для отображения графика</p>
     </div>
 
-    <!-- Детализация по сотрудникам (под графиком) -->
-    <div v-if="!isLoading && !error && chartData && showEmployeesDetails" class="employees-details">
-      <h4 class="employees-details-title">Детализация по сотрудникам</h4>
-      <div class="employees-details-content">
-        <div
-          v-for="stage in stages"
-          :key="stage.id"
-          class="stage-details"
-        >
-          <div class="stage-details-header">
-            <span
-              class="stage-details-color"
-              :style="{ backgroundColor: stage.color }"
-            ></span>
-            <h5 class="stage-details-name">{{ stage.name }}</h5>
-            <span class="stage-details-count">
-              Всего: {{ getStageTotalCount(stage.id) }} тикетов
-            </span>
-          </div>
-          <div class="stage-details-employees">
-            <div
-              v-for="employee in getEmployeesForStage(stage.id)"
-              :key="`${stage.id}-${employee.id}`"
-              :class="['employee-detail-item', { 'employee-detail-keeper': employee.isKeeper }]"
-            >
-              <span class="employee-detail-name">{{ employee.name }}</span>
-              <span class="employee-detail-count">{{ employee.count }} тикетов</span>
-            </div>
-            <div v-if="getEmployeesForStage(stage.id).length === 0" class="no-employees-in-stage">
-              Нет сотрудников на этом этапе
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <!-- Модальное окно с детализацией по сотрудникам -->
+    <EmployeeDetailsModal
+      :is-visible="showEmployeeModal"
+      :stage-name="modalStageName"
+      :total-count="modalTotalCount"
+      :employees="modalEmployees"
+      :others="modalOthers"
+      @close="closeEmployeeModal"
+    />
+
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue';
 import { Line, Bar, Doughnut } from 'vue-chartjs';
+import { Chart as ChartJS } from 'chart.js';
 import { chartColors } from '@/utils/chart-config.js';
 import SnapshotService from '@/services/graph-state/SnapshotService.js';
 import SectorDataAdapter from '@/services/graph-state/SectorDataAdapter.js';
@@ -154,6 +144,13 @@ import CompareSnapshots from '@/utils/graph-state/compareSnapshots.js';
 import { useNotifications } from '@/composables/useNotifications.js';
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue';
 import StageChips from '@/components/filters/StageChips.vue';
+import EmployeeDetailsModal from '@/components/graph-state/EmployeeDetailsModal.vue';
+import {
+  prepareLineChartEmployeeData,
+  prepareBarChartEmployeeData,
+  prepareDoughnutChartEmployeeData,
+  formatEmployeeProgressBarData
+} from '@/utils/graph-state/employeeChartUtils.js';
 
 const cssVar = (name, fallback) => {
   if (typeof window === 'undefined') {
@@ -216,10 +213,15 @@ const chartTypes = [
  */
 const chartType = ref('line');
 
+
 /**
- * Показывать детализацию по сотрудникам
+ * Состояние модального окна с детализацией по сотрудникам
  */
-const showEmployeesDetails = ref(true);
+const showEmployeeModal = ref(false);
+const modalStageName = ref('');
+const modalTotalCount = ref(0);
+const modalEmployees = ref([]);
+const modalOthers = ref(null);
 
 /**
  * Список доступных сотрудников
@@ -267,86 +269,93 @@ const stageFilters = ref({
 });
 
 
-/**
- * Получить общее количество тикетов на этапе
- */
-function getStageTotalCount(stageId) {
-  const snapshot = snapshots.value.current || snapshots.value.weekEnd || snapshots.value.weekStart;
-  if (!snapshot || !snapshot.statistics || !snapshot.statistics.stages) {
-    return 0;
-  }
-  
-  return snapshot.statistics.stages[stageId]?.count || 0;
-}
-
-/**
- * Получить список сотрудников для этапа с количеством их тикетов
- * Включает также тикеты из "Неразобранного" (Хранитель объектов, ID: 1051)
- */
-function getEmployeesForStage(stageId) {
-  const snapshot = snapshots.value.current || snapshots.value.weekEnd || snapshots.value.weekStart;
-  if (!snapshot || !snapshot.statistics) {
-    return [];
-  }
-  
-  const employees = [];
-  
-  // Обычные сотрудники
-  if (snapshot.statistics.employees && Array.isArray(snapshot.statistics.employees)) {
-    snapshot.statistics.employees
-      .filter(emp => emp.ticketsByStage && emp.ticketsByStage[stageId] > 0)
-      .forEach(emp => {
-        employees.push({
-          id: emp.id,
-          name: emp.name,
-          count: emp.ticketsByStage[stageId] || 0
-        });
-      });
-  }
-  
-  // Тикеты из "Неразобранного" (Хранитель объектов, ID: 1051) для этого этапа
-  const keeperCount = getKeeperTicketsCountForStage(stageId);
-  if (keeperCount > 0) {
-    employees.push({
-      id: 1051,
-      name: 'Хранитель объектов (Неразобранное)',
-      count: keeperCount,
-      isKeeper: true
-    });
-  }
-  
-  return employees.sort((a, b) => b.count - a.count); // Сортировка по убыванию количества
-}
-
-/**
- * Получить количество тикетов хранителя объектов (ID: 1051) для этапа
- */
-function getKeeperTicketsCountForStage(stageId) {
-  const snapshot = snapshots.value.current || snapshots.value.weekEnd || snapshots.value.weekStart;
-  if (!snapshot || !snapshot.statistics) {
-    return 0;
-  }
-  
-  // Используем новое поле zeroPointByStage из статистики (если доступно)
-  if (snapshot.statistics.zeroPointByStage && snapshot.statistics.zeroPointByStage[stageId]) {
-    return snapshot.statistics.zeroPointByStage[stageId].keeper || 0;
-  }
-  
-  // Fallback: если zeroPointByStage нет, используем общую статистику
-  // (это для обратной совместимости со старыми слепками)
-  if (snapshot.statistics.zeroPoint) {
-    const totalKeeper = snapshot.statistics.zeroPoint.keeper || 0;
-    // Приблизительное распределение поровну по этапам (не идеально, но лучше чем ничего)
-    return Math.floor(totalKeeper / 3);
-  }
-  
-  return 0;
-}
 
 /**
  * Композаблы
  */
 const notifications = useNotifications();
+
+/**
+ * Плагин для отрисовки имён сотрудников под столбцами
+ */
+const employeeLabelsPlugin = {
+  id: 'employeeLabelsPlugin',
+  afterDatasetsDraw: (chart) => {
+    // Работает только для столбчатых графиков
+    if (chart.config.type !== 'bar') return;
+    
+    try {
+      const ctx = chart.ctx;
+      if (!chart.data || !chart.data.datasets) return;
+      
+      const datasets = chart.data.datasets;
+      const yScale = chart.scales.y;
+      
+      // Для каждого dataset (сотрудника)
+      datasets.forEach((dataset, datasetIndex) => {
+        const datasetMeta = chart.getDatasetMeta(datasetIndex);
+        if (!datasetMeta || datasetMeta.hidden) return;
+        
+        const employeeName = dataset.label || '';
+        if (!employeeName || employeeName.includes('Другие')) return; // Пропускаем "Другие"
+        
+        // Форматируем имя (Имя\nФамилия)
+        const nameParts = employeeName.trim().split(/\s+/);
+        let formattedName = '';
+        if (nameParts.length === 1) {
+          formattedName = nameParts[0];
+        } else {
+          const firstName = nameParts[0];
+          const lastName = nameParts.slice(1).join(' ');
+          formattedName = `${firstName}\n${lastName}`;
+        }
+        const namePartsArray = formattedName.split('\n');
+        
+        // Для каждого столбца (стадии)
+        dataset.data.forEach((value, dataIndex) => {
+          if (value === 0 || !value) return;
+          
+          const bar = datasetMeta.data[dataIndex];
+          if (!bar || typeof bar.x !== 'number' || typeof bar.y !== 'number') return;
+          
+          const x = bar.x;
+          // Позиция под столбцом - используем координату Y столбца + его высота
+          // Учитываем padding из layout
+          const y = bar.y + bar.height + 25; // Увеличенный отступ под столбцом для лучшей видимости
+          
+          // Сохраняем состояние контекста
+          ctx.save();
+          
+          // Настройка стиля текста
+          ctx.font = 'bold 9px Arial, sans-serif';
+          ctx.fillStyle = '#6b7280';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'top';
+          
+          // Поворот текста
+          ctx.translate(x, y);
+          ctx.rotate(-12 * Math.PI / 180); // -12 градусов
+          
+          // Отрисовка текста (две строки)
+          namePartsArray.forEach((part, index) => {
+            const trimmedPart = part.trim();
+            if (trimmedPart) {
+              ctx.fillText(trimmedPart, 0, index * 11);
+            }
+          });
+          
+          // Восстанавливаем состояние
+          ctx.restore();
+        });
+      });
+    } catch (error) {
+      console.error('Error in employeeLabelsPlugin:', error);
+    }
+  }
+};
+
+// Регистрация плагина глобально
+ChartJS.register(employeeLabelsPlugin);
 
 /**
  * Извлечь список доступных сотрудников из слепков
@@ -463,6 +472,258 @@ function getStageKeyFromLabel(label) {
 }
 
 /**
+ * Получить ID этапа из названия (алиас для getStageKeyFromLabel)
+ * 
+ * @param {string} label - Название этапа
+ * @returns {string} ID этапа
+ */
+function getStageIdFromLabel(label) {
+  return getStageKeyFromLabel(label);
+}
+
+/**
+ * Определение временной точки по индексу данных
+ * 
+ * @param {number} index - Индекс точки графика (0, 1, 2)
+ * @returns {string} Временная точка ('weekStart' | 'weekEnd' | 'current')
+ */
+function getTimePointFromIndex(index) {
+  if (index === 0) return 'weekStart';
+  if (index === 1) return 'weekEnd';
+  if (index === 2) return 'current';
+  return 'weekEnd'; // По умолчанию
+}
+
+/**
+ * Получить слепок по временной точке
+ * 
+ * @param {string} timePoint - Временная точка ('weekStart' | 'weekEnd' | 'current')
+ * @returns {Object|null} Слепок с данными
+ */
+function getSnapshotByTimePoint(timePoint) {
+  return snapshots.value[timePoint] || null;
+}
+
+/**
+ * Общая функция открытия модального окна с детализацией по сотрудникам
+ * 
+ * @param {string} stageName - Название этапа
+ * @param {number} totalCount - Общее количество тикетов
+ * @param {Array} employees - Массив сотрудников
+ * @param {Object} others - Данные о группе "Другие" (опционально)
+ */
+function openEmployeeDetailsModal(stageName, totalCount, employees, others = null) {
+  modalStageName.value = stageName;
+  modalTotalCount.value = totalCount;
+  modalEmployees.value = employees || [];
+  modalOthers.value = others && others.count > 0 ? others : null;
+  showEmployeeModal.value = true;
+}
+
+/**
+ * Открытие модального окна для линейного графика
+ * 
+ * @param {string} stageId - ID этапа
+ * @param {string} timePoint - Временная точка ('weekStart' | 'weekEnd' | 'current')
+ * @param {Array} employeeData - Данные сотрудников
+ */
+function openEmployeeDetailsModalForLine(stageId, timePoint, employeeData) {
+  const stage = stages.find(s => s.id === stageId);
+  if (!stage) {
+    return;
+  }
+
+  const snapshot = getSnapshotByTimePoint(timePoint);
+  if (!snapshot) {
+    return;
+  }
+
+  // Получить общее количество тикетов этапа
+  const totalCount = snapshot.statistics?.stages?.[stageId]?.count || 0;
+
+  // Форматирование данных для прогресс-баров
+  const formatted = formatEmployeeProgressBarData(
+    employeeData,
+    totalCount,
+    stage.color,
+    10
+  );
+
+  openEmployeeDetailsModal(stage.name, totalCount, formatted.employees, formatted.others);
+}
+
+/**
+ * Открытие модального окна для круговой диаграммы
+ * 
+ * @param {string} stageId - ID этапа
+ * @param {Object} employeeData - Данные сотрудников из метаданных
+ */
+function openEmployeeDetailsModalForDoughnut(stageId, employeeData) {
+  if (!employeeData || !employeeData.employees || employeeData.employees.length === 0) {
+    // Нет данных о сотрудниках
+    notifications.warning('Нет данных о сотрудниках для этого этапа');
+    return;
+  }
+
+  openEmployeeDetailsModal(
+    employeeData.stageName,
+    employeeData.totalCount,
+    employeeData.employees,
+    employeeData.others
+  );
+}
+
+/**
+ * Закрытие модального окна с детализацией по сотрудникам
+ */
+function closeEmployeeModal() {
+  showEmployeeModal.value = false;
+  modalStageName.value = '';
+  modalTotalCount.value = 0;
+  modalEmployees.value = [];
+  modalOthers.value = null;
+}
+
+/**
+ * Обработчик клика на точку линейного графика
+ * 
+ * @param {Event} event - Событие клика
+ * @param {Array} elements - Массив элементов графика под курсором
+ * @param {Object} chart - Экземпляр Chart.js
+ */
+function handleLineChartClick(event, elements, chart) {
+  if (chartType.value !== 'line' || elements.length === 0) {
+    return;
+  }
+
+  const element = elements[0];
+  const datasetIndex = element.datasetIndex;
+  const dataIndex = element.index;
+
+  // Получить данные этапа
+  const dataset = chart.data.datasets[datasetIndex];
+  if (!dataset || !dataset.meta) {
+    return;
+  }
+
+  const stageId = getStageIdFromLabel(dataset.label);
+
+  // Определить временную точку по индексу
+  const timePoint = getTimePointFromIndex(dataIndex);
+
+  // Получить данные сотрудников из метаданных
+  const employeeData = dataset.meta?.employees?.[timePoint];
+
+  if (!employeeData || employeeData.length === 0) {
+    return;
+  }
+
+  // Открыть модальное окно с детализацией
+  openEmployeeDetailsModalForLine(stageId, timePoint, employeeData);
+}
+
+/**
+ * Обработчик клика на сектор круговой диаграммы
+ * 
+ * @param {Event} event - Событие клика
+ * @param {Array} elements - Массив элементов графика под курсором
+ * @param {Object} chart - Экземпляр Chart.js
+ */
+function handleDoughnutChartClick(event, elements, chart) {
+  if (chartType.value !== 'doughnut' || elements.length === 0) {
+    return;
+  }
+
+  const element = elements[0];
+  const index = element.index;
+
+  // Получить данные графика
+  const chartData = chart.data;
+  const label = chartData.labels[index];
+
+  // Определить ID этапа по названию
+  const stageId = getStageIdFromLabel(label);
+
+  // Получить данные сотрудников из метаданных
+  const employeesMeta = chartData.datasets[0]?.meta?.employees;
+  const employeeData = employeesMeta?.[stageId];
+
+  if (!employeeData) {
+    console.warn('Данные о сотрудниках не найдены для этапа:', stageId);
+    return;
+  }
+
+  // Открыть модальное окно с детализацией
+  openEmployeeDetailsModalForDoughnut(stageId, employeeData);
+}
+
+/**
+ * Получить общее количество тикетов этапа для столбчатого графика
+ * 
+ * @param {number} stageIndex - Индекс этапа в массиве stages
+ * @returns {number} Общее количество тикетов
+ */
+function getStageTotalForBarChart(stageIndex) {
+  const stage = stages[stageIndex];
+  if (!stage) {
+    return 0;
+  }
+
+  // Используем текущий слепок или последний доступный
+  const snapshot = snapshots.value.current || snapshots.value.weekEnd || snapshots.value.weekStart;
+  if (!snapshot || !snapshot.statistics || !snapshot.statistics.stages) {
+    return 0;
+  }
+
+  return snapshot.statistics.stages[stage.id]?.count || 0;
+}
+
+/**
+ * Форматирование имени сотрудника для легенды (Имя Фамилия в две строки)
+ * 
+ * @param {string} fullName - Полное имя сотрудника
+ * @returns {string} Отформатированное имя (Имя\nФамилия)
+ */
+function formatEmployeeNameForLegend(fullName) {
+  if (!fullName) {
+    return '';
+  }
+  
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length === 1) {
+    return parts[0];
+  }
+  
+  // Первая часть - имя, остальное - фамилия
+  const firstName = parts[0];
+  const lastName = parts.slice(1).join(' ');
+  
+  return `${firstName}\n${lastName}`;
+}
+
+/**
+ * Получить название стадии с количеством тикетов
+ * 
+ * @param {string} stageId - ID стадии
+ * @returns {string} Название стадии с количеством
+ */
+function getStageLabelWithCount(stageId) {
+  const stage = stages.find(s => s.id === stageId);
+  if (!stage) {
+    return '';
+  }
+  
+  // Используем текущий слепок или последний доступный
+  const snapshot = snapshots.value.current || snapshots.value.weekEnd || snapshots.value.weekStart;
+  if (!snapshot || !snapshot.statistics || !snapshot.statistics.stages) {
+    return stage.name;
+  }
+  
+  const totalCount = snapshot.statistics.stages[stageId]?.count || 0;
+  return `${stage.name} (${totalCount})`;
+}
+
+/**
  * Отфильтрованные данные для графика
  */
 const filteredChartData = computed(() => {
@@ -470,6 +731,12 @@ const filteredChartData = computed(() => {
 
   // Для круговой диаграммы не применяем фильтры (показываем все этапы)
   if (chartType.value === 'doughnut') {
+    return chartData.value;
+  }
+
+  // Для столбчатого графика не применяем фильтры (показываем все этапы)
+  // так как фильтрация происходит на уровне labels
+  if (chartType.value === 'bar') {
     return chartData.value;
   }
 
@@ -487,18 +754,59 @@ const filteredChartData = computed(() => {
 });
 
 /**
+ * Метаданные для кастомной легенды столбчатого графика
+ */
+const barChartLegendData = computed(() => {
+  if (chartType.value !== 'bar' || !chartData.value || !chartData.value.meta) {
+    return null;
+  }
+  
+  return chartData.value.meta.employeesByStage || null;
+});
+
+/**
  * Конфигурация графика (зависит от типа)
  */
 const chartOptions = computed(() => {
   const baseOptions = {
     responsive: true,
     maintainAspectRatio: false,
+    resizeDelay: 0,
+    layout: {
+      padding: chartType.value === 'bar' ? {
+        bottom: 80 // Отступ снизу для подписей сотрудников
+      } : {}
+    },
+    onClick: (event, elements, chart) => {
+      if (chartType.value === 'line') {
+        handleLineChartClick(event, elements, chart);
+      } else if (chartType.value === 'doughnut') {
+        handleDoughnutChartClick(event, elements, chart);
+      }
+    },
+    onHover: (event, elements, chart) => {
+      // Изменение курсора при наведении на сектор круговой диаграммы
+      if (chartType.value === 'doughnut') {
+        event.native.target.style.cursor = elements.length > 0 ? 'pointer' : 'default';
+      }
+    },
     plugins: {
       legend: {
-        display: true,
+        display: chartType.value !== 'bar', // Скрываем стандартную легенду для столбчатого графика
         position: chartType.value === 'doughnut' ? 'right' : 'top',
         onClick: (e, legendItem, legend) => {
-          // Переключение видимости этапа при клике на легенду
+          // Для столбчатого графика - переключение видимости столбца сотрудника
+          if (chartType.value === 'bar') {
+            const index = legendItem.datasetIndex;
+            if (index !== undefined) {
+              const meta = legend.chart.getDatasetMeta(index);
+              meta.hidden = !meta.hidden;
+              legend.chart.update();
+            }
+            return;
+          }
+          
+          // Для линейного графика - переключение видимости этапа при клике на легенду
           const index = legendItem.datasetIndex;
           if (index !== undefined) {
             const meta = legend.chart.getDatasetMeta(index);
@@ -513,6 +821,12 @@ const chartOptions = computed(() => {
         intersect: false,
         callbacks: {
           title: (tooltipItems) => {
+            // Для столбчатого графика показываем название стадии
+            if (chartType.value === 'bar') {
+              const stageIndex = tooltipItems[0].dataIndex;
+              const stage = stages[stageIndex];
+              return stage ? stage.name : '';
+            }
             return tooltipItems[0].label || '';
           },
           label: (context) => {
@@ -520,15 +834,24 @@ const chartOptions = computed(() => {
             const value = context.parsed.y || context.parsed || 0;
             const index = context.dataIndex;
             
+            // Для столбчатого графика показываем информацию о сотруднике
+            if (chartType.value === 'bar') {
+              const dataset = context.dataset;
+              const stageIndex = context.dataIndex;
+              const stage = stages[stageIndex];
+              const stageName = stage ? stage.name : '';
+              return `${dataset.label}: ${value} тикетов на этапе "${stageName}"`;
+            }
+            
             if (chartType.value === 'doughnut') {
               // Для круговой диаграммы показываем процент
               const total = context.dataset.data.reduce((a, b) => a + b, 0);
               const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
-              return `${label}: ${value} (${percentage}%)`;
+              return `${label}: ${value} тикетов (${percentage}%)`;
             } else {
-              // Для линейного и столбчатого графика показываем информацию о сравнении
-              if (!comparison.value || index === 0 || chartType.value === 'doughnut') {
-                return `${label}: ${value}`;
+              // Для линейного графика показываем информацию о сравнении
+              if (!comparison.value || index === 0) {
+                return `${label}: ${value} тикетов`;
               }
 
               // Получение данных сравнения на основе типа сравнения и индекса
@@ -537,21 +860,21 @@ const chartOptions = computed(() => {
 
               if (comparisonType.value === 'weekStartToWeekEnd' && index === 1) {
                 comparisonData = comparison.value.weekStartToWeekEnd?.stages?.[stageKey];
-              } else if (comparisonType.value === 'weekEndToCurrent' && index === 2 && snapshots.current) {
+              } else if (comparisonType.value === 'weekEndToCurrent' && index === 2 && snapshots.value.current) {
                 comparisonData = comparison.value.weekEndToCurrent?.stages?.[stageKey];
-              } else if (comparisonType.value === 'weekStartToCurrent' && index === 2 && snapshots.current) {
+              } else if (comparisonType.value === 'weekStartToCurrent' && index === 2 && snapshots.value.current) {
                 comparisonData = comparison.value.weekStartToCurrent?.stages?.[stageKey];
               }
 
               if (!comparisonData) {
-                return `${label}: ${value}`;
+                return `${label}: ${value} тикетов`;
               }
 
               const delta = comparisonData.delta;
               const deltaPercent = comparisonData.deltaPercent;
               const trend = comparisonData.trend;
 
-              let result = `${label}: ${value}`;
+              let result = `${label}: ${value} тикетов`;
 
               if (delta !== 0) {
                 const sign = delta > 0 ? '+' : '';
@@ -565,8 +888,59 @@ const chartOptions = computed(() => {
             }
           },
           afterBody: (tooltipItems) => {
-            // Дополнительная информация после основного содержимого
-            if (chartType.value === 'doughnut' || !comparison.value) {
+            // Для столбчатого графика показываем процент от общего количества этапа
+            if (chartType.value === 'bar' && tooltipItems.length > 0) {
+              const context = tooltipItems[0];
+              const dataset = context.dataset;
+              const value = context.parsed.y || 0;
+              const stageIndex = context.dataIndex;
+              
+              // Получить общее количество тикетов этапа
+              const totalCount = getStageTotalForBarChart(stageIndex);
+              const percentage = totalCount > 0 ? ((value / totalCount) * 100).toFixed(1) : 0;
+              
+              return [`${percentage}% от общего количества этапа`];
+            }
+            
+            // Для круговой диаграммы - подсказка о клике
+            if (chartType.value === 'doughnut' && tooltipItems.length > 0) {
+              return ['Кликните для детализации по сотрудникам'];
+            }
+            
+            // Для линейного графика добавляем подсказку о клике для детализации
+            if (chartType.value === 'line') {
+              const result = [];
+              
+              // Добавить информацию о периоде сравнения (если есть)
+              if (comparison.value) {
+                const index = tooltipItems[0].dataIndex;
+                if (index !== 0) {
+                  let comparisonData = null;
+                  const stageKey = getStageKeyFromLabel(tooltipItems[0].dataset.label || '');
+
+                  if (comparisonType.value === 'weekStartToWeekEnd' && index === 1) {
+                    comparisonData = comparison.value.weekStartToWeekEnd;
+                  } else if (comparisonType.value === 'weekEndToCurrent' && index === 2) {
+                    comparisonData = comparison.value.weekEndToCurrent;
+                  } else if (comparisonType.value === 'weekStartToCurrent' && index === 2) {
+                    comparisonData = comparison.value.weekStartToCurrent;
+                  }
+
+                  if (comparisonData && comparisonData.metadata) {
+                    const timeDiff = comparisonData.metadata.timeDiff;
+                    result.push(`Период: ${timeDiff.days} дн. ${timeDiff.hours} ч. ${timeDiff.minutes} мин.`);
+                  }
+                }
+              }
+              
+              // Добавить подсказку о клике для детализации
+              result.push('Кликните для детализации по сотрудникам');
+              
+              return result;
+            }
+            
+            // Для других типов графиков - существующая логика
+            if (!comparison.value) {
               return [];
             }
 
@@ -673,6 +1047,7 @@ function prepareDoughnutData(snapshotsData) {
   const data = [];
   const backgroundColor = [];
   const borderColor = [];
+  const employeesMeta = {}; // Метаданные о сотрудниках
 
   stages.forEach(stage => {
     const count = source.statistics.stages[stage.id]?.count || 0;
@@ -681,6 +1056,12 @@ function prepareDoughnutData(snapshotsData) {
       data.push(count);
       backgroundColor.push(stage.color + '80'); // С прозрачностью
       borderColor.push(stage.color);
+      
+      // Подготовка данных сотрудников для этапа
+      const employeeData = prepareDoughnutChartEmployeeData(stage.id, source, stages);
+      if (employeeData && employeeData.employees) {
+        employeesMeta[stage.id] = employeeData;
+      }
     }
   });
 
@@ -695,7 +1076,10 @@ function prepareDoughnutData(snapshotsData) {
       data,
       backgroundColor,
       borderColor,
-      borderWidth: 2
+      borderWidth: 2,
+      meta: {
+        employees: employeesMeta
+      }
     }]
   };
 }
@@ -710,7 +1094,18 @@ function prepareChartData(snapshotsData) {
     return prepareDoughnutData(snapshotsData);
   }
 
-  // Для линейного и столбчатого графика используем стандартную логику с учётом сравнения
+  // Для столбчатого графика используем группированные столбцы (по одному на сотрудника)
+  if (chartType.value === 'bar') {
+    const snapshotType = props.showCurrentState && snapshotsData.current
+      ? 'current'
+      : snapshotsData.weekEnd
+      ? 'weekEnd'
+      : 'weekStart';
+    
+    return prepareBarChartEmployeeData(snapshotsData, snapshotType, stages);
+  }
+
+  // Для линейного графика используем стандартную логику с учётом сравнения и метаданными о сотрудниках
   const { weekStart, weekEnd, current } = snapshotsData;
 
   // Метки для точек графика
@@ -808,6 +1203,15 @@ function prepareChartData(snapshotsData) {
       pointBackgroundColor = stage.color;
     }
 
+    // Подготовка метаданных о сотрудниках для линейного графика
+    let meta = null;
+    if (chartType.value === 'line') {
+      const employeeData = prepareLineChartEmployeeData(stage.id, snapshotsData);
+      meta = {
+        employees: employeeData
+      };
+    }
+
     datasets.push({
       label: stage.name,
       data: data,
@@ -819,7 +1223,8 @@ function prepareChartData(snapshotsData) {
       pointRadius: 6,
       pointHoverRadius: 8,
       fill: chartType.value === 'line' ? false : true,
-      tension: chartType.value === 'line' ? 0.4 : 0
+      tension: chartType.value === 'line' ? 0.4 : 0,
+      meta: meta // Метаданные о сотрудниках для линейного графика
     });
   });
 
@@ -924,11 +1329,24 @@ function handleStageFiltersUpdate(newFilters) {
  * Обновление данных графика
  */
 const updateChartData = () => {
-  chartData.value = prepareChartData({
+  const newData = prepareChartData({
     weekStart: snapshots.value.weekStart,
     weekEnd: snapshots.value.weekEnd,
     current: snapshots.value.current
   });
+  
+  // Обновляем только если данные действительно изменились
+  // Используем простую проверку по наличию данных, чтобы избежать бесконечных обновлений
+  if (!chartData.value || !chartData.value.labels || chartData.value.labels.length !== newData?.labels?.length) {
+    chartData.value = newData;
+  } else if (newData) {
+    // Обновляем только если структура данных изменилась
+    const oldStr = JSON.stringify(chartData.value);
+    const newStr = JSON.stringify(newData);
+    if (oldStr !== newStr) {
+      chartData.value = newData;
+    }
+  }
 };
 
 // Перезагрузка данных при изменении props
@@ -1158,146 +1576,63 @@ watch(comparisonType, () => {
 .legend-decrease { background-color: var(--b24-danger); }
 .legend-stable { background-color: var(--b24-text-muted); }
 
-/* Детализация по сотрудникам */
-.employees-details {
-  margin-top: 30px;
-  padding: 20px;
-  background-color: var(--b24-bg-light);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--b24-border-light);
-}
-
-.employees-details-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--b24-text-primary);
-  margin: 0 0 20px 0;
-}
-
-.employees-details-content {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.stage-details {
-  background-color: var(--b24-bg-white);
-  border-radius: var(--radius-md);
-  padding: 15px;
-  border: 1px solid var(--b24-border-light);
-}
-
-.stage-details-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 15px;
-  padding-bottom: 12px;
-  border-bottom: 2px solid var(--b24-border-light);
-}
-
-.stage-details-color {
-  width: 20px;
-  height: 20px;
-  border-radius: var(--radius-sm);
-  border: 1px solid rgba(0, 0, 0, 0.1);
-}
-
-.stage-details-name {
-  flex: 1;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--b24-text-primary);
-  margin: 0;
-}
-
-.stage-details-count {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--b24-text-secondary);
-  background-color: var(--b24-bg);
-  padding: 4px 12px;
-  border-radius: var(--radius-xl);
-}
-
-.stage-details-employees {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.employee-detail-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 12px;
-  background-color: var(--b24-bg-light);
-  border-radius: var(--radius-sm);
-  border-left: 3px solid var(--b24-primary);
-  transition: background-color 0.2s;
-}
-
-.employee-detail-item:hover {
-  background-color: var(--b24-bg);
-}
-
-.employee-detail-item.employee-detail-keeper {
-  border-left-color: var(--b24-warning);
-  background-color: var(--b24-warning-lighter);
-}
-
-.employee-detail-item.employee-detail-keeper:hover {
-  background-color: var(--b24-warning-light);
-}
-
-.employee-detail-name {
-  font-size: 14px;
-  color: var(--b24-text-primary);
-  font-weight: 500;
-}
-
-.employee-detail-count {
-  font-size: 14px;
-  color: var(--b24-text-secondary);
-  font-weight: 600;
-  background-color: var(--b24-bg-white);
-  padding: 4px 10px;
-  border-radius: var(--radius-xl);
-  border: 1px solid var(--b24-border-light);
-}
-
-.no-employees-in-stage {
-  text-align: center;
-  padding: 15px;
-  color: var(--b24-text-muted);
-  font-size: 14px;
-  font-style: italic;
-}
-
 @media (max-width: 768px) {
   .radio-group {
     flex-direction: column;
     gap: 12px;
   }
+}
 
-  .stage-details-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
+/* Обёртка для графика с подписями */
+.chart-wrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 400px; /* Минимальная высота для размещения подписей */
+}
+
+/* Контейнер для canvas графика */
+.chart-canvas-container {
+  position: relative;
+  width: 100%;
+  height: 380px; /* Увеличена высота для размещения подписей */
+  max-height: 380px;
+  min-height: 380px;
+  overflow: visible; /* Разрешаем отображение подписей за пределами контейнера */
+  padding-bottom: 0;
+  margin-bottom: 0;
+}
+
+/* Имена сотрудников теперь рисуются на canvas через плагин Chart.js */
+
+/* Названия стадий внизу */
+.bar-chart-stage-labels {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  margin-top: 12px;
+  padding: 8px 20px;
+  border-top: 1px solid var(--b24-border-light, #e5e7eb);
+}
+
+.stage-label-item {
+  flex: 1;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--b24-text-primary, #1f2937);
+  padding: 4px 8px;
+}
+
+@media (max-width: 768px) {
+  .bar-chart-stage-labels {
+    padding: 6px 10px;
   }
 
-  .stage-details-count {
-    align-self: flex-start;
-  }
-
-  .employee-detail-item {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-  }
-
-  .employee-detail-count {
-    align-self: flex-end;
+  .stage-label-item {
+    font-size: 11px;
+    padding: 3px 4px;
   }
 }
 </style>

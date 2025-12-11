@@ -177,6 +177,10 @@ class SnapshotService {
       const result = await response.json();
 
       if (!result.success) {
+        // Если слепок не найден, возвращаем null вместо ошибки
+        if (result.message && result.message.includes('не найден')) {
+          return null;
+        }
         throw new Error(result.message || 'Ошибка получения слепка');
       }
 
