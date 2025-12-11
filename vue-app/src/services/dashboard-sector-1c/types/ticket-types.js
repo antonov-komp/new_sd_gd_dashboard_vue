@@ -14,7 +14,10 @@
  * @property {number} assignedById - ID ответственного
  * @property {string} createdAt - Дата создания
  * @property {string} updatedAt - Дата обновления
- * @property {string} priority - Приоритет
+ * @property {string} priorityId - Внутренний id приоритета (UF_CRM_7_UF_PRIORITY)
+ * @property {string} priorityLabel - Отображаемое значение приоритета
+ * @property {{color: string, backgroundColor: string, textColor: string}} priorityColors - Цвета чипа приоритета
+ * @property {string} priority - Приоритет (legacy id, для обратной совместимости)
  * @property {number} opportunity - Сумма
  * @property {string} currencyId - ID валюты
  * @property {string} comments - Комментарии
@@ -42,7 +45,10 @@
  * @property {number} assignedById - ID ответственного
  * @property {string} createdAt - Дата создания
  * @property {string} updatedAt - Дата обновления
- * @property {string} priority - Приоритет
+ * @property {string} priorityId - Внутренний id приоритета (UF_CRM_7_UF_PRIORITY)
+ * @property {string} priorityLabel - Отображаемое значение приоритета
+ * @property {{color: string, backgroundColor: string, textColor: string}} priorityColors - Цвета чипа приоритета
+ * @property {string} priority - Приоритет (legacy id, для обратной совместимости)
  * @property {number} opportunity - Сумма
  * @property {string} currencyId - ID валюты
  * @property {string} comments - Комментарии

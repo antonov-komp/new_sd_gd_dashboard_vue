@@ -1,12 +1,8 @@
 <template>
   <div
     class="ticket-card"
-    :class="{
-      'priority-high': ticket.priority === 'high',
-      'priority-medium': ticket.priority === 'medium',
-      'priority-low': ticket.priority === 'low'
-    }"
     :draggable="isDragEnabled"
+    :style="priorityBorderStyle"
     @click="handleCardClick"
     @dragstart="handleDragStart"
     @dragend="handleDragEnd"
@@ -21,8 +17,8 @@
     </div>
     
     <div class="ticket-meta">
-      <span class="ticket-priority" :class="`priority-${ticket.priority}`">
-        {{ getPriorityLabel(ticket.priority) }}
+      <span class="ticket-priority" :style="priorityChipStyle">
+        {{ displayPriorityLabel }}
       </span>
       <span class="ticket-status">
         {{ getStatusLabel(ticket.status) }}
@@ -55,7 +51,10 @@ import { DISABLE_TICKET_DRAG, getTicketIframeUrl } from '@/services/dashboard-se
  * @prop {number} ticket.id - ID тикета
  * @prop {string} ticket.title - Название тикета (fallback, если отсутствует ufSubject)
  * @prop {string|null} ticket.ufSubject - Тема тикета из пользовательского поля UF_SUBJECT (приоритетное для отображения)
- * @prop {string} ticket.priority - Приоритет (high, medium, low)
+ * @prop {string} ticket.priorityId - Внутренний id приоритета (из UF_CRM_7_UF_PRIORITY)
+ * @prop {string} ticket.priorityLabel - Отображаемое значение приоритета
+ * @prop {Object} ticket.priorityColors - Цвета приоритета { color, backgroundColor, textColor }
+ * @prop {string} ticket.priority - legacy-поле приоритета (id), сохраняется для обратной совместимости
  * @prop {string} ticket.status - Статус (in_progress, new, done, pending)
  * @prop {string} ticket.description - Описание тикета (опционально)
  * @prop {boolean} draggable - Можно ли перетаскивать тикет
@@ -85,23 +84,33 @@ export default {
   },
   emits: ['click', 'drag-start', 'drag-end'],
   setup(props, { emit }) {
-    /**
-     * Получение текстового значения приоритета
-     * 
-     * @param {string} priority - Приоритет (high, medium, low)
-     * @returns {string} Текстовое значение
-     */
     const isDragging = ref(false);
     const isDragEnabled = computed(() => !DISABLE_TICKET_DRAG && props.draggable);
 
-    const getPriorityLabel = (priority) => {
-      const labels = {
-        high: 'Высокий',
-        medium: 'Средний',
-        low: 'Низкий'
-      };
-      return labels[priority] || priority;
+    const NEUTRAL_COLORS = {
+      color: '#ced4da',
+      backgroundColor: '#f1f3f5',
+      textColor: '#6c757d'
     };
+
+    const priorityData = computed(() => {
+      return {
+        label: props.ticket.priorityLabel || 'Не указано',
+        colors: props.ticket.priorityColors || NEUTRAL_COLORS
+      };
+    });
+
+    const displayPriorityLabel = computed(() => priorityData.value.label || 'Не указано');
+
+    const priorityChipStyle = computed(() => ({
+      color: priorityData.value.colors.textColor || NEUTRAL_COLORS.textColor,
+      backgroundColor: priorityData.value.colors.backgroundColor || NEUTRAL_COLORS.backgroundColor,
+      borderColor: priorityData.value.colors.color || NEUTRAL_COLORS.color
+    }));
+
+    const priorityBorderStyle = computed(() => ({
+      borderLeftColor: priorityData.value.colors.color || NEUTRAL_COLORS.color
+    }));
 
     /**
      * Получение текстового значения статуса
@@ -171,12 +180,14 @@ export default {
     };
 
     return {
-      getPriorityLabel,
       getStatusLabel,
       handleDragStart,
       handleDragEnd,
       handleCardClick,
-      isDragEnabled
+      isDragEnabled,
+      priorityChipStyle,
+      displayPriorityLabel,
+      priorityBorderStyle
     };
   }
 };
@@ -196,18 +207,6 @@ export default {
 .ticket-card:hover {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
   transform: translateY(-2px);
-}
-
-.ticket-card.priority-high {
-  border-left-color: #dc3545;
-}
-
-.ticket-card.priority-medium {
-  border-left-color: #ffc107;
-}
-
-.ticket-card.priority-low {
-  border-left-color: #28a745;
 }
 
 .ticket-card[draggable="true"] {
@@ -256,21 +255,7 @@ export default {
   padding: 2px 8px;
   border-radius: 12px;
   font-weight: 500;
-}
-
-.ticket-priority.priority-high {
-  background: #dc3545;
-  color: white;
-}
-
-.ticket-priority.priority-medium {
-  background: #ffc107;
-  color: #333;
-}
-
-.ticket-priority.priority-low {
-  background: #28a745;
-  color: white;
+  border: 1px solid transparent;
 }
 
 .ticket-status {

@@ -78,15 +78,15 @@
       <h4 class="legend-title">Легенда:</h4>
       <div class="legend-items">
         <div class="legend-item">
-          <span class="legend-color" style="background-color: #10b981;"></span>
+          <span class="legend-color legend-increase"></span>
           <span>Зелёный — рост количества тикетов</span>
         </div>
         <div class="legend-item">
-          <span class="legend-color" style="background-color: #ef4444;"></span>
+          <span class="legend-color legend-decrease"></span>
           <span>Красный — снижение количества тикетов</span>
         </div>
         <div class="legend-item">
-          <span class="legend-color" style="background-color: #9ca3af;"></span>
+          <span class="legend-color legend-stable"></span>
           <span>Серый — без изменений</span>
         </div>
       </div>
@@ -164,6 +164,14 @@ import SectorDataAdapter from '@/services/graph-state/SectorDataAdapter.js';
 import CompareSnapshots from '@/utils/graph-state/compareSnapshots.js';
 import { useNotifications } from '@/composables/useNotifications.js';
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue';
+
+const cssVar = (name, fallback) => {
+  if (typeof window === 'undefined') {
+    return fallback;
+  }
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return value || fallback;
+};
 
 /**
  * Props компонента
@@ -247,10 +255,16 @@ const chartComponent = computed(() => {
 /**
  * Этапы для фильтров
  */
+const stageColors = {
+  formed: cssVar('--b24-primary', '#007bff'),
+  review: cssVar('--b24-warning', '#ffc107'),
+  execution: cssVar('--b24-success', '#28a745')
+};
+
 const stages = [
-  { id: 'formed', name: 'Сформировано обращение', color: '#007bff' },
-  { id: 'review', name: 'Рассмотрение ТЗ', color: '#ffc107' },
-  { id: 'execution', name: 'Исполнение', color: '#28a745' }
+  { id: 'formed', name: 'Сформировано обращение', color: stageColors.formed },
+  { id: 'review', name: 'Рассмотрение ТЗ', color: stageColors.review },
+  { id: 'execution', name: 'Исполнение', color: stageColors.execution }
 ];
 
 /**
@@ -379,23 +393,23 @@ function extractAvailableEmployees() {
 function getTrendColor(trend, type = 'background') {
   const colors = {
     increase: {
-      background: '#10b981',
-      border: '#059669',
-      point: '#10b981'
+      background: cssVar('--b24-success', '#28a745'),
+      border: cssVar('--b24-success-hover', '#218838'),
+      point: cssVar('--b24-success', '#28a745')
     },
     decrease: {
-      background: '#ef4444',
-      border: '#dc2626',
-      point: '#ef4444'
+      background: cssVar('--b24-danger', '#dc3545'),
+      border: cssVar('--b24-danger-hover', '#c82333'),
+      point: cssVar('--b24-danger', '#dc3545')
     },
     stable: {
-      background: '#9ca3af',
-      border: '#6b7280',
-      point: '#9ca3af'
+      background: cssVar('--b24-text-muted', '#9ca3af'),
+      border: cssVar('--b24-text-secondary', '#6b7280'),
+      point: cssVar('--b24-text-muted', '#9ca3af')
     }
   };
 
-  return colors[trend]?.[type] || '#6c757d';
+  return colors[trend]?.[type] || cssVar('--b24-text-secondary', '#6c757d');
 }
 
 /**
@@ -943,10 +957,10 @@ watch(comparisonType, () => {
 <style scoped>
 .graph-state-chart {
   width: 100%;
-  padding: 20px;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  padding: var(--spacing-lg);
+  background: var(--b24-bg-white);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
 }
 
 .chart-header {
@@ -962,7 +976,7 @@ watch(comparisonType, () => {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: #333;
+  color: var(--b24-text-primary);
 }
 
 .chart-type-selector {
@@ -974,24 +988,24 @@ watch(comparisonType, () => {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 12px;
-  background: white;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--b24-bg-white);
+  border: 1px solid var(--b24-border-medium);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-base);
 }
 
 .chart-type-btn:hover {
-  background: #f5f5f5;
-  border-color: #007bff;
+  background: var(--b24-bg);
+  border-color: var(--b24-primary);
 }
 
 .chart-type-btn.active {
-  background: #007bff;
-  color: white;
-  border-color: #007bff;
+  background: var(--b24-primary);
+  color: var(--b24-text-inverse);
+  border-color: var(--b24-primary);
 }
 
 .chart-type-icon {
@@ -1007,8 +1021,8 @@ watch(comparisonType, () => {
   gap: 16px;
   margin-bottom: 20px;
   padding: 12px;
-  background: #f8f9fa;
-  border-radius: 4px;
+  background: var(--b24-bg-light);
+  border-radius: var(--radius-sm);
   flex-wrap: wrap;
 }
 
@@ -1027,12 +1041,12 @@ watch(comparisonType, () => {
 .filter-color {
   width: 16px;
   height: 16px;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 .filter-label {
-  color: #333;
+  color: var(--b24-text-primary);
 }
 
 .chart-container {
@@ -1047,30 +1061,30 @@ watch(comparisonType, () => {
 }
 
 .error-message {
-  color: #dc3545;
+  color: var(--b24-danger);
   font-size: 16px;
   margin-bottom: 20px;
 }
 
 .btn-retry {
-  padding: 10px 20px;
-  background-color: #007bff;
-  color: white;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background-color: var(--b24-primary);
+  color: var(--b24-text-inverse);
   border: none;
-  border-radius: 4px;
-  font-size: 14px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
   cursor: pointer;
-  transition: background-color 0.2s ease;
+  transition: background-color var(--transition-base);
 }
 
 .btn-retry:hover {
-  background-color: #0056b3;
+  background-color: var(--b24-primary-hover);
 }
 
 .no-data {
   padding: 40px;
   text-align: center;
-  color: #666;
+  color: var(--b24-text-secondary);
 }
 
 .no-data p {
@@ -1079,7 +1093,7 @@ watch(comparisonType, () => {
 
 .no-data-hint {
   font-size: 14px;
-  color: #999;
+  color: var(--b24-text-muted);
 }
 
 /* Адаптивность */
@@ -1112,15 +1126,15 @@ watch(comparisonType, () => {
 .comparison-type-selector {
   margin-bottom: 20px;
   padding: 15px;
-  background-color: #f9fafb;
-  border-radius: 8px;
+  background-color: var(--b24-bg-light);
+  border-radius: var(--radius-lg);
 }
 
 .comparison-title {
   margin: 0 0 10px 0;
   font-size: 16px;
   font-weight: 600;
-  color: #333;
+  color: var(--b24-text-primary);
 }
 
 .radio-group {
@@ -1144,15 +1158,15 @@ watch(comparisonType, () => {
 .graph-legend {
   margin-top: 20px;
   padding: 15px;
-  background-color: #f9fafb;
-  border-radius: 8px;
+  background-color: var(--b24-bg-light);
+  border-radius: var(--radius-lg);
 }
 
 .legend-title {
   margin: 0 0 10px 0;
   font-size: 16px;
   font-weight: 600;
-  color: #333;
+  color: var(--b24-text-primary);
 }
 
 .legend-items {
@@ -1171,23 +1185,26 @@ watch(comparisonType, () => {
 .legend-color {
   width: 16px;
   height: 16px;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   border: 1px solid rgba(0, 0, 0, 0.1);
 }
+.legend-increase { background-color: var(--b24-success); }
+.legend-decrease { background-color: var(--b24-danger); }
+.legend-stable { background-color: var(--b24-text-muted); }
 
 /* Детализация по сотрудникам */
 .employees-details {
   margin-top: 30px;
   padding: 20px;
-  background-color: #f9fafb;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
+  background-color: var(--b24-bg-light);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--b24-border-light);
 }
 
 .employees-details-title {
   font-size: 18px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--b24-text-primary);
   margin: 0 0 20px 0;
 }
 
@@ -1198,10 +1215,10 @@ watch(comparisonType, () => {
 }
 
 .stage-details {
-  background-color: white;
-  border-radius: 6px;
+  background-color: var(--b24-bg-white);
+  border-radius: var(--radius-md);
   padding: 15px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--b24-border-light);
 }
 
 .stage-details-header {
@@ -1210,13 +1227,13 @@ watch(comparisonType, () => {
   gap: 12px;
   margin-bottom: 15px;
   padding-bottom: 12px;
-  border-bottom: 2px solid #e5e7eb;
+  border-bottom: 2px solid var(--b24-border-light);
 }
 
 .stage-details-color {
   width: 20px;
   height: 20px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
@@ -1224,17 +1241,17 @@ watch(comparisonType, () => {
   flex: 1;
   font-size: 16px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--b24-text-primary);
   margin: 0;
 }
 
 .stage-details-count {
   font-size: 14px;
   font-weight: 500;
-  color: #6b7280;
-  background-color: #f3f4f6;
+  color: var(--b24-text-secondary);
+  background-color: var(--b24-bg);
   padding: 4px 12px;
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
 }
 
 .stage-details-employees {
@@ -1248,45 +1265,45 @@ watch(comparisonType, () => {
   align-items: center;
   justify-content: space-between;
   padding: 10px 12px;
-  background-color: #f9fafb;
-  border-radius: 4px;
-  border-left: 3px solid #3b82f6;
+  background-color: var(--b24-bg-light);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--b24-primary);
   transition: background-color 0.2s;
 }
 
 .employee-detail-item:hover {
-  background-color: #f3f4f6;
+  background-color: var(--b24-bg);
 }
 
 .employee-detail-item.employee-detail-keeper {
-  border-left-color: #f59e0b;
-  background-color: #fffbeb;
+  border-left-color: var(--b24-warning);
+  background-color: var(--b24-warning-lighter);
 }
 
 .employee-detail-item.employee-detail-keeper:hover {
-  background-color: #fef3c7;
+  background-color: var(--b24-warning-light);
 }
 
 .employee-detail-name {
   font-size: 14px;
-  color: #374151;
+  color: var(--b24-text-primary);
   font-weight: 500;
 }
 
 .employee-detail-count {
   font-size: 14px;
-  color: #6b7280;
+  color: var(--b24-text-secondary);
   font-weight: 600;
-  background-color: white;
+  background-color: var(--b24-bg-white);
   padding: 4px 10px;
-  border-radius: 12px;
-  border: 1px solid #e5e7eb;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--b24-border-light);
 }
 
 .no-employees-in-stage {
   text-align: center;
   padding: 15px;
-  color: #9ca3af;
+  color: var(--b24-text-muted);
   font-size: 14px;
   font-style: italic;
 }

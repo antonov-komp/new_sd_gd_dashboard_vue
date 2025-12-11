@@ -312,20 +312,20 @@ onUnmounted(() => {
 .create-snapshot-btn {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-xs);
   padding: 10px 16px;
-  background-color: #007bff;
-  color: white;
+  background-color: var(--b24-primary);
+  color: var(--b24-text-inverse);
   border: none;
-  border-radius: 4px;
-  font-size: 14px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.2s ease;
+  transition: background-color var(--transition-base);
 }
 
 .create-snapshot-btn:hover:not(:disabled) {
-  background-color: #0056b3;
+  background-color: var(--b24-primary-hover);
 }
 
 .create-snapshot-btn:disabled {
@@ -357,9 +357,9 @@ onUnmounted(() => {
 }
 
 .modal-content {
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  background: var(--b24-bg-white);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
   max-width: 500px;
   width: 100%;
   max-height: 90vh;
@@ -371,21 +371,21 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 20px;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--b24-border-light);
 }
 
 .modal-title {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: #333;
+  color: var(--b24-text-primary);
 }
 
 .modal-close {
   background: none;
   border: none;
   font-size: 24px;
-  color: #999;
+  color: var(--b24-text-muted);
   cursor: pointer;
   padding: 0;
   width: 32px;
@@ -393,13 +393,13 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
-  transition: background-color 0.2s ease;
+  border-radius: var(--radius-sm);
+  transition: background-color var(--transition-base);
 }
 
 .modal-close:hover {
-  background-color: #f5f5f5;
-  color: #333;
+  background-color: var(--b24-bg);
+  color: var(--b24-text-primary);
 }
 
 .modal-body {
@@ -408,18 +408,18 @@ onUnmounted(() => {
 
 .modal-description {
   margin: 0 0 12px 0;
-  color: #666;
+  color: var(--b24-text-secondary);
   line-height: 1.5;
 }
 
 .modal-warning {
   margin: 0;
   padding: 12px;
-  background-color: #fff3cd;
-  border: 1px solid #ffc107;
-  border-radius: 4px;
-  color: #856404;
-  font-size: 14px;
+  background-color: var(--b24-warning-light);
+  border: 1px solid var(--b24-warning);
+  border-radius: var(--radius-sm);
+  color: var(--b24-warning-active);
+  font-size: var(--font-size-sm);
   line-height: 1.5;
 }
 
@@ -431,16 +431,16 @@ onUnmounted(() => {
 .progress-bar-wrapper {
   width: 100%;
   height: 8px;
-  background-color: #e0e0e0;
-  border-radius: 4px;
+  background-color: var(--b24-border-light);
+  border-radius: var(--radius-sm);
   overflow: hidden;
   margin-bottom: 12px;
 }
 
 .progress-bar {
   height: 100%;
-  background: linear-gradient(90deg, #007bff, #0056b3);
-  border-radius: 4px;
+  background: linear-gradient(90deg, var(--b24-primary), var(--b24-primary-hover));
+  border-radius: var(--radius-sm);
   transition: width 0.3s ease;
   animation: pulse 2s ease-in-out infinite;
 }
@@ -463,11 +463,11 @@ onUnmounted(() => {
 
 .progress-percent {
   font-weight: 600;
-  color: #007bff;
+  color: var(--b24-primary);
 }
 
 .progress-description {
-  color: #666;
+  color: var(--b24-text-secondary);
   flex: 1;
   text-align: right;
   margin-left: 12px;
@@ -478,35 +478,35 @@ onUnmounted(() => {
   justify-content: flex-end;
   gap: 12px;
   padding: 20px;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--b24-border-light);
 }
 
 .btn {
   padding: 10px 20px;
   border: none;
-  border-radius: 4px;
-  font-size: 14px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-base);
 }
 
 .btn-primary {
-  background-color: #007bff;
-  color: white;
+  background-color: var(--b24-primary);
+  color: var(--b24-text-inverse);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background-color: #0056b3;
+  background-color: var(--b24-primary-hover);
 }
 
 .btn-secondary {
-  background-color: #6c757d;
-  color: white;
+  background-color: var(--b24-text-secondary);
+  color: var(--b24-text-inverse);
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background-color: #545b62;
+  background-color: var(--b24-text-primary);
 }
 
 .btn:disabled {

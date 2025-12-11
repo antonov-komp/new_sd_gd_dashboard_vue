@@ -5,6 +5,12 @@
  */
 
 import { mapStageId } from './stage-mapper.js';
+import {
+  DEFAULT_PRIORITY_ID,
+  getPriorityByBitrixValue,
+  getPriorityById,
+  getPriorityColors
+} from '@/config/priority-config.js';
 import { PRIORITY_MAPPING, PRIORITY_TO_BITRIX } from '../utils/constants.js';
 
 /**
@@ -31,11 +37,29 @@ export function mapTicket(bitrixTicket) {
                     bitrixTicket['uf_subject'] ||
                     null;
 
+  const priorityRaw =
+    bitrixTicket.UF_CRM_7_UF_PRIORITY ||
+    bitrixTicket.uf_crm_7_uf_priority ||
+    bitrixTicket.ufCrm7UfPriority ||
+    bitrixTicket['UF_CRM_7_UF_PRIORITY'] ||
+    bitrixTicket['uf_crm_7_uf_priority'] ||
+    bitrixTicket.priority ||
+    bitrixTicket.PRIORITY ||
+    null;
+
+  const priorityObj = getPriorityByBitrixValue(priorityRaw);
+  const priorityColors = getPriorityColors(priorityObj);
+
   return {
     id: id,
     title: title,
     ufSubject: ufSubject,
-    priority: mapPriority(bitrixTicket.priority || bitrixTicket.PRIORITY),
+    priorityId: priorityObj.id,
+    priorityLabel: priorityObj.label,
+    priorityColors: priorityColors,
+    // legacy поле для обратной совместимости
+    priority: priorityObj.id,
+    priorityBitrixValue: priorityObj.bitrixValue || null,
     status: mapStatus(stageId),
     assigneeId: assignedById ? parseInt(assignedById) : null,
     stageId: mapStageId(stageId),
@@ -50,21 +74,35 @@ export function mapTicket(bitrixTicket) {
 /**
  * Маппинг приоритета из Bitrix24
  * 
- * @param {string} bitrixPriority - Приоритет в Bitrix24
- * @returns {string} Приоритет (high, medium, low)
+ * @param {string} bitrixPriority - Приоритет в Bitrix24 (UF_CRM_7_UF_PRIORITY)
+ * @returns {string} Внутренний id приоритета
  */
 export function mapPriority(bitrixPriority) {
-  return PRIORITY_MAPPING[bitrixPriority] || 'medium';
+  return getPriorityByBitrixValue(bitrixPriority).id;
 }
 
 /**
  * Маппинг приоритета на формат Bitrix24
  * 
- * @param {string} priority - Приоритет (high, medium, low)
- * @returns {string} Приоритет в Bitrix24
+ * @param {string|object} priority - Приоритет (id или объект)
+ * @returns {string|null} Приоритет в Bitrix24 (исходное текстовое значение)
  */
 export function mapPriorityToBitrix(priority) {
-  return PRIORITY_TO_BITRIX[priority] || '2';
+  if (priority && typeof priority === 'object') {
+    return priority.bitrixValue || null;
+  }
+
+  const priorityObj = getPriorityById(priority);
+  if (priorityObj && priorityObj.bitrixValue) {
+    return priorityObj.bitrixValue;
+  }
+
+  // fallback: если пришёл старый числовой код — поддерживаем прежнее поведение
+  if (PRIORITY_TO_BITRIX[priority]) {
+    return PRIORITY_TO_BITRIX[priority];
+  }
+
+  return getPriorityById(DEFAULT_PRIORITY_ID).bitrixValue;
 }
 
 /**

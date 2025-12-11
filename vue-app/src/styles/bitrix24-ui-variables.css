@@ -1,0 +1,134 @@
+/**
+ * Bitrix24 UI Kit - CSS Variables
+ *
+ * Централизованная система CSS-переменных для унификации дизайна
+ * с гайдлайнами Bitrix24 UI Kit.
+ *
+ * Использование:
+ *   background-color: var(--b24-primary);
+ *   padding: var(--spacing-md);
+ *   border-radius: var(--radius-md);
+ *
+ * Дата создания: 2025-12-11 (UTC+3, Брест)
+ * Версия: 1.0
+ */
+
+:root {
+  /* ============================================
+     ЦВЕТА BITRIX24 UI KIT
+     ============================================ */
+
+  /* Основные цвета */
+  --b24-primary: #007bff;
+  --b24-primary-hover: #0056b3;
+  --b24-primary-active: #004085;
+  --b24-primary-light: #cfe2ff;
+  --b24-primary-lighter: #e7f3ff;
+
+  --b24-success: #28a745;
+  --b24-success-hover: #218838;
+  --b24-success-active: #1e7e34;
+  --b24-success-light: #d4edda;
+  --b24-success-lighter: #e8f5e9;
+
+  --b24-danger: #dc3545;
+  --b24-danger-hover: #c82333;
+  --b24-danger-active: #bd2130;
+  --b24-danger-light: #f8d7da;
+  --b24-danger-lighter: #ffeaea;
+
+  --b24-warning: #ffc107;
+  --b24-warning-hover: #e0a800;
+  --b24-warning-active: #d39e00;
+  --b24-warning-light: #fff3cd;
+  --b24-warning-lighter: #fffbf0;
+
+  --b24-info: #17a2b8;
+  --b24-info-hover: #138496;
+  --b24-info-active: #117a8b;
+  --b24-info-light: #d1ecf1;
+  --b24-info-lighter: #e8f4f8;
+
+  /* ============================================
+     ЦВЕТА ТЕКСТА
+     ============================================ */
+
+  --b24-text-primary: #333333;
+  --b24-text-secondary: #666666;
+  --b24-text-muted: #999999;
+  --b24-text-disabled: #cccccc;
+  --b24-text-inverse: #ffffff;
+
+  /* ============================================
+     ЦВЕТА ГРАНИЦ
+     ============================================ */
+
+  --b24-border: #dee2e6;
+  --b24-border-light: #e5e7eb;
+  --b24-border-medium: #ced4da;
+  --b24-border-dark: #adb5bd;
+  --b24-border-focus: #007bff;
+
+  /* ============================================
+     ЦВЕТА ФОНОВ
+     ============================================ */
+
+  --b24-bg: #f5f5f5;
+  --b24-bg-light: #f9fafb;
+  --b24-bg-lighter: #fafbfc;
+  --b24-bg-white: #ffffff;
+  --b24-bg-dark: #343a40;
+
+  /* ============================================
+     ОТСТУПЫ (МОДУЛЬНАЯ СИСТЕМА 8PX)
+     ============================================ */
+
+  --spacing-xs: 4px;    /* 0.5 * 8px */
+  --spacing-sm: 8px;    /* 1 * 8px */
+  --spacing-md: 16px;   /* 2 * 8px */
+  --spacing-lg: 24px;   /* 3 * 8px */
+  --spacing-xl: 32px;   /* 4 * 8px */
+  --spacing-2xl: 40px;  /* 5 * 8px */
+  --spacing-3xl: 48px;  /* 6 * 8px */
+
+  /* ============================================
+     СКРУГЛЕНИЯ (BORDER-RADIUS)
+     ============================================ */
+
+  --radius-xs: 2px;      /* Очень мелкие элементы (квадратики, индикаторы) */
+  --radius-sm: 4px;      /* Мелкие элементы (badges, индикаторы) */
+  --radius-md: 6px;      /* Кнопки, поля ввода */
+  --radius-lg: 8px;      /* Карточки, панели */
+  --radius-xl: 12px;     /* Большие карточки, модальные окна */
+  --radius-full: 9999px; /* Круглые элементы (аватары) */
+
+  /* ============================================
+     ТЕНИ
+     ============================================ */
+
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 2px 4px 0 rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 4px 8px 0 rgba(0, 0, 0, 0.15);
+  --shadow-xl: 0 8px 16px 0 rgba(0, 0, 0, 0.2);
+
+  /* ============================================
+     ПЕРЕХОДЫ (TRANSITIONS)
+     ============================================ */
+
+  --transition-fast: 0.15s ease;
+  --transition-base: 0.2s ease;
+  --transition-slow: 0.3s ease;
+
+  /* ============================================
+     РАЗМЕРЫ ШРИФТОВ
+     ============================================ */
+
+  --font-size-xs: 12px;
+  --font-size-sm: 14px;
+  --font-size-base: 16px;
+  --font-size-lg: 18px;
+  --font-size-xl: 20px;
+  --font-size-2xl: 24px;
+  --font-size-3xl: 28px;
+}
+
