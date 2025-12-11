@@ -7,6 +7,11 @@
     @dragstart="handleDragStart"
     @dragend="handleDragEnd"
   >
+    <!-- Правый верхний угол: Отдел заказчика -->
+    <div v-if="ticket.departmentHead" class="ticket-department">
+      {{ ticket.departmentHead }}
+    </div>
+    
     <div class="ticket-header">
       <span class="ticket-icon">🎫</span>
       <span class="ticket-id">#{{ ticket.id }}</span>
@@ -34,12 +39,20 @@
     <div v-if="ticket.description" class="ticket-description">
       {{ ticket.description }}
     </div>
+    
+    <!-- Правый нижний угол: Дата создания с визуальным акцентом -->
+    <div v-if="formattedCreatedDate" class="ticket-created-date" :style="dateAccentStyle">
+      <span class="ticket-date-label">{{ dateAccentConfig?.label || '' }}</span>
+      <span class="ticket-date-value">{{ formattedCreatedDate }}</span>
+    </div>
   </div>
 </template>
 
 <script>
 import { computed, ref } from 'vue';
 import { DISABLE_TICKET_DRAG, getTicketIframeUrl } from '@/services/dashboard-sector-1c/utils/constants.js';
+import { parseBitrixDate, formatDate, getDateAccentCategory } from '@/services/dashboard-sector-1c/utils/date-utils.js';
+import { DATE_ACCENT_CONFIG } from '@/services/dashboard-sector-1c/utils/date-accent-config.js';
 
 /**
  * Компонент карточки тикета
@@ -63,6 +76,7 @@ import { DISABLE_TICKET_DRAG, getTicketIframeUrl } from '@/services/dashboard-se
  * @prop {string} ticket.priority - legacy-поле приоритета (id), сохраняется для обратной совместимости
  * @prop {string} ticket.status - Статус (in_progress, new, done, pending)
  * @prop {string|null} ticket.actionStr - Значение UF_ACTION_STR из Bitrix24 (динамичная строка, опционально)
+ * @prop {string|null} ticket.departmentHead - Отдел заказчика из UF_CRM_7_DEPARTMENT_HEAD (ограничено 10 символами, опционально)
  * @prop {string} ticket.description - Описание тикета (опционально)
  * @prop {boolean} draggable - Можно ли перетаскивать тикет
  * @emits {Object} click - Тикет кликнут
@@ -171,6 +185,48 @@ export default {
     }));
 
     /**
+     * Отформатированная дата создания
+     */
+    const formattedCreatedDate = computed(() => {
+      if (!props.ticket.createdAt) return '';
+      const date = parseBitrixDate(props.ticket.createdAt);
+      return formatDate(date);
+    });
+
+    /**
+     * Категория давности для визуального акцента
+     */
+    const dateAccentCategory = computed(() => {
+      if (!props.ticket.createdAt) return null;
+      const date = parseBitrixDate(props.ticket.createdAt);
+      return getDateAccentCategory(date);
+    });
+
+    /**
+     * Конфигурация визуального акцента для даты
+     */
+    const dateAccentConfig = computed(() => {
+      const category = dateAccentCategory.value;
+      if (!category) return null;
+      return DATE_ACCENT_CONFIG[category] || null;
+    });
+
+    /**
+     * Стили для элемента даты с визуальным акцентом
+     */
+    const dateAccentStyle = computed(() => {
+      const config = dateAccentConfig.value;
+      if (!config) return {};
+      
+      return {
+        color: config.textColor,
+        backgroundColor: config.backgroundColor,
+        borderColor: config.color,
+        border: `1px solid ${config.color}`
+      };
+    });
+
+    /**
      * Обработка начала перетаскивания
      * 
      * @param {Event} event - Событие dragstart
@@ -232,7 +288,11 @@ export default {
       displayServiceLabel,
       serviceChipStyle,
       actionStrValue,
-      actionChipStyle
+      actionChipStyle,
+      formattedCreatedDate,
+      dateAccentCategory,
+      dateAccentConfig,
+      dateAccentStyle
     };
   }
 };
@@ -240,6 +300,7 @@ export default {
 
 <style scoped>
 .ticket-card {
+  position: relative; /* Для позиционирования абсолютных элементов */
   background: white;
   border-radius: 4px;
   padding: 12px;
@@ -247,6 +308,23 @@ export default {
   cursor: pointer;
   transition: all 0.3s ease;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.ticket-department {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 11px;
+  color: #666;
+  font-weight: 500;
+  background-color: rgba(255, 255, 255, 0.9);
+  padding: 2px 6px;
+  border-radius: 4px;
+  max-width: 136px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  z-index: 1;
 }
 
 .ticket-card:hover {
@@ -330,6 +408,33 @@ export default {
   -webkit-line-clamp: 2;
   line-clamp: 2;
   -webkit-box-orient: vertical;
+}
+
+.ticket-created-date {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  font-size: 10px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 60px;
+  z-index: 1;
+}
+
+.ticket-date-label {
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 9px;
+  line-height: 1;
+}
+
+.ticket-date-value {
+  font-weight: 500;
+  font-size: 10px;
+  line-height: 1.2;
 }
 </style>
 

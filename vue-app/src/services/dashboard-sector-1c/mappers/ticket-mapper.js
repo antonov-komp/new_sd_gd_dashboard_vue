@@ -29,6 +29,7 @@ import { PRIORITY_MAPPING, PRIORITY_TO_BITRIX } from '../utils/constants.js';
  * @property {number} id - ID тикета
  * @property {string} title - Название тикета
  * @property {string|null} ufSubject - Тема тикета из UF_SUBJECT
+ * @property {string|null} departmentHead - Отдел заказчика из UF_CRM_7_DEPARTMENT_HEAD (ограничено 17 символами)
  * @property {string} priorityId - Внутренний id приоритета
  * @property {string} priorityLabel - Отображаемое значение приоритета
  * @property {Object} priorityColors - Цвета приоритета
@@ -62,6 +63,26 @@ export function mapTicket(bitrixTicket) {
                     bitrixTicket['UF_SUBJECT'] ||
                     bitrixTicket['uf_subject'] ||
                     null;
+
+  // Извлечение пользовательского поля UF_CRM_7_DEPARTMENT_HEAD (отдел заказчика)
+  // Проверяем все возможные варианты именования (по аналогии с UF_CRM_7_UF_PRIORITY)
+  const ufDepartmentHead = bitrixTicket.UF_CRM_7_DEPARTMENT_HEAD || 
+                           bitrixTicket.uf_crm_7_department_head || 
+                           bitrixTicket.ufCrm7DepartmentHead ||
+                           bitrixTicket['UF_CRM_7_DEPARTMENT_HEAD'] ||
+                           bitrixTicket['uf_crm_7_department_head'] ||
+                           null;
+
+  // Нормализация значения отдела заказчика: trim и ограничение 17 символов
+  // Если значение пустое или null — возвращаем null
+  let departmentHead = null;
+  if (ufDepartmentHead) {
+    const trimmed = String(ufDepartmentHead).trim();
+    if (trimmed.length > 0) {
+      // Ограничиваем длину до 17 символов
+      departmentHead = trimmed.length > 17 ? trimmed.substring(0, 17) : trimmed;
+    }
+  }
 
   const priorityRaw =
     bitrixTicket.UF_CRM_7_UF_PRIORITY ||
@@ -106,6 +127,7 @@ export function mapTicket(bitrixTicket) {
     id: id,
     title: title,
     ufSubject: ufSubject,
+    departmentHead: departmentHead,
     priorityId: priorityObj.id,
     priorityLabel: priorityObj.label,
     priorityColors: priorityColors,
