@@ -7,6 +7,8 @@
  * Используется только при включённом диагностическом режиме
  */
 
+import { isAdmin } from '@/config/access-config.js';
+
 /**
  * Класс для сбора диагностических данных
  */
@@ -217,9 +219,18 @@ export function getDiagnosticsService() {
  * Проверка, включён ли диагностический режим
  * 
  * @param {object} route - Объект route из Vue Router (опционально)
- * @returns {boolean} true, если диагностика включена
+ * @param {object} currentUser - Объект текущего пользователя (опционально)
+ * @returns {boolean} true, если диагностика включена И пользователь является администратором
  */
-export function isDiagnosticsEnabled(route = null) {
+export function isDiagnosticsEnabled(route = null, currentUser = null) {
+  // Сначала проверяем права администратора (если передан currentUser)
+  if (currentUser) {
+    if (!isAdmin(currentUser)) {
+      return false; // Не-администраторы не могут использовать диагностику
+    }
+  }
+  
+  // Затем проверяем, включена ли диагностика через URL/localStorage
   // Проверяем query-параметр из route (если передан) - это основной способ для Vue Router
   if (route && route.query && route.query.diagnostics === 'true') {
     return true;

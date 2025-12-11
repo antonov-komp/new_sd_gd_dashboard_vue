@@ -1,5 +1,5 @@
 <template>
-  <div v-if="isEnabled" class="diagnostics-panel">
+  <div v-if="isEnabled && isUserAdmin" class="diagnostics-panel">
     <div class="diagnostics-header">
       <h2>🔍 Диагностика дашборда</h2>
       <div class="header-actions">
@@ -227,6 +227,10 @@ export default {
     isEnabled: {
       type: Boolean,
       default: false
+    },
+    isUserAdmin: {
+      type: Boolean,
+      default: false
     }
   },
   setup(props) {
@@ -234,7 +238,7 @@ export default {
     const diagnostics = getDiagnosticsService();
     
     const metrics = computed(() => {
-      if (!props.isEnabled) {
+      if (!props.isEnabled || !props.isUserAdmin) {
         return {
           ticketsLoading: { stages: {}, totalLoaded: 0 },
           filtering: { total: 0, filtered: 0, rejected: [], tagValueExamples: [] },
@@ -259,7 +263,7 @@ export default {
     });
     
     const problematicTickets = computed(() => {
-      if (!props.isEnabled || !diagnostics) {
+      if (!props.isEnabled || !props.isUserAdmin || !diagnostics) {
         return {
           withoutAssignedById: [],
           withAssignedById1051: [],

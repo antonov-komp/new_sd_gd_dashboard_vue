@@ -6,7 +6,7 @@
       <h1>Дашборд - Сектор 1С</h1>
       <div class="header-actions">
         <button 
-          v-if="isDiagnosticsEnabled"
+          v-if="isDiagnosticsEnabled && isUserAdmin"
           @click="clearCache"
           class="btn-clear-cache"
           title="Сбросить кеш сектора и тикетов"
@@ -15,7 +15,7 @@
           <span>Сбросить кеш</span>
         </button>
         <button 
-          v-if="!isDiagnosticsEnabled"
+          v-if="!isDiagnosticsEnabled && isUserAdmin"
           @click="enableDiagnostics"
           class="btn-enable-diagnostics"
           title="Включить диагностический режим"
@@ -68,13 +68,13 @@
     <!-- Компонент управления логированием (только в режиме разработки) -->
     <LoggerControl :show-control="showLoggerControl" />
 
-    <!-- Панель диагностики (только при включённом режиме) -->
-    <DiagnosticsPanel :is-enabled="isDiagnosticsEnabled" />
+    <!-- Панель диагностики (только при включённом режиме и для администраторов) -->
+    <DiagnosticsPanel :is-enabled="isDiagnosticsEnabled" :is-user-admin="isUserAdmin" />
   </div>
 </template>
 
 <script>
-import { onMounted, computed } from 'vue';
+import { onMounted, computed, ref } from 'vue';
 import DashboardStage from './DashboardStage.vue';
 import LoadingPreloader from './LoadingPreloader.vue';
 import LoggerControl from './LoggerControl.vue';
@@ -91,6 +91,8 @@ import {
 import { isDiagnosticsEnabled, getDiagnosticsService } from '@/services/dashboard-sector-1c/utils/diagnostics-service.js';
 import { CacheManager } from '@/services/dashboard-sector-1c/cache/cache-manager.js';
 import { clearSectorCache } from '@/services/dashboard-sector-1c/utils/sector-helper.js';
+import { AccessControlService } from '@/services/access-control-service.js';
+import { isAdmin } from '@/config/access-config.js';
 
 /**
  * Главный компонент дашборда сектора 1С
@@ -135,9 +137,20 @@ export default {
     const state = useDashboardState();
     const actions = useDashboardActions(state);
 
+    // Информация о текущем пользователе
+    const currentUser = ref(null);
+
+    // Проверка, является ли пользователь администратором
+    const isUserAdmin = computed(() => {
+      if (!currentUser.value) {
+        return false;
+      }
+      return isAdmin(currentUser.value);
+    });
+
     // Проверка, включён ли диагностический режим
     const isDiagnosticsEnabledFlag = computed(() => {
-      const enabled = isDiagnosticsEnabled(route);
+      const enabled = isDiagnosticsEnabled(route, currentUser.value);
       // Отладочный вывод (можно убрать после проверки)
       if (import.meta.env?.MODE !== 'production') {
         console.log('[Diagnostics] Enabled:', enabled, 'Route query:', route.query, 'Hash:', window.location.hash);
@@ -186,7 +199,15 @@ export default {
     };
 
     // Загрузка данных при монтировании компонента
-    onMounted(() => {
+    onMounted(async () => {
+      // Получаем информацию о текущем пользователе
+      try {
+        currentUser.value = await AccessControlService.getCurrentUser();
+      } catch (error) {
+        console.error('Error getting current user:', error);
+        currentUser.value = null;
+      }
+
       // Сбрасываем диагностику перед загрузкой (если включена)
       if (isDiagnosticsEnabledFlag.value) {
         const diagnostics = getDiagnosticsService();
@@ -284,7 +305,8 @@ export default {
       // Диагностика
       isDiagnosticsEnabled: isDiagnosticsEnabledFlag,
       enableDiagnostics,
-      clearCache
+      clearCache,
+      isUserAdmin
     };
   }
 };
