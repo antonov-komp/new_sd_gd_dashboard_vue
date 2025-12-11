@@ -326,3 +326,4 @@ const totalEvents = computed(() => normalizedLogs.value.length); // ❌ Всег
 **Последнее обновление:** 2025-12-09 10:30 (UTC+3, Брест)
 
 
+
