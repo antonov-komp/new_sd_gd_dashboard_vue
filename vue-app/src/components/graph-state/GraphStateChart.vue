@@ -54,24 +54,13 @@
     </div>
 
     <!-- Фильтры по этапам -->
-    <div v-if="!isLoading && !error && chartData" class="chart-filters">
-      <label
-        v-for="stage in stages"
-        :key="stage.id"
-        class="filter-checkbox"
-      >
-        <input
-          type="checkbox"
-          v-model="stageFilters[stage.id]"
-          @change="updateChartData"
-        />
-        <span
-          class="filter-color"
-          :style="{ backgroundColor: stage.color }"
-        ></span>
-        <span class="filter-label">{{ stage.name }}</span>
-      </label>
-    </div>
+    <StageChips
+      v-if="!isLoading && !error && chartData"
+      :stages="stages"
+      :selected="stageFilters"
+      @update:selected="handleStageFiltersUpdate"
+      @change="updateChartData"
+    />
 
     <!-- Легенда -->
     <div v-if="!isLoading && !error && comparison && chartType !== 'doughnut'" class="graph-legend">
@@ -164,6 +153,7 @@ import SectorDataAdapter from '@/services/graph-state/SectorDataAdapter.js';
 import CompareSnapshots from '@/utils/graph-state/compareSnapshots.js';
 import { useNotifications } from '@/composables/useNotifications.js';
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue';
+import StageChips from '@/components/filters/StageChips.vue';
 
 const cssVar = (name, fallback) => {
   if (typeof window === 'undefined') {
@@ -924,6 +914,13 @@ onMounted(() => {
 });
 
 /**
+ * Обработка обновления фильтров стадий
+ */
+function handleStageFiltersUpdate(newFilters) {
+  stageFilters.value = newFilters;
+}
+
+/**
  * Обновление данных графика
  */
 const updateChartData = () => {
@@ -1016,38 +1013,7 @@ watch(comparisonType, () => {
   font-weight: 500;
 }
 
-.chart-filters {
-  display: flex;
-  gap: 16px;
-  margin-bottom: 20px;
-  padding: 12px;
-  background: var(--b24-bg-light);
-  border-radius: var(--radius-sm);
-  flex-wrap: wrap;
-}
-
-.filter-checkbox {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  font-size: 14px;
-}
-
-.filter-checkbox input[type="checkbox"] {
-  cursor: pointer;
-}
-
-.filter-color {
-  width: 16px;
-  height: 16px;
-  border-radius: var(--radius-xs);
-  border: 1px solid rgba(0, 0, 0, 0.1);
-}
-
-.filter-label {
-  color: var(--b24-text-primary);
-}
+/* Стили фильтров стадий перенесены в компонент StageChips.vue */
 
 .chart-container {
   position: relative;

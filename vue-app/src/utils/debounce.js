@@ -1,45 +1,30 @@
 /**
- * Утилита для debounce функции
+ * Утилита дебаунса
  * 
- * @param {Function} func - Функция для debounce
- * @param {number} wait - Время ожидания в миллисекундах
- * @param {boolean} immediate - Выполнить немедленно при первом вызове
- * @returns {Function} Debounced функция
+ * Откладывает выполнение функции до истечения указанного времени
+ * после последнего вызова.
+ * 
+ * @param {Function} func - Функция для дебаунса
+ * @param {number} wait - Задержка в миллисекундах (по умолчанию 300ms)
+ * @returns {Function} Дебаунсированная функция
+ * 
+ * @example
+ * const debouncedSearch = debounce((query) => {
+ *   console.log('Searching for:', query);
+ * }, 300);
+ * 
+ * debouncedSearch('test'); // Вызовется через 300ms после последнего вызова
  */
-export function debounce(func, wait = 300, immediate = false) {
-  let timeout;
+export function debounce(func, wait = 300) {
+  let timeoutId;
   
   return function executedFunction(...args) {
     const later = () => {
-      timeout = null;
-      if (!immediate) func(...args);
+      clearTimeout(timeoutId);
+      func(...args);
     };
     
-    const callNow = immediate && !timeout;
-    
-    clearTimeout(timeout);
-    timeout = setTimeout(later, wait);
-    
-    if (callNow) func(...args);
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(later, wait);
   };
 }
-
-/**
- * Утилита для throttle функции
- * 
- * @param {Function} func - Функция для throttle
- * @param {number} limit - Лимит времени в миллисекундах
- * @returns {Function} Throttled функция
- */
-export function throttle(func, limit = 300) {
-  let inThrottle;
-  
-  return function(...args) {
-    if (!inThrottle) {
-      func.apply(this, args);
-      inThrottle = true;
-      setTimeout(() => inThrottle = false, limit);
-    }
-  };
-}
-

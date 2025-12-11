@@ -25,6 +25,12 @@
       </span>
     </div>
     
+    <div v-if="actionStrValue" class="ticket-action">
+      <span class="ticket-action-chip" :style="actionChipStyle">
+        {{ actionStrValue }}
+      </span>
+    </div>
+    
     <div v-if="ticket.description" class="ticket-description">
       {{ ticket.description }}
     </div>
@@ -56,6 +62,7 @@ import { DISABLE_TICKET_DRAG, getTicketIframeUrl } from '@/services/dashboard-se
  * @prop {Object} ticket.priorityColors - Цвета приоритета { color, backgroundColor, textColor }
  * @prop {string} ticket.priority - legacy-поле приоритета (id), сохраняется для обратной совместимости
  * @prop {string} ticket.status - Статус (in_progress, new, done, pending)
+ * @prop {string|null} ticket.actionStr - Значение UF_ACTION_STR из Bitrix24 (динамичная строка, опционально)
  * @prop {string} ticket.description - Описание тикета (опционально)
  * @prop {boolean} draggable - Можно ли перетаскивать тикет
  * @emits {Object} click - Тикет кликнут
@@ -99,6 +106,12 @@ export default {
       textColor: '#6c757d'
     };
 
+    const NEUTRAL_ACTION_COLORS = {
+      color: '#dee2e6',
+      backgroundColor: '#f8f9fa',
+      textColor: '#6c757d'
+    };
+
     const priorityData = computed(() => {
       return {
         label: props.ticket.priorityLabel || 'Не указано',
@@ -132,6 +145,29 @@ export default {
       color: serviceData.value.colors.textColor || NEUTRAL_SERVICE_COLORS.textColor,
       backgroundColor: serviceData.value.colors.backgroundColor || NEUTRAL_SERVICE_COLORS.backgroundColor,
       borderColor: serviceData.value.colors.color || NEUTRAL_SERVICE_COLORS.color
+    }));
+
+    /**
+     * Computed-свойство для получения значения UF_ACTION_STR
+     * Нормализует значение: trim и проверка на пустоту
+     * 
+     * @returns {string|null} Значение UF_ACTION_STR или null, если пусто
+     */
+    const actionStrValue = computed(() => {
+      const value = props.ticket.actionStr || props.ticket.ufActionStr || null;
+      if (!value) return null;
+      const trimmed = String(value).trim();
+      return trimmed.length > 0 ? trimmed : null;
+    });
+
+    /**
+     * Стили для чипа UF_ACTION_STR (второй этаж)
+     * Использует нейтральные цвета
+     */
+    const actionChipStyle = computed(() => ({
+      color: NEUTRAL_ACTION_COLORS.textColor,
+      backgroundColor: NEUTRAL_ACTION_COLORS.backgroundColor,
+      borderColor: NEUTRAL_ACTION_COLORS.color
     }));
 
     /**
@@ -194,7 +230,9 @@ export default {
       displayPriorityLabel,
       priorityBorderStyle,
       displayServiceLabel,
-      serviceChipStyle
+      serviceChipStyle,
+      actionStrValue,
+      actionChipStyle
     };
   }
 };
@@ -263,6 +301,22 @@ export default {
   border-radius: 12px;
   font-weight: 500;
   border: 1px solid transparent;
+}
+
+.ticket-action {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.ticket-action-chip {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-weight: 500;
+  border: 1px solid;
 }
 
 .ticket-description {

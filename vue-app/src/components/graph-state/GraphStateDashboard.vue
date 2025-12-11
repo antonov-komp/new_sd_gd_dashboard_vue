@@ -85,126 +85,24 @@
 
     <!-- Панель фильтров -->
     <div 
-      class="filters-panel"
       :class="{ 
         'mobile-open': showMobileFilters && isMobile,
         'mobile-closed': !showMobileFilters && isMobile
       }"
     >
-      <div class="filters-header">
-        <h2>Фильтры</h2>
-        <button 
-          @click="resetFilters" 
-          class="btn-reset-filters"
-          :disabled="!hasActiveFilters"
-        >
-          Сбросить фильтры
-        </button>
-      </div>
-
-      <div class="filters-content">
-        <!-- Фильтр по этапам -->
-        <div class="filter-group">
-          <label class="filter-label">Этапы:</label>
-          <div class="checkbox-group">
-            <label class="checkbox-item">
-              <input 
-                type="checkbox" 
-                v-model="filters.stages.formed"
-                @change="applyFilters"
-              />
-              <span>Сформировано обращение</span>
-            </label>
-            <label class="checkbox-item">
-              <input 
-                type="checkbox" 
-                v-model="filters.stages.review"
-                @change="applyFilters"
-              />
-              <span>Рассмотрение ТЗ</span>
-            </label>
-            <label class="checkbox-item">
-              <input 
-                type="checkbox" 
-                v-model="filters.stages.execution"
-                @change="applyFilters"
-              />
-              <span>Исполнение</span>
-            </label>
-          </div>
-        </div>
-
-        <!-- Фильтр по сотрудникам -->
-        <div class="filter-group">
-          <label class="filter-label">Сотрудники:</label>
-          <select 
-            v-model="filters.employees" 
-            multiple
-            @change="applyFilters"
-            class="employees-select"
-            size="5"
-          >
-            <option value="all">Все сотрудники</option>
-            <option 
-              v-for="employee in availableEmployees" 
-              :key="employee.id"
-              :value="employee.id"
-            >
-              {{ employee.name }}
-            </option>
-          </select>
-          <small class="filter-hint">
-            Для выбора нескольких сотрудников удерживайте Ctrl (Cmd на Mac)
-          </small>
-        </div>
-
-        <!-- Фильтр по датам -->
-        <div class="filter-group">
-          <label class="filter-label">Период:</label>
-          <select 
-            v-model="filters.dateRange" 
-            @change="handleDateRangeChange"
-            class="date-range-select"
-          >
-            <option value="last-week">Последняя неделя</option>
-            <option value="last-2-weeks">Последние 2 недели</option>
-            <option value="last-month">Последний месяц</option>
-            <option value="custom">Произвольный период</option>
-          </select>
-        </div>
-
-        <!-- Календарь для произвольного периода -->
-        <div v-if="filters.dateRange === 'custom'" class="filter-group custom-date-range">
-          <label class="filter-label">Произвольный период:</label>
-          <div class="date-range-inputs">
-            <div class="date-input-group">
-              <label>С:</label>
-              <input 
-                type="date" 
-                v-model="filters.customDateRange.startDate"
-                @change="handleCustomDateChange"
-                :max="filters.customDateRange.endDate || maxDate"
-                class="date-input"
-              />
-            </div>
-            <div class="date-input-group">
-              <label>По:</label>
-              <input 
-                type="date" 
-                v-model="filters.customDateRange.endDate"
-                @change="handleCustomDateChange"
-                :min="filters.customDateRange.startDate || minDate"
-                :max="maxDate"
-                class="date-input"
-              />
-            </div>
-          </div>
-          <small v-if="dateRangeError" class="filter-error">{{ dateRangeError }}</small>
-          <small v-else class="filter-hint">
-            Выберите начальную и конечную дату для отображения данных
-          </small>
-        </div>
-      </div>
+      <FiltersPanel
+        :stages="filters.stages"
+        :employees="filters.employees"
+        :dateRange="filters.dateRange"
+        :customDateRange="filters.customDateRange"
+        :hasActiveFilters="hasActiveFilters"
+        @update:stages="handleStagesUpdate"
+        @update:employees="handleEmployeesUpdate"
+        @update:dateRange="handleDateRangeUpdate"
+        @update:customDateRange="handleCustomDateRangeUpdate"
+        @reset="resetFilters"
+        @apply="applyFilters"
+      />
     </div>
 
     <!-- Основной контент -->
@@ -227,6 +125,7 @@ import { useRouter } from 'vue-router';
 import GraphStateChart from './GraphStateChart.vue';
 import CreateSnapshotButton from './CreateSnapshotButton.vue';
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue';
+import FiltersPanel from '@/components/filters/FiltersPanel.vue';
 import { useNotifications } from '@/composables/useNotifications.js';
 import { useGraphState } from '@/composables/useGraphState.js';
 import { AccessControlService } from '@/services/access-control-service.js';
@@ -259,7 +158,6 @@ const {
  */
 const currentUser = ref(null);
 const showCurrentState = ref(true);
-const availableEmployees = ref([]); // Пока пустой массив, можно загрузить из API
 const isLoading = ref(false);
 const loadingMessage = ref('Загрузка данных...');
 const error = ref(null);
@@ -298,6 +196,34 @@ const maxDate = computed(() => {
 });
 
 /**
+ * Обработка обновления стадий
+ */
+function handleStagesUpdate(newStages) {
+  filters.value.stages = newStages;
+}
+
+/**
+ * Обработка обновления сотрудников
+ */
+function handleEmployeesUpdate(newEmployees) {
+  filters.value.employees = newEmployees;
+}
+
+/**
+ * Обработка обновления периода
+ */
+function handleDateRangeUpdate(newDateRange) {
+  filters.value.dateRange = newDateRange;
+}
+
+/**
+ * Обработка обновления произвольного периода
+ */
+function handleCustomDateRangeUpdate(newRange) {
+  filters.value.customDateRange = newRange;
+}
+
+/**
  * Применить фильтры
  */
 function applyFilters() {
@@ -312,34 +238,6 @@ function resetFilters() {
   dateRangeError.value = null;
   applyFilters();
   notifications.info('Фильтры сброшены');
-}
-
-/**
- * Обработка изменения типа периода
- */
-function handleDateRangeChange() {
-  if (filters.value.dateRange !== 'custom') {
-    dateRangeError.value = null;
-    applyFilters();
-  }
-}
-
-/**
- * Обработка изменения произвольного периода
- */
-function handleCustomDateChange() {
-  const validation = validateDateRange(
-    filters.value.customDateRange.startDate,
-    filters.value.customDateRange.endDate
-  );
-  
-  if (!validation.valid) {
-    dateRangeError.value = validation.error;
-    return;
-  }
-  
-  dateRangeError.value = null;
-  applyFilters();
 }
 
 /**
@@ -575,9 +473,6 @@ onMounted(() => {
     windowWidth.value = window.innerWidth;
     window.addEventListener('resize', handleResize);
   }
-  
-  // Загрузка списка сотрудников (можно реализовать позже)
-  // loadAvailableEmployees();
 });
 
 /**
@@ -700,106 +595,7 @@ onUnmounted(() => {
   align-items: center;
 }
 
-.filters-panel {
-  background-color: var(--b24-bg-light);
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-lg);
-  margin-bottom: var(--spacing-xl);
-  border: 1px solid var(--b24-border-light);
-}
-
-.filters-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--spacing-md);
-}
-
-.filters-header h2 {
-  margin: 0;
-  font-size: var(--font-size-xl);
-  font-weight: 600;
-  color: var(--b24-text-primary);
-}
-
-.btn-reset-filters {
-  padding: var(--spacing-sm) var(--spacing-md);
-  background-color: var(--b24-danger);
-  color: var(--b24-text-inverse);
-  border: none;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  font-size: var(--font-size-sm);
-  transition: background-color var(--transition-base);
-}
-
-.btn-reset-filters:hover:not(:disabled) {
-  background-color: var(--b24-danger-hover);
-}
-
-.btn-reset-filters:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.filters-content {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: var(--spacing-md);
-}
-
-.filter-group {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-xs);
-}
-
-.filter-label {
-  font-weight: 600;
-  color: var(--b24-text-primary);
-  font-size: var(--font-size-sm);
-}
-
-.checkbox-group {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-xs);
-}
-
-.checkbox-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-}
-
-.checkbox-item input[type="checkbox"] {
-  cursor: pointer;
-}
-
-.employees-select {
-  width: 100%;
-  padding: var(--spacing-sm);
-  border: 1px solid var(--b24-border-medium);
-  border-radius: var(--radius-sm);
-  font-size: var(--font-size-sm);
-  background-color: var(--b24-bg-white);
-}
-
-.filter-hint {
-  color: var(--b24-text-secondary);
-  font-size: var(--font-size-xs);
-  margin-top: var(--spacing-xs);
-}
-
-.date-range-select {
-  width: 100%;
-  padding: var(--spacing-sm);
-  border: 1px solid var(--b24-border-medium);
-  border-radius: var(--radius-sm);
-  font-size: var(--font-size-sm);
-  background-color: var(--b24-bg-white);
-}
+/* Стили фильтров перенесены в компонент FiltersPanel.vue */
 
 .dashboard-content {
   background-color: var(--b24-bg-white);
@@ -927,44 +723,7 @@ onUnmounted(() => {
   background-color: var(--b24-primary-hover);
 }
 
-/* Календарь для произвольного периода */
-.custom-date-range {
-  grid-column: 1 / -1;
-}
-
-.date-range-inputs {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.date-input-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.date-input-group label {
-  font-size: var(--font-size-xs);
-  color: var(--b24-text-secondary);
-  font-weight: 500;
-}
-
-.date-input {
-  width: 100%;
-  padding: var(--spacing-sm);
-  border: 1px solid var(--b24-border-medium);
-  border-radius: var(--radius-sm);
-  font-size: var(--font-size-sm);
-  background-color: var(--b24-bg-white);
-}
-
-.filter-error {
-  color: var(--b24-danger);
-  font-size: var(--font-size-xs);
-  margin-top: var(--spacing-xs);
-  display: block;
-}
+/* Стили календаря перенесены в компонент FiltersPanel.vue */
 
 /* Мобильное меню фильтров */
 .mobile-filters-toggle {
@@ -1051,25 +810,15 @@ select:focus {
     justify-content: center;
   }
 
-  .filters-panel {
+  /* Мобильные стили для панели фильтров */
+  .mobile-open {
+    max-height: 2000px;
+    overflow: visible;
+  }
+
+  .mobile-closed {
     max-height: 0;
     overflow: hidden;
-    padding: 0 20px;
-    margin-bottom: 0;
-  }
-
-  .filters-panel.mobile-open {
-    max-height: 2000px;
-    padding: 20px;
-    margin-bottom: 20px;
-  }
-
-  .filters-content {
-    grid-template-columns: 1fr;
-  }
-
-  .date-range-inputs {
-    grid-template-columns: 1fr;
   }
 
   .chart-container {

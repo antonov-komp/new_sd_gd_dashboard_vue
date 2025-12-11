@@ -21,8 +21,29 @@ import { PRIORITY_MAPPING, PRIORITY_TO_BITRIX } from '../utils/constants.js';
 /**
  * Маппинг тикета из Bitrix24 в внутренний формат
  * 
+ * Используется метод Bitrix24 REST API: crm.item.list
+ * Документация: https://context7.com/bitrix24/rest/crm.item.list
+ * 
  * @param {object} bitrixTicket - Тикет из Bitrix24 (элемент смарт-процесса)
  * @returns {object} Тикет во внутреннем формате
+ * @property {number} id - ID тикета
+ * @property {string} title - Название тикета
+ * @property {string|null} ufSubject - Тема тикета из UF_SUBJECT
+ * @property {string} priorityId - Внутренний id приоритета
+ * @property {string} priorityLabel - Отображаемое значение приоритета
+ * @property {Object} priorityColors - Цвета приоритета
+ * @property {Object} service - Объект сервиса
+ * @property {string} serviceLabel - Отображаемое значение сервиса
+ * @property {Object} serviceColors - Цвета сервиса
+ * @property {string|null} actionStr - Значение UF_ACTION_STR (динамичная строка, практически всегда заполнена)
+ * @property {string} status - Статус тикета
+ * @property {number|null} assigneeId - ID назначенного сотрудника
+ * @property {string} stageId - ID стадии
+ * @property {string} createdAt - Дата создания
+ * @property {string} modifiedAt - Дата изменения
+ * @property {number} amount - Сумма
+ * @property {string} currency - Валюта
+ * @property {string} description - Описание тикета
  */
 export function mapTicket(bitrixTicket) {
   // Обрабатываем как верхний, так и нижний регистр полей
@@ -66,6 +87,21 @@ export function mapTicket(bitrixTicket) {
   const serviceObj = getServiceByBitrixValue(serviceRaw);
   const serviceColors = getServiceColors(serviceObj);
 
+  // Извлечение пользовательского поля UF_ACTION_STR
+  // Проверяем все возможные варианты именования (как в других UF-полях)
+  const ufActionStrRaw =
+    bitrixTicket.UF_ACTION_STR ||
+    bitrixTicket.uf_action_str ||
+    bitrixTicket.UfActionStr ||
+    bitrixTicket.ufActionStr ||
+    bitrixTicket['UF_ACTION_STR'] ||
+    bitrixTicket['uf_action_str'] ||
+    null;
+
+  // Нормализация значения: trim и проверка на пустоту
+  const ufActionStr = ufActionStrRaw ? String(ufActionStrRaw).trim() : null;
+  const actionStr = (ufActionStr && ufActionStr.length > 0) ? ufActionStr : null;
+
   return {
     id: id,
     title: title,
@@ -80,6 +116,7 @@ export function mapTicket(bitrixTicket) {
     serviceLabel: serviceObj.label,
     serviceColors: serviceColors,
     serviceBitrixValue: serviceObj.bitrixValue || getDefaultService().bitrixValue,
+    actionStr: actionStr,
     status: mapStatus(stageId),
     assigneeId: assignedById ? parseInt(assignedById) : null,
     stageId: mapStageId(stageId),
