@@ -20,8 +20,8 @@
       <span class="ticket-priority" :style="priorityChipStyle">
         {{ displayPriorityLabel }}
       </span>
-      <span class="ticket-status">
-        {{ getStatusLabel(ticket.status) }}
+      <span class="ticket-service" :style="serviceChipStyle">
+        {{ displayServiceLabel }}
       </span>
     </div>
     
@@ -93,6 +93,12 @@ export default {
       textColor: '#6c757d'
     };
 
+    const NEUTRAL_SERVICE_COLORS = {
+      color: '#ced4da',
+      backgroundColor: '#f8f9fa',
+      textColor: '#6c757d'
+    };
+
     const priorityData = computed(() => {
       return {
         label: props.ticket.priorityLabel || 'Не указано',
@@ -112,21 +118,21 @@ export default {
       borderLeftColor: priorityData.value.colors.color || NEUTRAL_COLORS.color
     }));
 
-    /**
-     * Получение текстового значения статуса
-     * 
-     * @param {string} status - Статус
-     * @returns {string} Текстовое значение
-     */
-    const getStatusLabel = (status) => {
-      const labels = {
-        in_progress: 'В работе',
-        new: 'Новый',
-        done: 'Выполнено',
-        pending: 'Ожидание'
+    const serviceData = computed(() => {
+      const service = props.ticket.service || {};
+      return {
+        label: service.label || props.ticket.serviceLabel || 'Не указано',
+        colors: service.colors || props.ticket.serviceColors || NEUTRAL_SERVICE_COLORS
       };
-      return labels[status] || status;
-    };
+    });
+
+    const displayServiceLabel = computed(() => serviceData.value.label || 'Не указано');
+
+    const serviceChipStyle = computed(() => ({
+      color: serviceData.value.colors.textColor || NEUTRAL_SERVICE_COLORS.textColor,
+      backgroundColor: serviceData.value.colors.backgroundColor || NEUTRAL_SERVICE_COLORS.backgroundColor,
+      borderColor: serviceData.value.colors.color || NEUTRAL_SERVICE_COLORS.color
+    }));
 
     /**
      * Обработка начала перетаскивания
@@ -180,14 +186,15 @@ export default {
     };
 
     return {
-      getStatusLabel,
       handleDragStart,
       handleDragEnd,
       handleCardClick,
       isDragEnabled,
       priorityChipStyle,
       displayPriorityLabel,
-      priorityBorderStyle
+      priorityBorderStyle,
+      displayServiceLabel,
+      serviceChipStyle
     };
   }
 };
@@ -250,17 +257,12 @@ export default {
 }
 
 .ticket-priority,
-.ticket-status {
+.ticket-service {
   font-size: 11px;
   padding: 2px 8px;
   border-radius: 12px;
   font-weight: 500;
   border: 1px solid transparent;
-}
-
-.ticket-status {
-  background: #e9ecef;
-  color: #666;
 }
 
 .ticket-description {

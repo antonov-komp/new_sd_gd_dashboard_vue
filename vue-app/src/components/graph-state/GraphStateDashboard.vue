@@ -27,16 +27,30 @@
     <!-- Заголовок дашборда -->
     <div class="dashboard-header">
       <div class="header-content">
-        <nav class="breadcrumbs" aria-label="Навигация">
-          <router-link 
-            :to="{ name: 'dashboard-sector-1c' }"
-            class="breadcrumb-link"
+        <div class="breadcrumbs-row">
+          <button
+            class="btn-back-link"
+            type="button"
+            @click="handleBack"
+            :aria-label="backAriaLabel"
+            :aria-disabled="!hasHistory"
+            :data-fallback="!hasHistory"
+            :disabled="isNavigatingBack"
+            title="Назад"
           >
-            Дашборд сектора 1С
-          </router-link>
-          <span class="breadcrumb-separator" aria-hidden="true">/</span>
-          <span class="breadcrumb-current">График состояния</span>
-        </nav>
+            ←
+          </button>
+          <nav class="breadcrumbs" aria-label="Навигация">
+            <router-link 
+              :to="{ name: 'dashboard-sector-1c' }"
+              class="breadcrumb-link"
+            >
+              Дашборд сектора 1С
+            </router-link>
+            <span class="breadcrumb-separator" aria-hidden="true">/</span>
+            <span class="breadcrumb-current">График состояния</span>
+          </nav>
+        </div>
         <h1 class="dashboard-title">График состояния сектора 1С</h1>
         <p class="dashboard-subtitle">
           Визуализация изменений состояния сектора во времени
@@ -209,6 +223,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { useRouter } from 'vue-router';
 import GraphStateChart from './GraphStateChart.vue';
 import CreateSnapshotButton from './CreateSnapshotButton.vue';
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue';
@@ -228,6 +243,8 @@ const cssVar = (name, fallback) => {
  * Композаблы
  */
 const notifications = useNotifications();
+const router = useRouter();
+const fallbackRoute = { name: 'dashboard-sector-1c' };
 const {
   filters,
   selectedPeriod,
@@ -250,6 +267,7 @@ const isExporting = ref(false);
 const showMobileFilters = ref(false);
 const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1024);
 const dateRangeError = ref(null);
+const isNavigatingBack = ref(false);
 
 /**
  * Вычисляемые свойства для адаптивности
@@ -257,6 +275,14 @@ const dateRangeError = ref(null);
 const isMobile = computed(() => windowWidth.value < 768);
 const isTablet = computed(() => windowWidth.value >= 768 && windowWidth.value < 1024);
 const isDesktop = computed(() => windowWidth.value >= 1024);
+const hasHistory = computed(() => {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  // История >1 означает, что есть предыдущий экран для router.back()
+  return window.history.length > 1;
+});
+const backAriaLabel = 'Назад';
 
 /**
  * Минимальная и максимальная даты для календаря
@@ -486,6 +512,32 @@ async function exportToPDF() {
 }
 
 /**
+ * Навигация «Назад» с fallback на дашборд
+ */
+function handleBack(event) {
+  event?.preventDefault?.();
+
+  if (isNavigatingBack.value) {
+    return;
+  }
+
+  isNavigatingBack.value = true;
+
+  try {
+    if (hasHistory.value) {
+      router.back();
+      return;
+    }
+
+    console.warn('GraphStateDashboard: fallback navigation to dashboard-sector-1c');
+    router.push(fallbackRoute);
+  } finally {
+    // Небольшая задержка не требуется — состояние сбрасываем сразу
+    isNavigatingBack.value = false;
+  }
+}
+
+/**
  * Обработка изменения размера окна
  */
 function handleResize() {
@@ -544,6 +596,48 @@ onUnmounted(() => {
   max-width: 1400px;
   margin: 0 auto;
   background: var(--b24-bg);
+}
+
+.breadcrumbs-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-xs);
+}
+
+.btn-back-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--b24-border-light);
+  background: var(--b24-bg-white);
+  color: var(--b24-primary);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.btn-back-link:hover:not(:disabled) {
+  background-color: var(--b24-bg-light, #f5f7fb);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-back-link:focus {
+  outline: 2px solid var(--b24-primary);
+  outline-offset: 2px;
+}
+
+.btn-back-link:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-back-link[data-fallback="true"] {
+  border-style: dashed;
 }
 
 .dashboard-header {

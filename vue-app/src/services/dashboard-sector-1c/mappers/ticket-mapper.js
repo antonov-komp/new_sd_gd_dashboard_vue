@@ -11,6 +11,11 @@ import {
   getPriorityById,
   getPriorityColors
 } from '@/config/priority-config.js';
+import {
+  getServiceByBitrixValue,
+  getDefaultService,
+  getServiceColors
+} from '@/config/service-config.js';
 import { PRIORITY_MAPPING, PRIORITY_TO_BITRIX } from '../utils/constants.js';
 
 /**
@@ -50,6 +55,17 @@ export function mapTicket(bitrixTicket) {
   const priorityObj = getPriorityByBitrixValue(priorityRaw);
   const priorityColors = getPriorityColors(priorityObj);
 
+  const serviceRaw =
+    bitrixTicket.UF_SLA_SERVICE_STR ||
+    bitrixTicket.uf_sla_service_str ||
+    bitrixTicket.UfSlaServiceStr ||
+    bitrixTicket.ufSlaServiceStr ||
+    bitrixTicket.service || // обратная совместимость, если значение уже маппилось ранее
+    null;
+
+  const serviceObj = getServiceByBitrixValue(serviceRaw);
+  const serviceColors = getServiceColors(serviceObj);
+
   return {
     id: id,
     title: title,
@@ -60,6 +76,10 @@ export function mapTicket(bitrixTicket) {
     // legacy поле для обратной совместимости
     priority: priorityObj.id,
     priorityBitrixValue: priorityObj.bitrixValue || null,
+    service: serviceObj,
+    serviceLabel: serviceObj.label,
+    serviceColors: serviceColors,
+    serviceBitrixValue: serviceObj.bitrixValue || getDefaultService().bitrixValue,
     status: mapStatus(stageId),
     assigneeId: assignedById ? parseInt(assignedById) : null,
     stageId: mapStageId(stageId),
@@ -103,6 +123,25 @@ export function mapPriorityToBitrix(priority) {
   }
 
   return getPriorityById(DEFAULT_PRIORITY_ID).bitrixValue;
+}
+
+/**
+ * Маппинг значения "В работе" на формат Bitrix24
+ *
+ * @param {string|object|null|undefined} service - объект сервиса или значение bitrixValue
+ * @returns {string|null} Строка для Bitrix24 (UF_SLA_SERVICE_STR)
+ */
+export function mapServiceToBitrix(service) {
+  if (service && typeof service === 'object') {
+    return service.bitrixValue || null;
+  }
+
+  const serviceObj = getServiceByBitrixValue(service);
+  if (serviceObj && serviceObj.bitrixValue) {
+    return serviceObj.bitrixValue;
+  }
+
+  return getDefaultService().bitrixValue;
 }
 
 /**
