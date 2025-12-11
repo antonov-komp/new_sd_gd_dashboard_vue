@@ -14,6 +14,7 @@
 import { TicketRepository } from '../data/ticket-repository.js';
 import { Logger } from '../utils/logger.js';
 import { processAdditionalFields } from '../utils/ticket-field-processor.js';
+import { getPriorityByBitrixValue, getPriorityColors } from '@/config/priority-config.js';
 
 /**
  * ID смарт-процесса сектора 1С
@@ -55,6 +56,19 @@ export class TicketDetailsService {
       // Использование оптимизированного процессора с кешированием
       const additionalFields = processAdditionalFields(ticketData, ticketId, useCache);
 
+      const priorityRaw =
+        ticketData.UF_CRM_7_UF_PRIORITY ||
+        ticketData.uf_crm_7_uf_priority ||
+        ticketData.ufCrm7UfPriority ||
+        ticketData['UF_CRM_7_UF_PRIORITY'] ||
+        ticketData['uf_crm_7_uf_priority'] ||
+        ticketData.priority ||
+        ticketData.PRIORITY ||
+        null;
+
+      const priorityObj = getPriorityByBitrixValue(priorityRaw);
+      const priorityColors = getPriorityColors(priorityObj);
+
       // Формируем структурированный ответ
       return {
         // Базовые поля
@@ -64,7 +78,11 @@ export class TicketDetailsService {
         assignedById: ticketData.assignedById || ticketData.ASSIGNED_BY_ID,
         createdAt: ticketData.createdTime || ticketData.CREATED_TIME || ticketData.CREATED_DATE,
         updatedAt: ticketData.updatedTime || ticketData.UPDATED_TIME || ticketData.MODIFY_DATE,
-        priority: ticketData.priority || ticketData.PRIORITY,
+        priorityId: priorityObj.id,
+        priorityLabel: priorityObj.label,
+        priorityColors: priorityColors,
+        priority: priorityObj.id, // legacy поле для обратной совместимости
+        priorityBitrixValue: priorityObj.bitrixValue || null,
         opportunity: ticketData.opportunity || ticketData.OPPORTUNITY,
         currencyId: ticketData.currencyId || ticketData.CURRENCY_ID,
         comments: ticketData.comments || ticketData.COMMENTS,

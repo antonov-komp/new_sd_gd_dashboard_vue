@@ -26,6 +26,12 @@
  */
 
 import { Bitrix24ApiService } from './bitrix24-api.js';
+import {
+  DEFAULT_PRIORITY_ID,
+  getPriorityByBitrixValue,
+  getPriorityById,
+  getPriorityColors
+} from '@/config/priority-config.js';
 
 export class DashboardSector1CService {
   /**
@@ -439,11 +445,27 @@ export class DashboardSector1CService {
     const assignedById = bitrixTicket.assignedById || bitrixTicket.ASSIGNED_BY_ID || null;
     const createdAt = bitrixTicket.createdTime || bitrixTicket.CREATED_DATE || bitrixTicket.CREATED_TIME || '';
     const updatedAt = bitrixTicket.updatedTime || bitrixTicket.MODIFY_DATE || bitrixTicket.UPDATED_TIME || '';
+    const priorityRaw =
+      bitrixTicket.UF_CRM_7_UF_PRIORITY ||
+      bitrixTicket.uf_crm_7_uf_priority ||
+      bitrixTicket.ufCrm7UfPriority ||
+      bitrixTicket['UF_CRM_7_UF_PRIORITY'] ||
+      bitrixTicket['uf_crm_7_uf_priority'] ||
+      bitrixTicket.priority ||
+      bitrixTicket.PRIORITY ||
+      null;
+
+    const priorityObj = getPriorityByBitrixValue(priorityRaw);
+    const priorityColors = getPriorityColors(priorityObj);
 
     return {
       id: id,
       title: title,
-      priority: this.mapPriority(bitrixTicket.priority || bitrixTicket.PRIORITY),
+      priorityId: priorityObj.id,
+      priorityLabel: priorityObj.label,
+      priorityColors: priorityColors,
+      priority: priorityObj.id, // legacy
+      priorityBitrixValue: priorityObj.bitrixValue || null,
       status: this.mapStatus(stageId),
       assigneeId: assignedById ? parseInt(assignedById) : null,
       stageId: this.mapStageId(stageId),
@@ -458,31 +480,43 @@ export class DashboardSector1CService {
   /**
    * Маппинг приоритета из Bitrix24
    * 
-   * @param {string} bitrixPriority - Приоритет в Bitrix24
-   * @returns {string} Приоритет (high, medium, low)
+   * @param {string} bitrixPriority - Приоритет в Bitrix24 (UF_CRM_7_UF_PRIORITY)
+   * @returns {string} Внутренний id приоритета
    */
   static mapPriority(bitrixPriority) {
-    const mapping = {
-      '3': 'high',
-      '2': 'medium',
-      '1': 'low'
-    };
-    return mapping[bitrixPriority] || 'medium';
+    return getPriorityByBitrixValue(bitrixPriority).id;
   }
 
   /**
    * Маппинг приоритета на формат Bitrix24
    * 
-   * @param {string} priority - Приоритет (high, medium, low)
-   * @returns {string} Приоритет в Bitrix24
+   * @param {string|object} priority - Приоритет (id или объект)
+   * @returns {string|null} Приоритет в Bitrix24 (текстовое значение UF)
    */
   static mapPriorityToBitrix(priority) {
-    const mapping = {
-      'high': '3',
-      'medium': '2',
-      'low': '1'
+    if (priority && typeof priority === 'object') {
+      return priority.bitrixValue || null;
+    }
+
+    const priorityObj = getPriorityById(priority);
+    if (priorityObj && priorityObj.bitrixValue) {
+      return priorityObj.bitrixValue;
+    }
+
+    // поддерживаем старые числовые коды как fallback
+    const legacyMapping = {
+      '3': '3',
+      '2': '2',
+      '1': '1',
+      high: '3',
+      medium: '2',
+      low: '1'
     };
-    return mapping[priority] || '2';
+    if (legacyMapping[priority]) {
+      return legacyMapping[priority];
+    }
+
+    return getPriorityById(DEFAULT_PRIORITY_ID).bitrixValue;
   }
 
   /**
