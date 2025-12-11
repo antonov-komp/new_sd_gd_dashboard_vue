@@ -6,8 +6,8 @@
       'priority-medium': ticket.priority === 'medium',
       'priority-low': ticket.priority === 'low'
     }"
-    :draggable="draggable"
-    @click="$emit('click', ticket)"
+    :draggable="isDragEnabled"
+    @click="handleCardClick"
     @dragstart="handleDragStart"
     @dragend="handleDragEnd"
   >
@@ -17,7 +17,7 @@
     </div>
     
     <div class="ticket-title">
-      {{ ticket.title }}
+      {{ ticket.ufSubject || ticket.title || 'Без названия' }}
     </div>
     
     <div class="ticket-meta">
@@ -36,11 +36,15 @@
 </template>
 
 <script>
+import { computed, ref } from 'vue';
+import { DISABLE_TICKET_DRAG, getTicketIframeUrl } from '@/services/dashboard-sector-1c/utils/constants.js';
+
 /**
  * Компонент карточки тикета
  * 
  * Отображает информацию о тикете (ID, тема, приоритет, статус)
  * Поддерживает перетаскивание (Drag & Drop)
+ * При клике открывает детальную информацию о тикете в iframe Bitrix24
  * 
  * Используется в:
  * - EmployeeColumn.vue (тикеты сотрудника)
@@ -49,7 +53,8 @@
  * @component
  * @prop {Object} ticket - Объект тикета
  * @prop {number} ticket.id - ID тикета
- * @prop {string} ticket.title - Название тикета
+ * @prop {string} ticket.title - Название тикета (fallback, если отсутствует ufSubject)
+ * @prop {string|null} ticket.ufSubject - Тема тикета из пользовательского поля UF_SUBJECT (приоритетное для отображения)
  * @prop {string} ticket.priority - Приоритет (high, medium, low)
  * @prop {string} ticket.status - Статус (in_progress, new, done, pending)
  * @prop {string} ticket.description - Описание тикета (опционально)
@@ -86,6 +91,9 @@ export default {
      * @param {string} priority - Приоритет (high, medium, low)
      * @returns {string} Текстовое значение
      */
+    const isDragging = ref(false);
+    const isDragEnabled = computed(() => !DISABLE_TICKET_DRAG && props.draggable);
+
     const getPriorityLabel = (priority) => {
       const labels = {
         high: 'Высокий',
@@ -117,6 +125,9 @@ export default {
      * @param {Event} event - Событие dragstart
      */
     const handleDragStart = (event) => {
+      if (!isDragEnabled.value) {
+        return;
+      }
       // Сохраняем данные тикета в dataTransfer
       event.dataTransfer.effectAllowed = 'move';
       event.dataTransfer.setData('application/json', JSON.stringify(props.ticket));
@@ -124,6 +135,7 @@ export default {
       // Добавляем визуальный эффект
       event.dataTransfer.setDragImage(event.target, 0, 0);
       
+      isDragging.value = true;
       emit('drag-start', props.ticket);
     };
 
@@ -131,14 +143,40 @@ export default {
      * Обработка окончания перетаскивания
      */
     const handleDragEnd = () => {
+      if (!isDragEnabled.value) {
+        return;
+      }
+      isDragging.value = false;
       emit('drag-end');
+    };
+
+    /**
+     * Обработка клика по карточке тикета
+     * Открывает детальную информацию о тикете в iframe Bitrix24
+     * 
+     * @param {Event} event - Событие клика
+     */
+    const handleCardClick = (event) => {
+      // Предотвращаем клик, если идёт перетаскивание
+      if (isDragging.value) {
+        return;
+      }
+      
+      const iframeUrl = getTicketIframeUrl(props.ticket.id);
+      
+      // Открываем всегда в новой вкладке (по требованию)
+      window.open(iframeUrl, '_blank');
+
+      emit('click', props.ticket);
     };
 
     return {
       getPriorityLabel,
       getStatusLabel,
       handleDragStart,
-      handleDragEnd
+      handleDragEnd,
+      handleCardClick,
+      isDragEnabled
     };
   }
 };

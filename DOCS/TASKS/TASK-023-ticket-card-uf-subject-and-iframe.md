@@ -360,4 +360,7 @@ export function getTicketIframeUrl(ticketId) {
 ## История правок
 
 - 2025-12-11 10:47 (UTC+3, Брест): Создана задача
+- 2025-12-11 17:45 (UTC+3, Брест): Этап 2 выполнен — обновлён маппер `ticket-mapper.js`, добавлено поле `ufSubject`, подтверждён запрос `UF_SUBJECT` через `select: ['*']` и `useOriginalUfNames: 'Y'`
+- 2025-12-11 18:00 (UTC+3, Брест): Этап 3 выполнен — обновлён компонент `TicketCard.vue`: заменено отображение `title` на `ufSubject || title`, добавлен обработчик `handleCardClick` для открытия iframe через `BX.helper` с fallback на `window.open()`, обновлены JSDoc комментарии. Добавлены константы `BITRIX24_BASE_URL`, `SERVISDESK_SECTION` и функция `getTicketIframeUrl()` в `constants.js`.
+- 2025-12-11 18:10 (UTC+3, Брест): Этап 4 выполнен — кликабельная ссылка на iframe реализована в `TicketCard.vue` с использованием `getTicketIframeUrl`, `BX.helper.show` и fallback `window.open`; стили кликабельности сохранены.
 

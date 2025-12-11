@@ -21,10 +21,20 @@ export function mapTicket(bitrixTicket) {
   const assignedById = bitrixTicket.assignedById || bitrixTicket.ASSIGNED_BY_ID || null;
   const createdAt = bitrixTicket.createdTime || bitrixTicket.CREATED_DATE || bitrixTicket.CREATED_TIME || '';
   const updatedAt = bitrixTicket.updatedTime || bitrixTicket.MODIFY_DATE || bitrixTicket.UPDATED_TIME || '';
+  
+  // Извлечение пользовательского поля UF_SUBJECT
+  // Проверяем все возможные варианты именования (как в sector-filter.js)
+  const ufSubject = bitrixTicket.UF_SUBJECT || 
+                    bitrixTicket.uf_subject || 
+                    bitrixTicket.ufSubject ||
+                    bitrixTicket['UF_SUBJECT'] ||
+                    bitrixTicket['uf_subject'] ||
+                    null;
 
   return {
     id: id,
     title: title,
+    ufSubject: ufSubject,
     priority: mapPriority(bitrixTicket.priority || bitrixTicket.PRIORITY),
     status: mapStatus(stageId),
     assigneeId: assignedById ? parseInt(assignedById) : null,

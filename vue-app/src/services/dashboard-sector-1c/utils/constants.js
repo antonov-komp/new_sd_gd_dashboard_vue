@@ -178,4 +178,34 @@ export function getStatusById(statusId) {
   return Object.values(STATUSES).find(status => status.id === statusId) || null;
 }
 
+/**
+ * Флаг отключения drag & drop карточек тикетов.
+ * true — drag выключен; false — включить обратно без правок логики.
+ */
+export const DISABLE_TICKET_DRAG = true;
+
+/**
+ * Базовый URL Bitrix24 для создания ссылок на iframe
+ */
+export const BITRIX24_BASE_URL = 'https://bitrix24.kompo.by';
+
+/**
+ * Раздел сервис-деска в Bitrix24
+ */
+export const SERVISDESK_SECTION = 'servisdeskitotdel';
+
+/**
+ * Генерация URL для открытия тикета в iframe Bitrix24
+ * 
+ * @param {number} ticketId - ID тикета
+ * @returns {string} URL для iframe
+ * 
+ * @example
+ * getTicketIframeUrl(5025)
+ * // 'https://bitrix24.kompo.by/page/servisdeskitotdel/servisdesk/type/140/details/5025/'
+ */
+export function getTicketIframeUrl(ticketId) {
+  return `${BITRIX24_BASE_URL}/page/${SERVISDESK_SECTION}/servisdesk/type/${ENTITY_TYPE_ID}/details/${ticketId}/`;
+}
+
 
