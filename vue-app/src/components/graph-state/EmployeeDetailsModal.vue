@@ -255,13 +255,14 @@
  * Компонент модального окна с детализацией по сотрудникам
  * 
  * Используется для отображения детализации по сотрудникам при клике на точку графика
- * Поддерживает три уровня интерактивности:
+ * Поддерживает четыре уровня интерактивности:
  * - Уровень 1: Список сотрудников стадии
  * - Уровень 2: Временные градации тикетов сотрудника
  * - Уровень 3: Детализация по заказчикам (отделам)
+ * - Уровень 4: Список тикетов (детальный просмотр)
  * 
  * Дата создания: 2025-12-11 (UTC+3, Брест)
- * Задача: TASK-031-03, TASK-033
+ * Задача: TASK-031-03, TASK-033, TASK-034
  */
 
 import { ref, computed, watch, onMounted } from 'vue';
@@ -338,7 +339,7 @@ const emit = defineEmits(['close']);
 const notifications = useNotifications();
 
 /**
- * Текущий уровень попапа (1, 2, или 3)
+ * Текущий уровень попапа (1, 2, 3, или 4)
  */
 const popupLevel = ref(1);
 
@@ -371,6 +372,11 @@ const level2Data = ref(null);
  * Данные уровня 3 (заказчики градации)
  */
 const level3Data = ref(null);
+
+/**
+ * Данные уровня 4 (список тикетов)
+ */
+const level4Data = ref(null);
 
 /**
  * Computed-свойства для удобного доступа
@@ -847,11 +853,13 @@ async function handleEmployeeClick(employee, event = null) {
 }
 
 /**
- * Обработка клика на временную градацию (переход на уровень 3)
+ * Обработка клика на временную градацию (переход на уровень 4)
+ * 
+ * Переходит на уровень 4 со списком тикетов сотрудника в выбранной временной градации
  * 
  * @param {Object} category - Объект категории давности
  */
-function handleCategoryClick(category) {
+async function handleCategoryClick(category) {
   if (!category || category.count === 0) {
     notifications.info(`В категории "${category?.label || 'неизвестная'}" нет тикетов`);
     return;
@@ -864,36 +872,137 @@ function handleCategoryClick(category) {
 
   // Проверить наличие данных уровня 2
   if (!level2Data.value) {
-    console.error('Level 2 data not found');
+    console.error('[EmployeeDetailsModal] Level 2 data not found');
+    notifications.error('Ошибка: данные уровня 2 не найдены');
     return;
   }
 
-  // Группировать тикеты по заказчикам
-  const departments = groupTicketsByDepartment(category.tickets);
+  try {
+    // Импортировать функции создания контекста
+    const { createContextFromLevel2 } = await import('@/utils/graph-state/ticketListUtils.js');
+    
+    // Создать контекст перехода на уровень 4
+    const context = createContextFromLevel2(level2Data.value, category);
+    
+    console.log('[EmployeeDetailsModal] Transitioning to level 4 from level 2:', {
+      employeeName: context.employeeName,
+      dateCategory: context.dateCategoryLabel,
+      ticketsCount: context.tickets.length
+    });
 
-  // Сохранить данные уровня 3
-  level3Data.value = {
-    employeeId: level2Data.value.employeeId,
-    employeeName: level2Data.value.employeeName,
-    stageId: level2Data.value.stageId,
-    stageName: level2Data.value.stageName,
-    dateCategory: category.category,
-    dateCategoryLabel: category.label,
-    totalCount: category.count,
-    departments: departments,
-    snapshot: level2Data.value.snapshot,
-    ticketDetails: level2Data.value.ticketDetails
-  };
+    // Перейти на уровень 4
+    await goToLevel4(context);
+  } catch (error) {
+    console.error('[EmployeeDetailsModal] Error transitioning to level 4 from level 2:', error);
+    notifications.error('Ошибка перехода на список тикетов: ' + error.message);
+  }
+}
 
-  // Перейти на уровень 3
-  popupLevel.value = 3;
+/**
+ * Переход на уровень 4 (список тикетов)
+ * 
+ * Фильтрует тикеты по контексту перехода, подготавливает их для отображения
+ * и сохраняет в level4Data.
+ * 
+ * @param {Object} context - Контекст перехода на уровень 4 (Level4Context)
+ * @returns {Promise<void>}
+ */
+async function goToLevel4(context) {
+  if (!context) {
+    console.error('[EmployeeDetailsModal] Context is required for level 4');
+    notifications.error('Ошибка: контекст перехода не указан');
+    return;
+  }
+
+  console.log('[EmployeeDetailsModal] Transitioning to level 4:', {
+    sourceLevel: context.sourceLevel,
+    employeeId: context.employeeId,
+    stageId: context.stageId,
+    dateCategory: context.dateCategory,
+    departmentName: context.departmentName,
+    ticketsCount: context.tickets?.length || 0
+  });
+
+  try {
+    // Установить флаг загрузки
+    level4Data.value = {
+      context: context,
+      tickets: [],
+      totalCount: 0,
+      isLoading: true
+    };
+
+    // Фильтровать тикеты по контексту (если не переданы напрямую)
+    let filteredTickets = context.tickets || [];
+    
+    if (filteredTickets.length === 0 && context.snapshot) {
+      // Если тикеты не переданы, фильтруем из snapshot
+      const { filterTicketsByContext } = await import('@/utils/graph-state/ticketListUtils.js');
+      filteredTickets = await filterTicketsByContext(context);
+    }
+
+    // Подготовить тикеты для отображения
+    const { prepareTicketsForDisplay } = await import('@/utils/graph-state/ticketListUtils.js');
+    const preparedTickets = await prepareTicketsForDisplay(
+      filteredTickets,
+      context.snapshot,
+      context.ticketDetails
+    );
+
+    console.log('[EmployeeDetailsModal] Tickets prepared for level 4:', {
+      filteredCount: filteredTickets.length,
+      preparedCount: preparedTickets.length
+    });
+
+    // Сохранить данные уровня 4
+    level4Data.value = {
+      context: context,
+      tickets: preparedTickets,
+      totalCount: preparedTickets.length,
+      isLoading: false
+    };
+
+    // Перейти на уровень 4
+    popupLevel.value = 4;
+
+    console.log('[EmployeeDetailsModal] Level 4 initialized:', {
+      totalCount: level4Data.value.totalCount,
+      ticketsCount: level4Data.value.tickets.length,
+      isLoading: level4Data.value.isLoading
+    });
+  } catch (error) {
+    console.error('[EmployeeDetailsModal] Error transitioning to level 4:', error);
+    console.error('[EmployeeDetailsModal] Error details:', {
+      message: error.message,
+      stack: error.stack,
+      context: context
+    });
+
+    notifications.error('Ошибка загрузки списка тикетов: ' + error.message);
+
+    // Сбросить состояние уровня 4 при ошибке
+    level4Data.value = null;
+    // Вернуться на предыдущий уровень
+    goBack();
+  }
 }
 
 /**
  * Возврат на предыдущий уровень
  */
 function goBack() {
-  if (popupLevel.value === 3) {
+  if (popupLevel.value === 4) {
+    // Возврат с уровня 4 на предыдущий уровень
+    // Определяем предыдущий уровень из контекста
+    if (level4Data.value && level4Data.value.context) {
+      const sourceLevel = level4Data.value.context.sourceLevel;
+      popupLevel.value = sourceLevel;
+    } else {
+      // Если контекст не найден, возвращаемся на уровень 1
+      popupLevel.value = 1;
+    }
+    level4Data.value = null;
+  } else if (popupLevel.value === 3) {
     // Возврат с уровня 3 на уровень 2
     popupLevel.value = 2;
     level3Data.value = null;
@@ -913,6 +1022,7 @@ function resetPopup() {
   level1Data.value = null;
   level2Data.value = null;
   level3Data.value = null;
+  level4Data.value = null;
 }
 
 /**
