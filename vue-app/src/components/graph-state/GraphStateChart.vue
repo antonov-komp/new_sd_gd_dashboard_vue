@@ -151,6 +151,7 @@ import {
   prepareDoughnutChartEmployeeData,
   formatEmployeeProgressBarData
 } from '@/utils/graph-state/employeeChartUtils.js';
+import { overlappingPointsPlugin } from './plugins/overlappingPointsPlugin.js';
 
 const cssVar = (name, fallback) => {
   if (typeof window === 'undefined') {
@@ -258,6 +259,14 @@ const stages = [
   { id: 'review', name: 'Рассмотрение ТЗ', color: stageColors.review },
   { id: 'execution', name: 'Исполнение', color: stageColors.execution }
 ];
+
+/**
+ * Массив стилей точек для линейного графика
+ * Используется для визуального различия точек разных этапов при перекрытии
+ * Порядок: круг, треугольник, квадрат, ромб, звезда, крест, повёрнутый крест
+ * @type {Array<string>}
+ */
+const POINT_STYLES = ['circle', 'triangle', 'rect', 'rectRot', 'star', 'cross', 'crossRot'];
 
 /**
  * Фильтры по этапам
@@ -1113,7 +1122,7 @@ function prepareChartData(snapshotsData) {
   const datasets = [];
 
   // Данные для каждого этапа
-  stages.forEach(stage => {
+  stages.forEach((stage, index) => {
     const data = [];
 
     // Начало недели
@@ -1218,6 +1227,11 @@ function prepareChartData(snapshotsData) {
       backgroundColor: Array.isArray(backgroundColor) ? backgroundColor : backgroundColor,
       borderColor: Array.isArray(borderColor) ? borderColor : borderColor,
       borderWidth: 2,
+      // Применение стиля точки только для линейных графиков
+      // Используется циклический выбор стиля для случаев, когда этапов больше, чем стилей
+      ...(chartType.value === 'line' && {
+        pointStyle: POINT_STYLES[index % POINT_STYLES.length]
+      }),
       pointBackgroundColor: Array.isArray(pointBackgroundColor) ? pointBackgroundColor : pointBackgroundColor,
       pointBorderColor: Array.isArray(borderColor) ? borderColor : borderColor,
       pointRadius: 6,
@@ -1315,6 +1329,10 @@ const loadData = async () => {
 
 // Загрузка данных при монтировании
 onMounted(() => {
+  // Регистрация плагина для отрисовки индикаторов перекрывающихся точек
+  // Плагин будет применяться ко всем графикам, созданным после регистрации
+  ChartJS.register(overlappingPointsPlugin);
+  
   loadData();
 });
 
