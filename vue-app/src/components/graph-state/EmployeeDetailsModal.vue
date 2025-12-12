@@ -224,6 +224,7 @@
                     <tr>
                       <th class="col-department">Заказчик</th>
                       <th class="col-count">Количество тикетов</th>
+                      <th class="col-action"></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -231,12 +232,17 @@
                       v-for="(department, index) in level3Data.departments"
                       :key="index"
                       class="department-row"
+                      @click.stop="handleDepartmentClickFromLevel3(department)"
+                      title="Кликните для просмотра тикетов"
                     >
                       <td class="col-department">
                         <span class="department-name">{{ department.departmentName }}</span>
                       </td>
                       <td class="col-count">
                         <span class="count-value">{{ department.count }}</span>
+                      </td>
+                      <td class="col-action">
+                        <span class="department-arrow">→</span>
                       </td>
                     </tr>
                   </tbody>
@@ -691,17 +697,101 @@ async function loadLevel1ViewData() {
 }
 
 /**
- * Обработка клика на временную градацию в виде "По времени" (уровень 1)
+ * Обработка клика на строку заказчика в уровне 3 (переход на уровень 4)
+ * 
+ * Переходит на уровень 4 со списком тикетов сотрудника у выбранного заказчика
+ * в выбранной временной градации
+ * 
+ * @param {Object} department - Объект заказчика
  */
-function handleTimeCategoryClick(category) {
+async function handleDepartmentClickFromLevel3(department) {
+  if (!department || department.count === 0) {
+    notifications.info(`У заказчика "${department?.departmentName || 'неизвестный'}" нет тикетов`);
+    return;
+  }
+
+  // Проверить наличие данных уровня 3
+  if (!level3Data.value) {
+    console.error('[EmployeeDetailsModal] Level 3 data not found');
+    notifications.error('Ошибка: данные уровня 3 не найдены');
+    return;
+  }
+
+  try {
+    // Импортировать функции создания контекста и фильтрации
+    const { 
+      createContextFromLevel3,
+      filterTicketsByContext 
+    } = await import('@/utils/graph-state/ticketListUtils.js');
+    
+    // Создать контекст перехода на уровень 4
+    let context = createContextFromLevel3(level3Data.value, department);
+    
+    // Если тикеты не переданы в контексте, фильтруем из snapshot
+    if (!context.tickets || context.tickets.length === 0) {
+      // Фильтровать тикеты по контексту
+      context.tickets = await filterTicketsByContext(context);
+    }
+    
+    console.log('[EmployeeDetailsModal] Transitioning to level 4 from level 3:', {
+      employeeName: context.employeeName,
+      dateCategory: context.dateCategoryLabel,
+      departmentName: context.departmentName,
+      ticketsCount: context.tickets.length
+    });
+
+    // Перейти на уровень 4
+    await goToLevel4(context);
+  } catch (error) {
+    console.error('[EmployeeDetailsModal] Error transitioning to level 4 from level 3:', error);
+    notifications.error('Ошибка перехода на список тикетов: ' + error.message);
+  }
+}
+
+/**
+ * Обработка клика на временную градацию в виде "По времени" (уровень 1)
+ * 
+ * Переходит на уровень 4 со списком всех тикетов стадии в выбранной временной градации
+ * 
+ * @param {Object} category - Объект категории давности
+ */
+async function handleTimeCategoryClick(category) {
   if (!category || category.count === 0) {
     notifications.info(`В категории "${category?.label || 'неизвестная'}" нет тикетов`);
     return;
   }
 
-  // Перейти на уровень 2 с данными категории
-  // Здесь можно открыть детализацию по сотрудникам для этой категории
-  notifications.info(`Детализация по категории "${category.label}" будет доступна в следующей версии`);
+  if (!category.tickets || category.tickets.length === 0) {
+    notifications.info(`В категории "${category.label}" нет тикетов`);
+    return;
+  }
+
+  // Проверить наличие данных уровня 1
+  if (!level1Data.value) {
+    console.error('[EmployeeDetailsModal] Level 1 data not found');
+    notifications.error('Ошибка: данные уровня 1 не найдены');
+    return;
+  }
+
+  try {
+    // Импортировать функции создания контекста
+    const { createContextFromLevel1Time } = await import('@/utils/graph-state/ticketListUtils.js');
+    
+    // Создать контекст перехода на уровень 4
+    const context = createContextFromLevel1Time(level1Data.value, category);
+    
+    console.log('[EmployeeDetailsModal] Transitioning to level 4 from level 1 (time):', {
+      stageName: context.stageName,
+      dateCategory: context.dateCategoryLabel,
+      ticketsCount: context.tickets.length
+    });
+
+    // Перейти на уровень 4
+    await goToLevel4(context);
+  } catch (error) {
+    console.error('[EmployeeDetailsModal] Error transitioning to level 4 from level 1 (time):', error);
+    notifications.error('Ошибка перехода на список тикетов: ' + error.message);
+  }
 }
 
 /**
@@ -1449,6 +1539,11 @@ function close() {
   text-align: right;
 }
 
+.departments-table .col-action {
+  width: 40px;
+  text-align: center;
+}
+
 .departments-table tbody tr {
   border-bottom: 1px solid var(--b24-border-light, #e5e7eb);
   transition: background-color 0.2s ease;
@@ -1463,7 +1558,31 @@ function close() {
 }
 
 .department-row {
-  cursor: default; /* Таблица не интерактивна, только для просмотра */
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.level-3 .department-row:hover {
+  background-color: var(--b24-bg-light, #f3f4f6);
+  transform: translateX(2px);
+}
+
+.level-3 .col-action {
+  width: 40px;
+  text-align: center;
+}
+
+.level-3 .department-arrow {
+  font-size: 18px;
+  color: var(--b24-text-secondary, #6b7280);
+  opacity: 0.6;
+  transition: all 0.2s ease;
+}
+
+.level-3 .department-row:hover .department-arrow {
+  opacity: 1;
+  color: var(--b24-primary, #007bff);
+  transform: translateX(4px);
 }
 
 .department-name {
