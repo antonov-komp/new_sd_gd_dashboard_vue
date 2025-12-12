@@ -300,6 +300,16 @@ export function groupTicketsByDepartment(tickets) {
     // Используем departmentHeadFull (полное значение) или departmentHead
     let departmentName = ticket.departmentHeadFull || ticket.departmentHead;
     
+    // Логирование для отладки (только для первых 3 тикетов)
+    if (tickets.indexOf(ticket) < 3) {
+      console.log('[popupNavigationUtils] groupTicketsByDepartment - ticket sample:', {
+        ticketId: ticket.id,
+        departmentHead: ticket.departmentHead,
+        departmentHeadFull: ticket.departmentHeadFull,
+        allKeys: Object.keys(ticket).filter(k => k.toLowerCase().includes('department'))
+      });
+    }
+    
     // Нормализация значения
     if (!departmentName) {
       // Если значение null, undefined, пустая строка или только пробелы

@@ -271,6 +271,8 @@ import {
   groupTicketsByDepartment
 } from '@/utils/graph-state/popupNavigationUtils.js';
 import { useNotifications } from '@/composables/useNotifications.js';
+import TicketDetailsService from '@/services/graph-state/TicketDetailsService.js';
+import { mapStageId } from '@/services/dashboard-sector-1c/mappers/stage-mapper.js';
 
 const props = defineProps({
   /**
@@ -440,30 +442,209 @@ function initializeLevel1() {
  */
 async function loadLevel1ViewData() {
   if (!level1Data.value || !level1Data.value.snapshot || !level1Data.value.stageId) {
+    console.warn('[EmployeeDetailsModal] Cannot load level 1 view data - missing required data');
     return;
   }
 
   try {
-    // Получить все тикеты стадии из snapshot
-    const allTickets = level1Data.value.snapshot.tickets || [];
+    // Получить все тикеты из snapshot
+    const allSnapshotTickets = level1Data.value.snapshot.tickets || [];
+    const currentStageId = level1Data.value.stageId;
     
-    // Фильтровать по стадии (если в snapshot есть информация о стадии)
-    // Пока используем все тикеты, так как snapshot уже содержит тикеты для конкретной стадии
+    console.log('[EmployeeDetailsModal] Loading level 1 view data:', {
+      totalSnapshotTickets: allSnapshotTickets.length,
+      currentStageId: currentStageId,
+      sampleTicket: allSnapshotTickets[0] ? {
+        id: allSnapshotTickets[0].id,
+        stageId: allSnapshotTickets[0].stageId,
+        hasDepartmentHead: !!allSnapshotTickets[0].departmentHead,
+        departmentHead: allSnapshotTickets[0].departmentHead,
+        hasDepartmentHeadFull: !!allSnapshotTickets[0].departmentHeadFull,
+        departmentHeadFull: allSnapshotTickets[0].departmentHeadFull,
+        allKeys: Object.keys(allSnapshotTickets[0])
+      } : null
+    });
     
-    // Группировать по временным градациям
+    // ВАЖНО: Фильтровать тикеты только по текущей стадии
+    // snapshot содержит тикеты всех стадий, нужно оставить только текущую
+    // Используем mapStageId для преобразования Bitrix24 stageId во внутренний формат
+    let allTickets = allSnapshotTickets.filter(ticket => {
+      // Если у тикета есть stageId, проверяем его
+      if (ticket.stageId) {
+        const internalStageId = mapStageId(ticket.stageId);
+        return internalStageId === currentStageId;
+      }
+      // Если stageId нет в тикете, но он есть в snapshot для этой стадии
+      // Проверяем, есть ли тикет в списке ticketIds для этой стадии (если есть)
+      // Если нет - оставляем, так как snapshot уже отфильтрован по стадии при создании
+      // Но лучше загрузить детали через API для проверки stageId
+      return true; // Временно оставляем все, но загрузим детали через API для проверки
+    });
+    
+    console.log('[EmployeeDetailsModal] Filtered tickets by stage:', {
+      beforeFilter: allSnapshotTickets.length,
+      afterFilter: allTickets.length,
+      stageId: currentStageId,
+      ticketsWithStageId: allTickets.filter(t => t.stageId).length,
+      ticketsWithoutStageId: allTickets.filter(t => !t.stageId).length
+    });
+    
+    // Определить, какие тикеты нужно загрузить через API
+    // Загружаем детали для тикетов, у которых нет departmentHead или departmentHeadFull
+    const ticketsNeedingDetails = allTickets.filter(t => !t.departmentHead && !t.departmentHeadFull);
+    
+    if (ticketsNeedingDetails.length > 0) {
+      console.log('[EmployeeDetailsModal] DepartmentHead missing for some tickets, loading via API...', {
+        ticketsNeedingDetails: ticketsNeedingDetails.length,
+        totalTickets: allTickets.length,
+        ticketsWithDepartment: allTickets.filter(t => t.departmentHead || t.departmentHeadFull).length
+      });
+      
+      // Загрузить детали только для тикетов, которым это нужно
+      const ticketIds = ticketsNeedingDetails.map(t => t.id).filter(id => id);
+      
+      try {
+        console.log('[EmployeeDetailsModal] Loading details for tickets:', {
+          ticketIdsCount: ticketIds.length,
+          ticketIdsSample: ticketIds.slice(0, 10)
+        });
+        
+        const ticketDetails = await TicketDetailsService.getTicketsDetails(ticketIds);
+        
+        // Создать Map для быстрого доступа
+        const detailsMap = new Map();
+        ticketDetails.forEach(detail => {
+          if (detail && detail.id) {
+            detailsMap.set(detail.id, detail);
+          }
+        });
+        
+        console.log('[EmployeeDetailsModal] Details loaded from API:', {
+          detailsCount: ticketDetails.length,
+          detailsMapSize: detailsMap.size,
+          sampleDetail: ticketDetails[0] ? {
+            id: ticketDetails[0].id,
+            departmentHead: ticketDetails[0].departmentHead,
+            departmentHeadFull: ticketDetails[0].departmentHeadFull
+          } : null
+        });
+        
+        // Объединить данные из snapshot и загруженных деталей
+        allTickets = allTickets.map(ticket => {
+          const details = detailsMap.get(ticket.id);
+          if (details) {
+            // Использовать данные из API, если они есть
+            return {
+              ...ticket,
+              stageId: details.stageId || ticket.stageId || null, // Добавляем stageId из деталей
+              departmentHead: details.departmentHead || ticket.departmentHead || null,
+              departmentHeadFull: details.departmentHeadFull || details.departmentHead || ticket.departmentHead || null
+            };
+          }
+          // Если детали не загружены, использовать данные из snapshot
+          return ticket;
+        });
+        
+        // ВАЖНО: После загрузки деталей через API снова фильтруем по стадии
+        // Теперь у тикетов может быть stageId из API, нужно проверить его
+        allTickets = allTickets.filter(ticket => {
+          if (ticket.stageId) {
+            const internalStageId = mapStageId(ticket.stageId);
+            return internalStageId === currentStageId;
+          }
+          // Если stageId всё ещё нет, оставляем тикет (он уже был отфильтрован ранее)
+          return true;
+        });
+        
+        console.log('[EmployeeDetailsModal] Ticket details merged (before stage filter):', {
+          totalTickets: allTickets.length,
+          ticketsWithDepartment: allTickets.filter(t => t.departmentHead || t.departmentHeadFull).length,
+          ticketsWithoutDepartment: allTickets.filter(t => !t.departmentHead && !t.departmentHeadFull).length,
+          ticketsWithStageId: allTickets.filter(t => t.stageId).length,
+          ticketsWithoutStageId: allTickets.filter(t => !t.stageId).length
+        });
+        
+        // ВАЖНО: После загрузки деталей через API снова фильтруем по стадии
+        // Теперь у тикетов может быть stageId из API, нужно проверить его
+        const beforeStageFilter = allTickets.length;
+        allTickets = allTickets.filter(ticket => {
+          if (ticket.stageId) {
+            const internalStageId = mapStageId(ticket.stageId);
+            return internalStageId === currentStageId;
+          }
+          // Если stageId всё ещё нет, оставляем тикет (он уже был отфильтрован ранее)
+          return true;
+        });
+        
+        console.log('[EmployeeDetailsModal] Ticket details merged (after stage filter):', {
+          beforeStageFilter: beforeStageFilter,
+          afterStageFilter: allTickets.length,
+          filteredOut: beforeStageFilter - allTickets.length,
+          currentStageId: currentStageId,
+          ticketsWithDepartment: allTickets.filter(t => t.departmentHead || t.departmentHeadFull).length,
+          ticketsWithoutDepartment: allTickets.filter(t => !t.departmentHead && !t.departmentHeadFull).length,
+          sampleWithDepartment: allTickets.find(t => t.departmentHead || t.departmentHeadFull) ? {
+            id: allTickets.find(t => t.departmentHead || t.departmentHeadFull).id,
+            departmentHead: allTickets.find(t => t.departmentHead || t.departmentHeadFull).departmentHead,
+            departmentHeadFull: allTickets.find(t => t.departmentHead || t.departmentHeadFull).departmentHeadFull
+          } : null
+        });
+      } catch (error) {
+        console.warn('[EmployeeDetailsModal] Failed to load ticket details via API, using snapshot data:', error);
+        console.error('[EmployeeDetailsModal] Error details:', {
+          message: error.message,
+          stack: error.stack
+        });
+        // Продолжаем с данными из snapshot
+      }
+    } else {
+      console.log('[EmployeeDetailsModal] All tickets have departmentHead, skipping API load');
+    }
+    
+    // ВАЖНО: Все три вида (По сотрудникам, По времени, По заказчикам) 
+    // должны использовать только тикеты текущей стадии
+    console.log('[EmployeeDetailsModal] Final tickets for grouping (only current stage):', {
+      totalTickets: allTickets.length,
+      currentStageId: currentStageId,
+      ticketsWithStageId: allTickets.filter(t => t.stageId).length,
+      ticketsWithoutStageId: allTickets.filter(t => !t.stageId).length,
+      ticketsWithDepartment: allTickets.filter(t => t.departmentHead || t.departmentHeadFull).length,
+      ticketsWithoutDepartment: allTickets.filter(t => !t.departmentHead && !t.departmentHeadFull).length
+    });
+    
+    // Группировать по временным градациям (только тикеты текущей стадии)
     const timeCategories = groupTicketsByDateCategory(allTickets);
     level1TimeCategories.value = timeCategories;
     
-    // Группировать по заказчикам
+    // Группировать по заказчикам (только тикеты текущей стадии)
     const departments = groupTicketsByDepartment(allTickets);
     level1Departments.value = departments;
     
-    console.log('[EmployeeDetailsModal] Level 1 view data loaded:', {
+    // Подсчитать общее количество тикетов для проверки
+    const totalTicketsInTimeCategories = timeCategories.reduce((sum, cat) => sum + cat.count, 0);
+    const totalTicketsInDepartments = departments.reduce((sum, dept) => sum + dept.count, 0);
+    
+    console.log('[EmployeeDetailsModal] Level 1 view data loaded (only current stage):', {
+      currentStageId: currentStageId,
+      totalTicketsForGrouping: allTickets.length,
       timeCategoriesCount: timeCategories.length,
-      departmentsCount: departments.length
+      totalTicketsInTimeCategories: totalTicketsInTimeCategories,
+      departmentsCount: departments.length,
+      totalTicketsInDepartments: totalTicketsInDepartments,
+      departmentsSample: departments.slice(0, 5),
+      ticketsWithDepartment: allTickets.filter(t => t.departmentHead || t.departmentHeadFull).length,
+      ticketsWithoutDepartment: allTickets.filter(t => !t.departmentHead && !t.departmentHeadFull).length,
+      // Проверка: все три вида должны показывать одинаковое количество тикетов
+      consistencyCheck: {
+        totalTickets: allTickets.length,
+        timeCategoriesTotal: totalTicketsInTimeCategories,
+        departmentsTotal: totalTicketsInDepartments,
+        isConsistent: allTickets.length === totalTicketsInTimeCategories && allTickets.length === totalTicketsInDepartments
+      }
     });
   } catch (error) {
     console.error('[EmployeeDetailsModal] Error loading level 1 view data:', error);
+    console.error('[EmployeeDetailsModal] Error stack:', error.stack);
   }
 }
 
