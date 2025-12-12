@@ -164,16 +164,27 @@ export function groupTicketsByStages(tickets, employees) {
       
       const mappedTicket = mapTicket(ticket);
       
+      // ВАЖНО: Сохраняем полные данные о тикете для попапа
+      // Убеждаемся, что все необходимые поля сохранены
+      const fullTicketData = {
+        ...mappedTicket,
+        // Сохраняем оригинальный Bitrix24 stageId для фильтрации
+        stageId: ticket.stageId || ticket.STAGE_ID || mappedTicket.stageId || null,
+        // Сохраняем departmentHead (уже должен быть в mappedTicket, но на всякий случай)
+        departmentHead: mappedTicket.departmentHead || null,
+        departmentHeadFull: mappedTicket.departmentHeadFull || mappedTicket.departmentHead || null
+      };
+      
       // Добавляем тикет во все тикеты (для обратной совместимости)
-      employee.tickets.push(mappedTicket);
+      employee.tickets.push(fullTicketData);
       
       // Разделяем тикеты на внутри/вне сектора
       if (employee.isFromSector1C) {
         // Сотрудник из сектора 1С — тикет внутри сектора
-        employee.ticketsInsideSector.push(mappedTicket);
+        employee.ticketsInsideSector.push(fullTicketData);
       } else {
         // Сотрудник из другого сектора — тикет вне сектора
-        employee.ticketsOutsideSector.push(mappedTicket);
+        employee.ticketsOutsideSector.push(fullTicketData);
       }
     } else {
       // Тикет без employeeId (не попал в колонку)
@@ -280,7 +291,17 @@ export function getZeroPointTickets(tickets) {
     .forEach(ticket => {
       const stageId = mapStageId(ticket.stageId || ticket.STAGE_ID || '');
       if (zeroPointTickets[stageId]) {
-        zeroPointTickets[stageId].push(mapTicket(ticket));
+        const mappedTicket = mapTicket(ticket);
+        // ВАЖНО: Сохраняем полные данные о тикете для попапа
+        const fullTicketData = {
+          ...mappedTicket,
+          // Сохраняем оригинальный Bitrix24 stageId для фильтрации
+          stageId: ticket.stageId || ticket.STAGE_ID || mappedTicket.stageId || null,
+          // Сохраняем departmentHead (уже должен быть в mappedTicket, но на всякий случай)
+          departmentHead: mappedTicket.departmentHead || null,
+          departmentHeadFull: mappedTicket.departmentHeadFull || mappedTicket.departmentHead || null
+        };
+        zeroPointTickets[stageId].push(fullTicketData);
       }
     });
 

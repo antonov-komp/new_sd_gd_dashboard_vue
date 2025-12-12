@@ -447,7 +447,8 @@ async function loadLevel1ViewData() {
   }
 
   try {
-    // Получить все тикеты из snapshot
+    // ВАЖНО: Все данные уже должны быть в snapshot при загрузке
+    // Не нужно загружать данные через API - они уже разложены по стадиям при создании snapshot
     const allSnapshotTickets = level1Data.value.snapshot.tickets || [];
     const currentStageId = level1Data.value.stageId;
     

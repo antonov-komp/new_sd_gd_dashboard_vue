@@ -76,10 +76,13 @@ export function mapTicket(bitrixTicket) {
   // Нормализация значения отдела заказчика: trim и ограничение 17 символов
   // Если значение пустое или null — возвращаем null
   let departmentHead = null;
+  let departmentHeadFull = null; // Полное значение без ограничений
   if (ufDepartmentHead) {
     const trimmed = String(ufDepartmentHead).trim();
     if (trimmed.length > 0) {
-      // Ограничиваем длину до 17 символов
+      // Полное значение без ограничений (для попапа)
+      departmentHeadFull = trimmed;
+      // Ограничиваем длину до 17 символов (для отображения в карточках)
       departmentHead = trimmed.length > 17 ? trimmed.substring(0, 17) : trimmed;
     }
   }
@@ -127,7 +130,8 @@ export function mapTicket(bitrixTicket) {
     id: id,
     title: title,
     ufSubject: ufSubject,
-    departmentHead: departmentHead,
+    departmentHead: departmentHead, // Ограниченное значение (17 символов) для отображения
+    departmentHeadFull: departmentHeadFull, // Полное значение без ограничений для попапа
     priorityId: priorityObj.id,
     priorityLabel: priorityObj.label,
     priorityColors: priorityColors,

@@ -322,12 +322,21 @@ function extractTicketsData(stages, zeroPointTickets) {
             };
           }
 
+          // Сохраняем полные данные о тикете, включая departmentHead и stageId
           ticketsMap.set(ticketId, {
             id: ticketId,
             title: ticket.title || 'Без названия',
             assignedTo: assignedTo || null,
             createdAt: normalizeDate(ticket.createdAt || ticket.createdTime),
-            updatedAt: normalizeDate(ticket.updatedAt || ticket.modifiedAt || ticket.updatedTime)
+            updatedAt: normalizeDate(ticket.updatedAt || ticket.modifiedAt || ticket.updatedTime),
+            // ВАЖНО: Сохраняем полные данные для попапа
+            stageId: ticket.stageId || stage.id || null, // Bitrix24 stageId или внутренний
+            departmentHead: ticket.departmentHead || null,
+            departmentHeadFull: ticket.departmentHeadFull || ticket.departmentHead || null,
+            priorityId: ticket.priorityId || null,
+            priorityLabel: ticket.priorityLabel || null,
+            service: ticket.service || null,
+            serviceLabel: ticket.serviceLabel || null
           });
         });
       });
@@ -375,12 +384,21 @@ function extractTicketsData(stages, zeroPointTickets) {
           }
         }
 
+        // Сохраняем полные данные о тикете из нулевой точки
         ticketsMap.set(ticketId, {
           id: ticketId,
           title: ticket.title || 'Без названия',
           assignedTo: assignedTo || null,
           createdAt: normalizeDate(ticket.createdAt || ticket.createdTime),
-          updatedAt: normalizeDate(ticket.updatedAt || ticket.modifiedAt || ticket.updatedTime)
+          updatedAt: normalizeDate(ticket.updatedAt || ticket.modifiedAt || ticket.updatedTime),
+          // ВАЖНО: Сохраняем полные данные для попапа
+          stageId: ticket.stageId || null, // Bitrix24 stageId
+          departmentHead: ticket.departmentHead || null,
+          departmentHeadFull: ticket.departmentHeadFull || ticket.departmentHead || null,
+          priorityId: ticket.priorityId || null,
+          priorityLabel: ticket.priorityLabel || null,
+          service: ticket.service || null,
+          serviceLabel: ticket.serviceLabel || null
         });
       });
     });
