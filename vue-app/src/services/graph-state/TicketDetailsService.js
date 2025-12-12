@@ -25,33 +25,6 @@ const ENTITY_TYPE_ID = 140;
  */
 const ticketDetailsCache = new Map();
 
-/**
- * Получить детали тикета из кеша или загрузить через API
- * 
- * @param {number} ticketId - ID тикета
- * @returns {Promise<Object|null>} Детали тикета или null при ошибке
- */
-async function getTicketDetails(ticketId) {
-  // Проверка кеша
-  if (ticketDetailsCache.has(ticketId)) {
-    return ticketDetailsCache.get(ticketId);
-  }
-  
-  // Загрузка через API
-  try {
-    const details = await TicketDetailsService.getTicketDetails(ticketId);
-    
-    // Сохранение в кеш
-    if (details) {
-      ticketDetailsCache.set(ticketId, details);
-    }
-    
-    return details;
-  } catch (error) {
-    console.error(`Error loading ticket details for ID ${ticketId}:`, error);
-    return null;
-  }
-}
 
 /**
  * Сервис для загрузки деталей тикетов

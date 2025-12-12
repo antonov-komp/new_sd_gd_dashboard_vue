@@ -124,9 +124,12 @@
     <EmployeeDetailsModal
       :is-visible="showEmployeeModal"
       :stage-name="modalStageName"
+      :stage-id="modalStageId"
       :total-count="modalTotalCount"
       :employees="modalEmployees"
       :others="modalOthers"
+      :snapshot="currentSnapshot"
+      :ticket-details="ticketDetails"
       @close="closeEmployeeModal"
     />
 
@@ -220,9 +223,12 @@ const chartType = ref('line');
  */
 const showEmployeeModal = ref(false);
 const modalStageName = ref('');
+const modalStageId = ref('');
 const modalTotalCount = ref(0);
 const modalEmployees = ref([]);
 const modalOthers = ref(null);
+const currentSnapshot = ref(null);
+const ticketDetails = ref(null);
 
 /**
  * Список доступных сотрудников
@@ -521,12 +527,29 @@ function getSnapshotByTimePoint(timePoint) {
  * @param {Array} employees - Массив сотрудников
  * @param {Object} others - Данные о группе "Другие" (опционально)
  */
-function openEmployeeDetailsModal(stageName, totalCount, employees, others = null) {
+function openEmployeeDetailsModal(stageName, stageId, totalCount, employees, others = null, snapshot = null, ticketDetailsData = null) {
+  console.log('[GraphStateChart] openEmployeeDetailsModal called:', {
+    stageName,
+    stageId,
+    totalCount,
+    employeesCount: employees?.length || 0,
+    hasSnapshot: !!snapshot,
+    snapshotTicketIds: snapshot?.ticketIds?.length || 0
+  });
+  
   modalStageName.value = stageName;
+  modalStageId.value = stageId || '';
   modalTotalCount.value = totalCount;
   modalEmployees.value = employees || [];
   modalOthers.value = others && others.count > 0 ? others : null;
+  currentSnapshot.value = snapshot;
+  ticketDetails.value = ticketDetailsData;
   showEmployeeModal.value = true;
+  
+  console.log('[GraphStateChart] Modal state set:', {
+    modalStageId: modalStageId.value,
+    hasCurrentSnapshot: !!currentSnapshot.value
+  });
 }
 
 /**
@@ -537,18 +560,51 @@ function openEmployeeDetailsModal(stageName, totalCount, employees, others = nul
  * @param {Array} employeeData - Данные сотрудников
  */
 function openEmployeeDetailsModalForLine(stageId, timePoint, employeeData) {
+  console.log('[GraphStateChart] openEmployeeDetailsModalForLine:', { stageId, timePoint, employeeDataCount: employeeData?.length });
+  
   const stage = stages.find(s => s.id === stageId);
   if (!stage) {
+    console.warn('[GraphStateChart] Stage not found:', stageId);
     return;
   }
 
   const snapshot = getSnapshotByTimePoint(timePoint);
+  console.log('[GraphStateChart] Snapshot for timePoint:', timePoint, snapshot ? 'found' : 'not found');
+  
   if (!snapshot) {
+    console.warn('[GraphStateChart] Snapshot not found for timePoint:', timePoint);
+    console.warn('[GraphStateChart] Available snapshots:', {
+      weekStart: !!snapshots.value.weekStart,
+      weekEnd: !!snapshots.value.weekEnd,
+      current: !!snapshots.value.current
+    });
+    return;
+  }
+
+  // Проверка структуры snapshot
+  console.log('[GraphStateChart] Snapshot structure:', {
+    hasTickets: !!snapshot.tickets,
+    ticketsIsArray: Array.isArray(snapshot.tickets),
+    ticketsLength: snapshot.tickets?.length || 0,
+    hasTicketIds: !!snapshot.ticketIds,
+    ticketIdsLength: snapshot.ticketIds?.length || 0,
+    hasMetadata: !!snapshot.metadata,
+    hasStatistics: !!snapshot.statistics,
+    snapshotKeys: Object.keys(snapshot),
+    snapshotType: typeof snapshot
+  });
+  
+  // Критическая проверка: snapshot должен иметь tickets
+  if (!snapshot.tickets || !Array.isArray(snapshot.tickets)) {
+    console.error('[GraphStateChart] ERROR: Snapshot does not have tickets array!');
+    console.error('[GraphStateChart] Snapshot:', snapshot);
+    notifications.warning('Слепок не содержит данных о тикетах');
     return;
   }
 
   // Получить общее количество тикетов этапа
   const totalCount = snapshot.statistics?.stages?.[stageId]?.count || 0;
+  console.log('[GraphStateChart] Total count for stage:', totalCount);
 
   // Форматирование данных для прогресс-баров
   const formatted = formatEmployeeProgressBarData(
@@ -558,7 +614,16 @@ function openEmployeeDetailsModalForLine(stageId, timePoint, employeeData) {
     10
   );
 
-  openEmployeeDetailsModal(stage.name, totalCount, formatted.employees, formatted.others);
+  console.log('[GraphStateChart] Opening modal with:', {
+    stageName: stage.name,
+    stageId,
+    totalCount,
+    employeesCount: formatted.employees?.length || 0,
+    hasSnapshot: !!snapshot,
+    snapshotHasTickets: !!snapshot.tickets
+  });
+
+  openEmployeeDetailsModal(stage.name, stageId, totalCount, formatted.employees, formatted.others, snapshot, null);
 }
 
 /**
@@ -574,11 +639,17 @@ function openEmployeeDetailsModalForDoughnut(stageId, employeeData) {
     return;
   }
 
+  // Получить слепок (используем текущий или последний доступный)
+  const snapshot = snapshots.value.current || snapshots.value.weekEnd || snapshots.value.weekStart;
+
   openEmployeeDetailsModal(
     employeeData.stageName,
+    stageId,
     employeeData.totalCount,
     employeeData.employees,
-    employeeData.others
+    employeeData.others,
+    snapshot,
+    null
   );
 }
 
@@ -588,9 +659,12 @@ function openEmployeeDetailsModalForDoughnut(stageId, employeeData) {
 function closeEmployeeModal() {
   showEmployeeModal.value = false;
   modalStageName.value = '';
+  modalStageId.value = '';
   modalTotalCount.value = 0;
   modalEmployees.value = [];
   modalOthers.value = null;
+  currentSnapshot.value = null;
+  ticketDetails.value = null;
 }
 
 /**

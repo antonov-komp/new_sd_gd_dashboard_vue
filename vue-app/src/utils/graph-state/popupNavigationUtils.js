@@ -16,6 +16,7 @@ import {
   DATE_ACCENT_CONFIG 
 } from '@/services/dashboard-sector-1c/utils/date-accent-config.js';
 import TicketDetailsService from '@/services/graph-state/TicketDetailsService.js';
+import { mapStageId } from '@/services/dashboard-sector-1c/mappers/stage-mapper.js';
 
 /**
  * Получить тикеты сотрудника на стадии
@@ -33,13 +34,34 @@ import TicketDetailsService from '@/services/graph-state/TicketDetailsService.js
  * const tickets = await getEmployeeTicketsForStage(456, 'formed', snapshot, null);
  */
 export async function getEmployeeTicketsForStage(employeeId, stageId, snapshot, ticketDetails = null) {
+  console.log('[popupNavigationUtils] getEmployeeTicketsForStage called:', {
+    employeeId,
+    stageId,
+    hasSnapshot: !!snapshot,
+    snapshotType: snapshot ? typeof snapshot : 'null',
+    snapshotKeys: snapshot ? Object.keys(snapshot) : [],
+    hasTickets: snapshot?.tickets ? true : false,
+    ticketsIsArray: Array.isArray(snapshot?.tickets),
+    ticketsLength: snapshot?.tickets?.length || 0
+  });
+
   if (!employeeId || !stageId) {
-    console.warn('Employee ID and stage ID are required');
+    console.warn('[popupNavigationUtils] Employee ID and stage ID are required');
     return [];
   }
 
-  if (!snapshot || !snapshot.tickets || !Array.isArray(snapshot.tickets)) {
-    console.warn('Invalid snapshot data');
+  if (!snapshot) {
+    console.warn('[popupNavigationUtils] Snapshot is null or undefined');
+    return [];
+  }
+
+  if (!snapshot.tickets) {
+    console.warn('[popupNavigationUtils] Snapshot.tickets is missing. Snapshot keys:', Object.keys(snapshot));
+    return [];
+  }
+
+  if (!Array.isArray(snapshot.tickets)) {
+    console.warn('[popupNavigationUtils] Snapshot.tickets is not an array. Type:', typeof snapshot.tickets);
     return [];
   }
 
@@ -74,16 +96,22 @@ export async function getEmployeeTicketsForStage(employeeId, stageId, snapshot, 
       // Если передан объект с деталями (ключ - ID тикета)
       detailsMap = ticketDetails;
     } else {
-      // Загрузить детали через API
-      const details = await TicketDetailsService.getTicketsDetails(ticketIds);
-      
-      // Преобразовать в Map для быстрого доступа
-      detailsMap = new Map();
-      details.forEach(detail => {
-        if (detail && detail.id) {
-          detailsMap.set(detail.id, detail);
-        }
-      });
+      // Попытка загрузить детали через API, но если ошибка - используем данные из snapshot
+      try {
+        const details = await TicketDetailsService.getTicketsDetails(ticketIds);
+        
+        // Преобразовать в Map для быстрого доступа
+        detailsMap = new Map();
+        details.forEach(detail => {
+          if (detail && detail.id) {
+            detailsMap.set(detail.id, detail);
+          }
+        });
+      } catch (error) {
+        console.warn('[popupNavigationUtils] Failed to load ticket details from API, using snapshot data:', error);
+        // Если API не работает, используем данные из snapshot как есть
+        detailsMap = null;
+      }
     }
   }
 
@@ -109,7 +137,8 @@ export async function getEmployeeTicketsForStage(employeeId, stageId, snapshot, 
       if (details) {
         merged.stageId = details.stageId || null;
         // Использовать полное значение departmentHead для уровня 3
-        merged.departmentHead = details.departmentHeadFull || details.departmentHead || null;
+        merged.departmentHead = details.departmentHead || null;
+        merged.departmentHeadFull = details.departmentHeadFull || details.departmentHead || null;
       } else {
         // Если детали не найдены, оставить null
         merged.stageId = null;
@@ -119,49 +148,34 @@ export async function getEmployeeTicketsForStage(employeeId, stageId, snapshot, 
       // Если загрузка не нужна, использовать данные из слепка (если есть)
       merged.stageId = ticket.stageId || null;
       merged.departmentHead = ticket.departmentHead || null;
+      // Если в слепке нет полного значения, используем то, что есть
+      merged.departmentHeadFull = ticket.departmentHeadFull || ticket.departmentHead || null;
     }
 
     return merged;
   });
 
   // Фильтровать по стадии
+  // Если stageId не определен в тикетах (API не сработал), используем все тикеты сотрудника
+  // так как они уже отфильтрованы по стадии в snapshot
   const filteredTickets = mergedTickets.filter(ticket => {
-    // Если stageId не определен, пропускаем тикет
+    // Если stageId не определен, но тикет есть в snapshot для этой стадии - используем его
     if (!ticket.stageId) {
-      return false;
+      // Если API не сработал, но тикет есть в snapshot для этой стадии - используем его
+      // Это означает, что тикет уже отфильтрован по стадии при создании snapshot
+      return true; // Используем все тикеты сотрудника из snapshot
     }
     
-    // Сравнить stageId (может быть в формате Bitrix24 или внутреннем формате)
-    // Внутренний формат: 'formed', 'review', 'execution'
-    // Bitrix24 формат: 'DT140_12:UC_0VHWE2', 'DT140_12:PREPARATION', 'DT140_12:CLIENT'
-    return ticket.stageId === stageId || 
-           mapStageIdToInternal(ticket.stageId) === stageId;
+    // Преобразовать Bitrix24 stageId во внутренний формат
+    const internalStageId = mapStageId(ticket.stageId);
+    
+    // Сравнить с переданным stageId (уже во внутреннем формате)
+    return internalStageId === stageId;
   });
 
   return filteredTickets;
 }
 
-/**
- * Маппинг Bitrix24 stageId на внутренний формат
- * 
- * @param {string} bitrixStageId - Stage ID из Bitrix24
- * @returns {string|null} Внутренний stageId ('formed', 'review', 'execution') или null
- * @private
- */
-function mapStageIdToInternal(bitrixStageId) {
-  if (!bitrixStageId) {
-    return null;
-  }
-
-  // Маппинг Bitrix24 ID на внутренние ID
-  const stageMapping = {
-    'DT140_12:UC_0VHWE2': 'formed',
-    'DT140_12:PREPARATION': 'review',
-    'DT140_12:CLIENT': 'execution'
-  };
-
-  return stageMapping[bitrixStageId] || null;
-}
 
 /**
  * Группировать тикеты по временным градациям
