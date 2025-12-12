@@ -541,7 +541,11 @@ function prepareSingleTicket(ticket, detailsMap) {
  * const preparedTickets = await prepareTicketsForDisplay(tickets, snapshot, null);
  */
 export async function prepareTicketsForDisplay(tickets, snapshot = null, ticketDetails = null) {
+  // Измерение производительности
+  console.time('[Performance] prepareTicketsForDisplay');
+  
   if (!tickets || tickets.length === 0) {
+    console.timeEnd('[Performance] prepareTicketsForDisplay');
     return [];
   }
 
@@ -607,6 +611,7 @@ export async function prepareTicketsForDisplay(tickets, snapshot = null, ticketD
     } : null
   });
 
+  console.timeEnd('[Performance] prepareTicketsForDisplay');
   return preparedTickets;
 }
 

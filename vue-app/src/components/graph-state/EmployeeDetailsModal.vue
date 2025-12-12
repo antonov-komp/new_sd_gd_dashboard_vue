@@ -280,29 +280,63 @@
             </div>
             
             <div class="modal-body">
-              <!-- Индикатор загрузки -->
-              <div v-if="level4Data.isLoading" class="loading-state">
-                <div class="loading-spinner"></div>
-                <p>Загрузка тикетов...</p>
-              </div>
-              
-              <!-- Пустое состояние -->
-              <div v-else-if="!level4Data.tickets || level4Data.tickets.length === 0" class="empty-state">
-                <p>Нет тикетов для отображения</p>
-              </div>
-              
-              <!-- Список тикетов -->
-              <div v-else class="tickets-list-container">
-                <div class="tickets-list">
-                  <TicketCard
-                    v-for="ticket in level4Data.tickets"
-                    :key="ticket.id"
-                    :ticket="ticket"
-                    :draggable="false"
-                    @click="handleTicketClick(ticket)"
-                  />
+              <!-- Transition для состояний загрузки, пустого состояния и списка -->
+              <Transition name="loading" mode="out-in">
+                <!-- Индикатор загрузки -->
+                <div v-if="level4Data.isLoading" key="loading" class="loading-state">
+                  <div class="loading-spinner"></div>
+                  <p>Загрузка тикетов...</p>
                 </div>
-              </div>
+                
+                <!-- Состояние ошибки с fallback -->
+                <div v-else-if="level4Data.error && level4Data.error.hasFallback" key="error-fallback" class="error-state-with-fallback">
+                  <div class="error-banner">
+                    <span class="error-icon">⚠️</span>
+                    <span class="error-message">Ошибка загрузки данных. Отображаются данные из кеша.</span>
+                  </div>
+                  <div class="tickets-list-container">
+                    <TransitionGroup name="ticket" tag="div" class="tickets-list">
+                      <TicketCard
+                        v-for="(ticket, index) in level4Data.tickets"
+                        :key="ticket.id"
+                        :ticket="ticket"
+                        :draggable="false"
+                        :style="{ '--ticket-index': index }"
+                        @click="handleTicketClick(ticket)"
+                      />
+                    </TransitionGroup>
+                  </div>
+                </div>
+
+                <!-- Состояние ошибки без fallback -->
+                <div v-else-if="level4Data.error && !level4Data.error.hasFallback" key="error" class="error-state">
+                  <div class="error-icon">❌</div>
+                  <h3 class="error-title">Ошибка загрузки данных</h3>
+                  <p class="error-message">{{ level4Data.error.message }}</p>
+                  <button class="btn-retry" @click="retryLoadLevel4">Повторить попытку</button>
+                </div>
+
+                <!-- Пустое состояние -->
+                <div v-else-if="!level4Data.tickets || level4Data.tickets.length === 0" key="empty" class="empty-state">
+                  <div class="empty-state-icon">📭</div>
+                  <h3 class="empty-state-title">{{ getEmptyStateTitle() }}</h3>
+                  <p class="empty-state-message">{{ getEmptyStateMessage() }}</p>
+                </div>
+                
+                <!-- Список тикетов -->
+                <div v-else key="tickets" class="tickets-list-container">
+                  <TransitionGroup name="ticket" tag="div" class="tickets-list">
+                    <TicketCard
+                      v-for="(ticket, index) in level4Data.tickets"
+                      :key="ticket.id"
+                      :ticket="ticket"
+                      :draggable="false"
+                      :style="{ '--ticket-index': index }"
+                      @click="handleTicketClick(ticket)"
+                    />
+                  </TransitionGroup>
+                </div>
+              </Transition>
             </div>
           </div>
         </Transition>
@@ -326,7 +360,7 @@
  * Задача: TASK-031-03, TASK-033, TASK-034
  */
 
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch, onMounted, TransitionGroup } from 'vue';
 import { 
   getEmployeeTicketsForStage,
   groupTicketsByDateCategory,
@@ -1129,9 +1163,13 @@ async function handleCategoryClick(category) {
  * @returns {Promise<void>}
  */
 async function goToLevel4(context) {
+  // Измерение производительности
+  console.time('[Performance] goToLevel4');
+  
   if (!context) {
     console.error('[EmployeeDetailsModal] Context is required for level 4');
     notifications.error('Ошибка: контекст перехода не указан');
+    console.timeEnd('[Performance] goToLevel4');
     return;
   }
 
@@ -1150,7 +1188,8 @@ async function goToLevel4(context) {
       context: context,
       tickets: [],
       totalCount: 0,
-      isLoading: true
+      isLoading: true,
+      error: null
     };
 
     // Фильтровать тикеты по контексту (если не переданы напрямую)
@@ -1162,13 +1201,39 @@ async function goToLevel4(context) {
       filteredTickets = await filterTicketsByContext(context);
     }
 
+    // Если тикеты не найдены, попробовать использовать данные из snapshot
+    if (!filteredTickets || filteredTickets.length === 0) {
+      console.warn('[EmployeeDetailsModal] No tickets found after filtering, using context tickets');
+      filteredTickets = context.tickets || [];
+    }
+
+    // Если все еще нет тикетов, попробовать получить из snapshot
+    if (!filteredTickets || filteredTickets.length === 0) {
+      console.warn('[EmployeeDetailsModal] No tickets in context, trying snapshot');
+      if (context.snapshot && context.snapshot.tickets) {
+        filteredTickets = context.snapshot.tickets || [];
+        console.log('[EmployeeDetailsModal] Using tickets from snapshot:', filteredTickets.length);
+      }
+    }
+
     // Подготовить тикеты для отображения
-    const { prepareTicketsForDisplay } = await import('@/utils/graph-state/ticketListUtils.js');
-    const preparedTickets = await prepareTicketsForDisplay(
-      filteredTickets,
-      context.snapshot,
-      context.ticketDetails
-    );
+    let preparedTickets = [];
+    try {
+      console.time('[Performance] prepareTicketsForDisplay');
+      const { prepareTicketsForDisplay } = await import('@/utils/graph-state/ticketListUtils.js');
+      preparedTickets = await prepareTicketsForDisplay(
+        filteredTickets,
+        context.snapshot,
+        context.ticketDetails
+      );
+      console.timeEnd('[Performance] prepareTicketsForDisplay');
+    } catch (prepareError) {
+      console.error('[EmployeeDetailsModal] Error preparing tickets:', prepareError);
+      console.timeEnd('[Performance] prepareTicketsForDisplay');
+      // Fallback: использовать исходные тикеты без дополнительной подготовки
+      preparedTickets = filteredTickets || [];
+      notifications.warning('Некоторые данные тикетов не удалось загрузить. Отображаются базовые данные.');
+    }
 
     console.log('[EmployeeDetailsModal] Tickets prepared for level 4:', {
       filteredCount: filteredTickets.length,
@@ -1180,7 +1245,8 @@ async function goToLevel4(context) {
       context: context,
       tickets: preparedTickets,
       totalCount: preparedTickets.length,
-      isLoading: false
+      isLoading: false,
+      error: null
     };
 
     // Перейти на уровень 4
@@ -1191,6 +1257,8 @@ async function goToLevel4(context) {
       ticketsCount: level4Data.value.tickets.length,
       isLoading: level4Data.value.isLoading
     });
+    
+    console.timeEnd('[Performance] goToLevel4');
   } catch (error) {
     console.error('[EmployeeDetailsModal] Error transitioning to level 4:', error);
     console.error('[EmployeeDetailsModal] Error details:', {
@@ -1199,12 +1267,50 @@ async function goToLevel4(context) {
       context: context
     });
 
-    notifications.error('Ошибка загрузки списка тикетов: ' + error.message);
+    // Попробовать использовать данные из snapshot как fallback
+    let fallbackTickets = [];
+    if (context.snapshot && context.snapshot.tickets) {
+      try {
+        // Простая фильтрация по стадии (если доступна)
+        const stageId = context.stageId;
+        if (stageId) {
+          fallbackTickets = (context.snapshot.tickets || []).filter(ticket => {
+            return ticket.stageId === stageId;
+          });
+        } else {
+          fallbackTickets = context.snapshot.tickets || [];
+        }
 
-    // Сбросить состояние уровня 4 при ошибке
-    level4Data.value = null;
-    // Вернуться на предыдущий уровень
-    goBack();
+        console.log('[EmployeeDetailsModal] Using fallback tickets from snapshot:', fallbackTickets.length);
+      } catch (fallbackError) {
+        console.error('[EmployeeDetailsModal] Error using fallback tickets:', fallbackError);
+      }
+    }
+
+    // Установить состояние ошибки
+    level4Data.value = {
+      context: context,
+      tickets: fallbackTickets,
+      totalCount: fallbackTickets.length,
+      isLoading: false,
+      error: {
+        message: error.message,
+        hasFallback: fallbackTickets.length > 0
+      }
+    };
+
+    // Показать уведомление пользователю
+    if (fallbackTickets.length > 0) {
+      notifications.warning('Ошибка загрузки данных. Отображаются данные из кеша.');
+      // Перейти на уровень 4 с fallback данными
+      popupLevel.value = 4;
+    } else {
+      notifications.error('Ошибка загрузки тикетов: ' + error.message);
+      // Вернуться на предыдущий уровень при критической ошибке
+      goBack();
+    }
+    
+    console.timeEnd('[Performance] goToLevel4');
   }
 }
 
@@ -1246,6 +1352,69 @@ function resetPopup() {
   level2Data.value = null;
   level3Data.value = null;
   level4Data.value = null;
+}
+
+/**
+ * Получить заголовок для пустого состояния
+ * 
+ * @returns {string} Заголовок в зависимости от контекста
+ */
+function getEmptyStateTitle() {
+  if (!level4Data.value?.context) {
+    return 'Нет тикетов';
+  }
+
+  const { sourceLevel, employeeName, dateCategoryLabel, departmentName } = level4Data.value.context;
+
+  if (sourceLevel === 2 && employeeName && dateCategoryLabel) {
+    return `Нет тикетов у ${employeeName} в категории "${dateCategoryLabel}"`;
+  }
+
+  if (sourceLevel === 3 && employeeName && departmentName) {
+    return `Нет тикетов у ${employeeName} у заказчика "${departmentName}"`;
+  }
+
+  if (sourceLevel === 1 && dateCategoryLabel) {
+    return `Нет тикетов в категории "${dateCategoryLabel}"`;
+  }
+
+  if (sourceLevel === 1 && departmentName) {
+    return `Нет тикетов у заказчика "${departmentName}"`;
+  }
+
+  return 'Нет тикетов для отображения';
+}
+
+/**
+ * Получить сообщение для пустого состояния
+ * 
+ * @returns {string} Сообщение с дополнительной информацией
+ */
+function getEmptyStateMessage() {
+  if (!level4Data.value?.context) {
+    return 'Попробуйте выбрать другую категорию или заказчика.';
+  }
+
+  const { stageName } = level4Data.value.context;
+
+  if (stageName) {
+    return `На стадии "${stageName}" нет тикетов, соответствующих выбранным критериям.`;
+  }
+
+  return 'Попробуйте выбрать другую категорию или заказчика.';
+}
+
+/**
+ * Повторить загрузку уровня 4
+ */
+async function retryLoadLevel4() {
+  if (!level4Data.value?.context) {
+    console.error('[EmployeeDetailsModal] Cannot retry: context not found');
+    return;
+  }
+
+  const context = level4Data.value.context;
+  await goToLevel4(context);
 }
 
 /**
@@ -2124,6 +2293,7 @@ function close() {
   padding: 60px 20px;
   min-height: 300px;
   color: var(--b24-text-muted, #9ca3af);
+  animation: fadeIn 0.3s ease-in;
 }
 
 .level-4 .loading-spinner {
@@ -2131,9 +2301,11 @@ function close() {
   height: 40px;
   border: 4px solid var(--b24-border-light, #e5e7eb);
   border-top-color: var(--b24-primary, #007bff);
+  border-right-color: var(--b24-primary, #007bff);
   border-radius: 50%;
-  animation: spin 1s linear infinite;
+  animation: spin 0.8s linear infinite;
   margin-bottom: 16px;
+  will-change: transform; /* Оптимизация производительности */
 }
 
 .level-4 .loading-state p {
@@ -2144,7 +2316,10 @@ function close() {
 }
 
 @keyframes spin {
-  to {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
     transform: rotate(360deg);
   }
 }
@@ -2160,19 +2335,92 @@ function close() {
   color: var(--b24-text-muted, #9ca3af);
 }
 
-.level-4 .empty-state p {
+
+.level-4 .empty-state-icon {
+  font-size: 64px;
+  margin-bottom: 20px;
+  opacity: 0.5;
+}
+
+.level-4 .empty-state-title {
+  margin: 0 0 12px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--b24-text-primary, #1f2937);
+}
+
+.level-4 .empty-state-message {
   margin: 0;
   font-size: 14px;
-  font-style: italic;
+  color: var(--b24-text-secondary, #6b7280);
+  max-width: 400px;
+  line-height: 1.5;
+}
+
+/* Стили для состояний ошибки */
+.level-4 .error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  min-height: 300px;
+  text-align: center;
+}
+
+.level-4 .error-state .error-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.level-4 .error-title {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--b24-danger, #dc3545);
+}
+
+.level-4 .error-message {
+  margin: 0 0 20px 0;
+  font-size: 14px;
   color: var(--b24-text-secondary, #6b7280);
 }
 
-/* Иконка для пустого состояния */
-.level-4 .empty-state::before {
-  content: '📭';
-  font-size: 48px;
+.level-4 .btn-retry {
+  padding: 10px 20px;
+  background-color: var(--b24-primary, #007bff);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md, 6px);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.level-4 .btn-retry:hover {
+  background-color: var(--b24-primary-dark, #0056b3);
+}
+
+.level-4 .error-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background-color: var(--b24-warning-lighter, #fff8e1);
+  border-left: 4px solid var(--b24-warning, #ffc107);
   margin-bottom: 16px;
-  opacity: 0.5;
+  border-radius: var(--radius-md, 6px);
+}
+
+.level-4 .error-banner .error-icon {
+  font-size: 20px;
+}
+
+.level-4 .error-banner .error-message {
+  font-size: 14px;
+  color: var(--b24-text-primary, #1f2937);
+  margin: 0;
 }
 
 /* Адаптивность для уровня 4 */
@@ -2261,6 +2509,59 @@ function close() {
   .level-4 .tickets-list .ticket-card {
     padding: 12px;
   }
+}
+
+/* Анимации для состояний загрузки, пустого состояния и списка */
+.loading-enter-active,
+.loading-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.loading-enter-from,
+.loading-leave-to {
+  opacity: 0;
+}
+
+.loading-enter-to,
+.loading-leave-from {
+  opacity: 1;
+}
+
+/* Анимация появления карточек тикетов */
+.ticket-enter-active {
+  transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  transition-delay: calc(var(--ticket-index, 0) * 50ms); /* Stagger-эффект */
+  will-change: opacity, transform; /* Подсказка браузеру */
+}
+
+.ticket-enter-from {
+  opacity: 0;
+  transform: translateY(20px) scale(0.95);
+}
+
+.ticket-enter-to {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  will-change: auto; /* Отключаем will-change после анимации */
+}
+
+.ticket-leave-active {
+  transition: all 0.3s ease-in;
+}
+
+.ticket-leave-from {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.ticket-leave-to {
+  opacity: 0;
+  transform: translateY(-10px) scale(0.95);
+}
+
+.ticket-move {
+  transition: transform 0.3s ease;
 }
 </style>
 
