@@ -256,6 +256,55 @@
               </div>
             </div>
           </div>
+
+          <!-- Уровень 4: Список тикетов -->
+          <div v-else-if="popupLevel === 4 && level4Data" key="level-4" class="level-4">
+            <div class="modal-header">
+              <button class="btn-back" @click="goBack" aria-label="Назад">
+                ←
+              </button>
+              <div class="header-info">
+                <h3>{{ popupTitle }}</h3>
+                <div v-if="level4Data.context" class="header-badges">
+                  <span v-if="level4Data.context.dateCategoryLabel" class="date-badge">
+                    {{ level4Data.context.dateCategoryLabel }}
+                  </span>
+                  <span v-if="level4Data.context.departmentName" class="department-badge">
+                    {{ level4Data.context.departmentName }}
+                  </span>
+                  <span class="stage-badge">{{ level4Data.context.stageName }}</span>
+                </div>
+              </div>
+              <span class="modal-total">Всего: {{ level4Data.totalCount }} тикетов</span>
+              <button class="modal-close" @click="close" aria-label="Закрыть">×</button>
+            </div>
+            
+            <div class="modal-body">
+              <!-- Индикатор загрузки -->
+              <div v-if="level4Data.isLoading" class="loading-state">
+                <div class="loading-spinner"></div>
+                <p>Загрузка тикетов...</p>
+              </div>
+              
+              <!-- Пустое состояние -->
+              <div v-else-if="!level4Data.tickets || level4Data.tickets.length === 0" class="empty-state">
+                <p>Нет тикетов для отображения</p>
+              </div>
+              
+              <!-- Список тикетов -->
+              <div v-else class="tickets-list-container">
+                <div class="tickets-list">
+                  <TicketCard
+                    v-for="ticket in level4Data.tickets"
+                    :key="ticket.id"
+                    :ticket="ticket"
+                    :draggable="false"
+                    @click="handleTicketClick(ticket)"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
         </Transition>
       </div>
     </div>
@@ -286,6 +335,8 @@ import {
 import { useNotifications } from '@/composables/useNotifications.js';
 import TicketDetailsService from '@/services/graph-state/TicketDetailsService.js';
 import { mapStageId } from '@/services/dashboard-sector-1c/mappers/stage-mapper.js';
+import TicketCard from '@/components/dashboard/TicketCard.vue';
+import { getTicketIframeUrl } from '@/services/dashboard-sector-1c/utils/constants.js';
 
 const props = defineProps({
   /**
@@ -1198,6 +1249,85 @@ function resetPopup() {
 }
 
 /**
+ * Обработка клика на карточку тикета
+ * 
+ * Открывает тикет в новой вкладке браузера через функцию getTicketIframeUrl()
+ * 
+ * @param {Object} ticket - Объект тикета
+ * @param {Number} ticket.id - ID тикета
+ */
+function handleTicketClick(ticket) {
+  // Проверка наличия тикета
+  if (!ticket) {
+    console.warn('[EmployeeDetailsModal] Ticket is null or undefined');
+    notifications.warning('Ошибка: тикет не найден');
+    return;
+  }
+
+  // Проверка наличия ID тикета
+  if (!ticket.id) {
+    console.error('[EmployeeDetailsModal] Ticket ID is missing:', ticket);
+    notifications.error('Ошибка: ID тикета не указан');
+    return;
+  }
+
+  try {
+    // Сформировать URL для открытия тикета
+    const iframeUrl = getTicketIframeUrl(ticket.id);
+    
+    console.log('[EmployeeDetailsModal] Opening ticket:', {
+      ticketId: ticket.id,
+      iframeUrl: iframeUrl
+    });
+
+    // Проверить, что URL сформирован корректно
+    if (!iframeUrl || typeof iframeUrl !== 'string' || iframeUrl.length === 0) {
+      throw new Error('Не удалось сформировать URL для тикета');
+    }
+
+    // Открыть тикет в новой вкладке
+    const newWindow = window.open(iframeUrl, '_blank', 'noopener,noreferrer');
+
+    // Проверить, что окно открылось (может быть заблокировано popup blocker)
+    if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+      // Попробовать альтернативный способ: создать ссылку и кликнуть по ней
+      try {
+        const link = document.createElement('a');
+        link.href = iframeUrl;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        console.log('[EmployeeDetailsModal] Ticket opened via alternative method:', {
+          ticketId: ticket.id,
+          iframeUrl: iframeUrl
+        });
+      } catch (altError) {
+        throw new Error('Не удалось открыть новую вкладку. Возможно, заблокирован popup blocker. Попробуйте разрешить всплывающие окна для этого сайта.');
+      }
+    } else {
+      console.log('[EmployeeDetailsModal] Ticket opened successfully:', {
+        ticketId: ticket.id,
+        iframeUrl: iframeUrl
+      });
+    }
+  } catch (error) {
+    console.error('[EmployeeDetailsModal] Error opening ticket:', error);
+    console.error('[EmployeeDetailsModal] Error details:', {
+      message: error.message,
+      stack: error.stack,
+      ticket: ticket
+    });
+
+    // Показать уведомление пользователю
+    notifications.error('Ошибка открытия тикета: ' + error.message);
+  }
+}
+
+/**
  * Закрытие модального окна
  */
 function close() {
@@ -1846,6 +1976,290 @@ function close() {
 
   .count-value {
     font-size: 13px;
+  }
+}
+
+/* Уровень 4: Список тикетов */
+.level-4 {
+  /* Наследуем базовые стили модального окна */
+}
+
+.level-4 .modal-body {
+  padding: 0; /* Убираем padding, так как он будет в .tickets-list */
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden; /* Предотвращаем прокрутку всего modal-body */
+}
+
+.level-4 .header-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.level-4 .header-info h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--b24-text-primary, #1f2937);
+}
+
+.level-4 .header-badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.level-4 .date-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  background-color: var(--b24-info, #17a2b8);
+  color: white;
+  border-radius: var(--radius-xl, 9999px);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.level-4 .department-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  background-color: var(--b24-secondary, #6c757d);
+  color: white;
+  border-radius: var(--radius-xl, 9999px);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.level-4 .stage-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  background-color: var(--b24-primary, #007bff);
+  color: white;
+  border-radius: var(--radius-xl, 9999px);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.level-4 .tickets-list-container {
+  width: 100%;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0; /* Важно для flex-контейнера */
+  padding: 0;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: var(--b24-border-medium, #d1d5db) var(--b24-bg-light, #f3f4f6);
+  /* Оптимизация прокрутки на touch-устройствах */
+  -webkit-overflow-scrolling: touch; /* Плавная прокрутка на iOS */
+  overscroll-behavior: contain; /* Предотвращаем цепочку прокрутки */
+  /* Улучшаем производительность прокрутки */
+  will-change: scroll-position; /* Подсказка браузеру для оптимизации */
+  transform: translateZ(0); /* Аппаратное ускорение */
+}
+
+.level-4 .tickets-list-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.level-4 .tickets-list-container::-webkit-scrollbar-track {
+  background: var(--b24-bg-light, #f3f4f6);
+  border-radius: 4px;
+}
+
+.level-4 .tickets-list-container::-webkit-scrollbar-thumb {
+  background: var(--b24-border-medium, #d1d5db);
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.level-4 .tickets-list-container::-webkit-scrollbar-thumb:hover {
+  background: var(--b24-text-secondary, #6b7280);
+}
+
+.level-4 .tickets-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+}
+
+/* Стили для карточек тикетов в попапе (уровень 4) */
+.level-4 .tickets-list .ticket-card {
+  margin-bottom: 0;
+  /* Убираем эффект drag & drop */
+  cursor: pointer; /* Всегда pointer, не grab/grabbing */
+  transition: transform 0.1s ease, opacity 0.1s ease, box-shadow 0.2s ease, border-left-color 0.2s ease;
+}
+
+.level-4 .tickets-list .ticket-card[draggable="false"] {
+  cursor: pointer;
+}
+
+.level-4 .tickets-list .ticket-card[draggable="false"]:active {
+  cursor: pointer;
+  transform: scale(0.98);
+  opacity: 0.8;
+}
+
+/* Улучшаем hover-эффект для попапа */
+.level-4 .tickets-list .ticket-card:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+  border-left-color: var(--b24-primary, #007bff); /* Подсветка при hover */
+}
+
+/* Убираем эффект перетаскивания при hover */
+.level-4 .tickets-list .ticket-card[draggable="false"]:hover {
+  cursor: pointer;
+}
+
+.level-4 .loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  min-height: 300px;
+  color: var(--b24-text-muted, #9ca3af);
+}
+
+.level-4 .loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid var(--b24-border-light, #e5e7eb);
+  border-top-color: var(--b24-primary, #007bff);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+.level-4 .loading-state p {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--b24-text-secondary, #6b7280);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.level-4 .empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  min-height: 300px;
+  text-align: center;
+  color: var(--b24-text-muted, #9ca3af);
+}
+
+.level-4 .empty-state p {
+  margin: 0;
+  font-size: 14px;
+  font-style: italic;
+  color: var(--b24-text-secondary, #6b7280);
+}
+
+/* Иконка для пустого состояния */
+.level-4 .empty-state::before {
+  content: '📭';
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+/* Адаптивность для уровня 4 */
+
+/* Стили для мобильных устройств (до 480px) */
+@media (max-width: 480px) {
+  .level-4 .modal-content {
+    width: 100%;
+    height: 100vh;
+    max-height: 100vh;
+    border-radius: 0;
+    margin: 0;
+  }
+
+  .level-4 .modal-header {
+    padding: 12px 16px;
+    font-size: 16px;
+  }
+
+  .level-4 .modal-body {
+    padding: 0;
+  }
+
+  .level-4 .tickets-list {
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .level-4 .tickets-list .ticket-card {
+    padding: 10px;
+    font-size: 13px;
+  }
+
+  .level-4 .header-info {
+    width: 100%;
+  }
+
+  .level-4 .header-badges {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+}
+
+/* Стили для планшетов (481px - 768px) */
+@media (min-width: 481px) and (max-width: 768px) {
+  .level-4 .modal-content {
+    width: 90%;
+    max-width: 600px;
+  }
+
+  .level-4 .tickets-list-container {
+    max-height: calc(90vh - 180px);
+  }
+
+  .level-4 .tickets-list {
+    gap: 10px;
+    padding: 16px;
+  }
+
+  .level-4 .tickets-list .ticket-card {
+    padding: 12px;
+  }
+
+  .level-4 .header-info {
+    width: 100%;
+  }
+
+  .level-4 .header-badges {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+}
+
+/* Стили для десктопов (от 769px) */
+@media (min-width: 769px) {
+  .level-4 .modal-content {
+    width: 80%;
+    max-width: 900px;
+  }
+
+  .level-4 .tickets-list {
+    gap: 12px;
+    padding: 20px;
+  }
+
+  .level-4 .tickets-list .ticket-card {
+    padding: 12px;
   }
 }
 </style>
