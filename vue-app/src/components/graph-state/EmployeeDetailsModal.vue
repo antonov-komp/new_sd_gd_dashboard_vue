@@ -393,10 +393,21 @@ const level4Data = ref(null);
 /**
  * Computed-свойства для удобного доступа
  */
+
+/**
+ * Можно ли вернуться на предыдущий уровень
+ * 
+ * Возвращает true, если текущий уровень > 1
+ */
 const canGoBack = computed(() => {
   return popupLevel.value > 1;
 });
 
+/**
+ * Заголовок попапа в зависимости от текущего уровня
+ * 
+ * Формирует заголовок на основе контекста уровня
+ */
 const popupTitle = computed(() => {
   switch (popupLevel.value) {
     case 1:
@@ -405,6 +416,36 @@ const popupTitle = computed(() => {
       return level2Data.value?.employeeName || '';
     case 3:
       return `${level2Data.value?.employeeName || ''} — ${level3Data.value?.dateCategoryLabel || ''}`;
+    case 4:
+      // Формируем заголовок на основе контекста уровня 4
+      if (!level4Data.value?.context) {
+        return 'Список тикетов';
+      }
+      
+      const ctx = level4Data.value.context;
+      const parts = [];
+      
+      // Добавить имя сотрудника (если есть)
+      if (ctx.employeeName) {
+        parts.push(ctx.employeeName);
+      }
+      
+      // Добавить категорию давности (если есть)
+      if (ctx.dateCategoryLabel) {
+        parts.push(ctx.dateCategoryLabel);
+      }
+      
+      // Добавить заказчика (если есть)
+      if (ctx.departmentName) {
+        parts.push(ctx.departmentName);
+      }
+      
+      // Добавить название стадии
+      if (ctx.stageName) {
+        parts.push(ctx.stageName);
+      }
+      
+      return parts.length > 0 ? parts.join(' — ') : 'Список тикетов';
     default:
       return '';
   }
@@ -443,9 +484,10 @@ function initializeLevel1() {
     snapshotType: level1Data.value.snapshot ? typeof level1Data.value.snapshot : 'null'
   });
   
-  // Сброс уровней 2 и 3
+  // Сброс уровней 2, 3 и 4
   level2Data.value = null;
   level3Data.value = null;
+  level4Data.value = null;
   popupLevel.value = 1;
   viewMode.value = 'employees';
   
@@ -1134,11 +1176,13 @@ function goBack() {
     // Возврат с уровня 3 на уровень 2
     popupLevel.value = 2;
     level3Data.value = null;
+    level4Data.value = null; // Сброс уровня 4 при возврате
   } else if (popupLevel.value === 2) {
     // Возврат с уровня 2 на уровень 1
     popupLevel.value = 1;
     level2Data.value = null;
     level3Data.value = null;
+    level4Data.value = null; // Сброс уровня 4 при возврате
   }
 }
 
