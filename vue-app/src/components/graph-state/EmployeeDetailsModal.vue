@@ -567,6 +567,15 @@ async function loadLevel1ViewData() {
         // ВАЖНО: После загрузки деталей через API снова фильтруем по стадии
         // Теперь у тикетов может быть stageId из API, нужно проверить его
         const beforeStageFilter = allTickets.length;
+        
+        // Сохраняем данные о departmentHead перед фильтрацией для отладки
+        const sampleBeforeFilter = allTickets.slice(0, 3).map(t => ({
+          id: t.id,
+          departmentHead: t.departmentHead,
+          departmentHeadFull: t.departmentHeadFull,
+          stageId: t.stageId
+        }));
+        
         allTickets = allTickets.filter(ticket => {
           if (ticket.stageId) {
             const internalStageId = mapStageId(ticket.stageId);
@@ -576,6 +585,14 @@ async function loadLevel1ViewData() {
           return true;
         });
         
+        // Сохраняем данные о departmentHead после фильтрации для отладки
+        const sampleAfterFilter = allTickets.slice(0, 3).map(t => ({
+          id: t.id,
+          departmentHead: t.departmentHead,
+          departmentHeadFull: t.departmentHeadFull,
+          stageId: t.stageId
+        }));
+        
         console.log('[EmployeeDetailsModal] Ticket details merged (after stage filter):', {
           beforeStageFilter: beforeStageFilter,
           afterStageFilter: allTickets.length,
@@ -583,10 +600,13 @@ async function loadLevel1ViewData() {
           currentStageId: currentStageId,
           ticketsWithDepartment: allTickets.filter(t => t.departmentHead || t.departmentHeadFull).length,
           ticketsWithoutDepartment: allTickets.filter(t => !t.departmentHead && !t.departmentHeadFull).length,
+          sampleBeforeFilter: sampleBeforeFilter,
+          sampleAfterFilter: sampleAfterFilter,
           sampleWithDepartment: allTickets.find(t => t.departmentHead || t.departmentHeadFull) ? {
             id: allTickets.find(t => t.departmentHead || t.departmentHeadFull).id,
             departmentHead: allTickets.find(t => t.departmentHead || t.departmentHeadFull).departmentHead,
-            departmentHeadFull: allTickets.find(t => t.departmentHead || t.departmentHeadFull).departmentHeadFull
+            departmentHeadFull: allTickets.find(t => t.departmentHead || t.departmentHeadFull).departmentHeadFull,
+            allKeys: Object.keys(allTickets.find(t => t.departmentHead || t.departmentHeadFull)).filter(k => k.toLowerCase().includes('department'))
           } : null
         });
       } catch (error) {
@@ -617,6 +637,21 @@ async function loadLevel1ViewData() {
     level1TimeCategories.value = timeCategories;
     
     // Группировать по заказчикам (только тикеты текущей стадии)
+    // Логирование перед группировкой для отладки
+    console.log('[EmployeeDetailsModal] Before groupTicketsByDepartment:', {
+      ticketsCount: allTickets.length,
+      sampleTickets: allTickets.slice(0, 5).map(t => ({
+        id: t.id,
+        departmentHead: t.departmentHead,
+        departmentHeadFull: t.departmentHeadFull,
+        hasDepartmentHead: !!t.departmentHead,
+        hasDepartmentHeadFull: !!t.departmentHeadFull,
+        allKeys: Object.keys(t).filter(k => k.toLowerCase().includes('department'))
+      })),
+      ticketsWithDepartment: allTickets.filter(t => t.departmentHead || t.departmentHeadFull).length,
+      ticketsWithoutDepartment: allTickets.filter(t => !t.departmentHead && !t.departmentHeadFull).length
+    });
+    
     const departments = groupTicketsByDepartment(allTickets);
     level1Departments.value = departments;
     
