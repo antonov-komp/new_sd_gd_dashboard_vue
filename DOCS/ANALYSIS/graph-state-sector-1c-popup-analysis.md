@@ -459,3 +459,4 @@ openEmployeeDetailsModalForDoughnut('formed', employeeData);
 **Автор анализа:** AI Assistant  
 **Дата:** 2025-12-12 08:47 (UTC+3, Брест)
 
+

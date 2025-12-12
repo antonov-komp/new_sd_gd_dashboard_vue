@@ -352,3 +352,4 @@ export function groupTicketsByDepartment(tickets) {
   return departments;
 }
 
+

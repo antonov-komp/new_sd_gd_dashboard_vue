@@ -774,3 +774,4 @@ console.log('Registered plugins:', ChartJS.registry.plugins.getAll());
 **Статус:** ✅ Завершена  
 **Реализовано:** Решение протестировано, код оптимизирован, готово к продакшену
 
+

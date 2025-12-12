@@ -702,3 +702,4 @@ export const overlappingPointsPlugin = {
 **Статус:** ✅ Завершена  
 **Реализовано:** Плагин overlappingPointsPlugin.js создан, реализовано увеличение размера точек при перекрытии (вариант 3)
 
+
