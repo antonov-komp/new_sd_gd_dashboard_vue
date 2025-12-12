@@ -13,6 +13,10 @@
 import { getDateAccentCategory } from '@/services/dashboard-sector-1c/utils/date-utils.js';
 import { DATE_ACCENT_CATEGORIES } from '@/services/dashboard-sector-1c/utils/date-accent-config.js';
 import { mapStageId } from '@/services/dashboard-sector-1c/mappers/stage-mapper.js';
+import { getEmployeeTicketsForStage } from '@/utils/graph-state/popupNavigationUtils.js';
+import { getPriorityColors } from '@/config/priority-config.js';
+import { getServiceColors, getDefaultService } from '@/config/service-config.js';
+import TicketDetailsService from '@/services/graph-state/TicketDetailsService.js';
 
 /**
  * Контекст перехода на уровень 4 (список тикетов)
@@ -57,11 +61,33 @@ export function createContextFromLevel2(level2Data, category) {
 /**
  * Создать контекст перехода на уровень 4 из уровня 3
  * 
+ * Получает тикеты сотрудника в выбранной временной градации и фильтрует по заказчику.
+ * 
  * @param {Object} level3Data - Данные уровня 3
  * @param {Object} department - Объект заказчика
- * @returns {Level4Context} Контекст перехода
+ * @returns {Promise<Level4Context>} Контекст перехода
  */
-export function createContextFromLevel3(level3Data, department) {
+export async function createContextFromLevel3(level3Data, department) {
+  // Получить тикеты сотрудника на стадии
+  const employeeTickets = await getEmployeeTicketsForStage(
+    level3Data.employeeId,
+    level3Data.stageId,
+    level3Data.snapshot,
+    level3Data.ticketDetails
+  );
+
+  // Фильтруем по временной градации
+  const dateCategoryTickets = filterTicketsByDateCategory(
+    employeeTickets,
+    level3Data.dateCategory
+  );
+
+  // Фильтруем по заказчику
+  const departmentTickets = filterTicketsByDepartment(
+    dateCategoryTickets,
+    department.departmentName
+  );
+
   return {
     sourceLevel: 3,
     employeeId: level3Data.employeeId,
@@ -71,7 +97,7 @@ export function createContextFromLevel3(level3Data, department) {
     dateCategory: level3Data.dateCategory,
     dateCategoryLabel: level3Data.dateCategoryLabel,
     departmentName: department.departmentName,
-    tickets: [], // Будет заполнено в функции фильтрации
+    tickets: departmentTickets,
     snapshot: level3Data.snapshot,
     ticketDetails: level3Data.ticketDetails
   };
@@ -103,11 +129,28 @@ export function createContextFromLevel1Time(level1Data, category) {
 /**
  * Создать контекст перехода на уровень 4 из уровня 1 (По заказчикам)
  * 
+ * Получает все тикеты стадии и фильтрует по заказчику.
+ * 
  * @param {Object} level1Data - Данные уровня 1
  * @param {Object} department - Объект заказчика
  * @returns {Level4Context} Контекст перехода
  */
 export function createContextFromLevel1Department(level1Data, department) {
+  // Получить все тикеты стадии из snapshot
+  const allStageTickets = (level1Data.snapshot?.tickets || []).filter(ticket => {
+    if (!ticket.stageId) {
+      return false;
+    }
+    const internalStageId = mapStageId(ticket.stageId);
+    return internalStageId === level1Data.stageId;
+  });
+
+  // Фильтруем по заказчику
+  const departmentTickets = filterTicketsByDepartment(
+    allStageTickets,
+    department.departmentName
+  );
+
   return {
     sourceLevel: 1,
     employeeId: null,
@@ -117,7 +160,7 @@ export function createContextFromLevel1Department(level1Data, department) {
     dateCategory: null,
     dateCategoryLabel: null,
     departmentName: department.departmentName,
-    tickets: [], // Будет заполнено в функции фильтрации
+    tickets: departmentTickets,
     snapshot: level1Data.snapshot,
     ticketDetails: level1Data.ticketDetails
   };
@@ -237,6 +280,9 @@ function filterTicketsByDepartment(tickets, departmentName) {
  * Объединяет данные из snapshot и загруженных деталей, затем фильтрует
  * тикеты по параметрам контекста (сотрудник, стадия, временная градация, заказчик).
  * 
+ * Если тикеты уже переданы в контексте (из уровня 2 или уровня 1 По времени),
+ * использует их напрямую, но проверяет дополнительные фильтры (например, по заказчику).
+ * 
  * @param {Level4Context} context - Контекст перехода
  * @returns {Promise<Array>} Массив отфильтрованных тикетов
  * 
@@ -258,38 +304,49 @@ export async function filterTicketsByContext(context) {
     return [];
   }
 
-  // Если тикеты уже переданы в контексте, используем их
+  // Если тикеты уже переданы в контексте (из уровня 2 или уровня 1 По времени),
+  // используем их напрямую, но проверяем дополнительные фильтры
   if (context.tickets && context.tickets.length > 0) {
-    console.log('[ticketListUtils] Using tickets from context:', context.tickets.length);
-    return context.tickets;
+    let tickets = context.tickets;
+
+    // Если указан заказчик, дополнительно фильтруем по нему
+    if (context.departmentName) {
+      tickets = filterTicketsByDepartment(tickets, context.departmentName);
+    }
+
+    console.log('[ticketListUtils] Using tickets from context:', {
+      originalCount: context.tickets.length,
+      filteredCount: tickets.length,
+      departmentFilter: context.departmentName
+    });
+
+    return tickets;
   }
 
+  // Если тикеты не переданы, фильтруем из snapshot
   const { snapshot, stageId, employeeId, dateCategory, departmentName } = context;
 
   // Получить все тикеты стадии из snapshot
   let tickets = snapshot.tickets || [];
   
-  // Фильтровать по стадии
+  // Применяем фильтры последовательно
   if (stageId) {
     tickets = filterTicketsByStage(tickets, stageId);
   }
 
-  // Фильтровать по сотруднику (если указан)
   if (employeeId) {
     tickets = filterTicketsByEmployee(tickets, employeeId);
   }
 
-  // Фильтровать по временной градации (если указана)
   if (dateCategory) {
     tickets = filterTicketsByDateCategory(tickets, dateCategory);
   }
 
-  // Фильтровать по заказчику (если указан)
   if (departmentName) {
     tickets = filterTicketsByDepartment(tickets, departmentName);
   }
 
-  console.log('[ticketListUtils] Filtered tickets:', {
+  console.log('[ticketListUtils] Filtered tickets from snapshot:', {
     totalInSnapshot: snapshot.tickets?.length || 0,
     filteredCount: tickets.length,
     filters: {
@@ -304,22 +361,252 @@ export async function filterTicketsByContext(context) {
 }
 
 /**
- * Подготовить тикеты для отображения на уровне 4
+ * Нейтральные цвета для fallback
+ */
+const NEUTRAL_COLORS = {
+  color: '#ced4da',
+  backgroundColor: '#f1f3f5',
+  textColor: '#6c757d'
+};
+
+const NEUTRAL_SERVICE_COLORS = {
+  color: '#ced4da',
+  backgroundColor: '#f8f9fa',
+  textColor: '#6c757d'
+};
+
+/**
+ * Маппинг статуса из stageId
  * 
- * Эта функция будет расширена в следующих этапах для добавления
- * дополнительных полей (ufSubject, priorityColors, serviceColors и т.д.)
+ * @param {String} stageId - ID стадии
+ * @returns {String} Статус тикета
+ */
+function mapStatus(stageId) {
+  // Простая логика маппинга (можно расширить)
+  if (!stageId) {
+    return 'new';
+  }
+  
+  // Если стадия в работе - статус in_progress
+  if (stageId === 'review' || stageId === 'execution') {
+    return 'in_progress';
+  }
+  
+  // Если стадия завершена - статус done
+  if (stageId === 'done' || stageId === 'closed') {
+    return 'done';
+  }
+  
+  return 'new';
+}
+
+/**
+ * Определить, какие тикеты требуют загрузки деталей через API
  * 
  * @param {Array} tickets - Массив тикетов
- * @param {Object} snapshot - Слепок с данными
- * @param {Object|null} ticketDetails - Детали тикетов (если загружены)
- * @returns {Promise<Array>} Массив подготовленных тикетов
+ * @returns {Array} Массив тикетов, которым нужны детали
  */
-export async function prepareTicketsForDisplay(tickets, snapshot, ticketDetails = null) {
+function identifyTicketsNeedingDetails(tickets) {
+  return tickets.filter(ticket => {
+    // Проверяем наличие критических полей
+    const needsUfSubject = !ticket.ufSubject || ticket.ufSubject === '';
+    const needsActionStr = ticket.actionStr === null || ticket.actionStr === undefined;
+    const needsDescription = !ticket.description || ticket.description === '';
+    
+    // Если хотя бы одно поле отсутствует, нужна загрузка
+    return needsUfSubject || needsActionStr || needsDescription;
+  });
+}
+
+/**
+ * Создать Map для быстрого доступа к деталям тикетов
+ * 
+ * @param {Array|Object|null} ticketDetails - Детали тикетов (массив или объект)
+ * @returns {Map} Map с ключом ID тикета и значением деталей
+ */
+function createDetailsMap(ticketDetails) {
+  const detailsMap = new Map();
+
+  if (!ticketDetails) {
+    return detailsMap;
+  }
+
+  // Если передан массив
+  if (Array.isArray(ticketDetails)) {
+    ticketDetails.forEach(detail => {
+      if (detail && detail.id) {
+        detailsMap.set(detail.id, detail);
+      }
+    });
+  }
+  // Если передан объект (ключ - ID тикета)
+  else if (typeof ticketDetails === 'object') {
+    Object.keys(ticketDetails).forEach(key => {
+      const detail = ticketDetails[key];
+      if (detail && detail.id) {
+        detailsMap.set(detail.id, detail);
+      }
+    });
+  }
+
+  return detailsMap;
+}
+
+/**
+ * Подготовить один тикет для отображения
+ * 
+ * @param {Object} ticket - Тикет из snapshot или контекста
+ * @param {Map} detailsMap - Map с деталями тикетов (из API)
+ * @returns {Object} Подготовленный тикет для TicketCard.vue
+ */
+function prepareSingleTicket(ticket, detailsMap) {
+  // Получить детали из Map (если есть)
+  const details = detailsMap.get(ticket.id) || null;
+
+  // Базовые поля (всегда есть в snapshot)
+  const prepared = {
+    id: ticket.id,
+    title: ticket.title || 'Без названия',
+    createdAt: ticket.createdAt || ticket.createdTime || '',
+    updatedAt: ticket.updatedAt || ticket.updatedTime || ticket.modifiedAt || ''
+  };
+
+  // ufSubject (приоритетное для отображения)
+  prepared.ufSubject = details?.ufSubject || ticket.ufSubject || null;
+
+  // Приоритет
+  const priorityId = details?.priorityId || ticket.priorityId || 'unknown';
+  const priorityLabel = details?.priorityLabel || ticket.priorityLabel || 'Не указано';
+  
+  // Получить цвета приоритета из конфигурации
+  const priorityColors = getPriorityColors(priorityId);
+  
+  prepared.priorityId = priorityId;
+  prepared.priorityLabel = priorityLabel;
+  prepared.priorityColors = priorityColors;
+  prepared.priority = priorityId; // legacy поле
+
+  // Сервис
+  const service = details?.service || ticket.service || getDefaultService();
+  const serviceLabel = details?.serviceLabel || ticket.serviceLabel || service.label || 'Не указано';
+  
+  // Получить цвета сервиса из конфигурации
+  const serviceColors = getServiceColors(service);
+  
+  prepared.service = service;
+  prepared.serviceLabel = serviceLabel;
+  prepared.serviceColors = serviceColors;
+
+  // actionStr (UF_ACTION_STR)
+  prepared.actionStr = details?.actionStr || ticket.actionStr || ticket.ufActionStr || null;
+  prepared.ufActionStr = prepared.actionStr; // для обратной совместимости
+
+  // departmentHead (уже есть в snapshot, но проверяем)
+  prepared.departmentHead = details?.departmentHead || ticket.departmentHead || null;
+  prepared.departmentHeadFull = details?.departmentHeadFull || ticket.departmentHeadFull || ticket.departmentHead || null;
+
+  // description
+  prepared.description = details?.description || ticket.description || ticket.comments || '';
+
+  // assignedTo (для обратной совместимости)
+  prepared.assignedTo = ticket.assignedTo || null;
+  prepared.assigneeId = ticket.assigneeId || (ticket.assignedTo?.id || null);
+
+  // stageId (для обратной совместимости)
+  prepared.stageId = ticket.stageId || null;
+
+  // status (вычисляется из stageId, если нужно)
+  if (!prepared.status && prepared.stageId) {
+    prepared.status = mapStatus(prepared.stageId);
+  } else {
+    prepared.status = ticket.status || 'new';
+  }
+
+  return prepared;
+}
+
+/**
+ * Подготовить тикеты для отображения в TicketCard.vue
+ * 
+ * Объединяет данные из snapshot и загруженных деталей через API,
+ * нормализует данные для соответствия структуре TicketCard.vue,
+ * обрабатывает отсутствующие поля (fallback значения).
+ * 
+ * @param {Array} tickets - Массив тикетов из snapshot или контекста
+ * @param {Object|null} snapshot - Слепок с данными (для получения дополнительных данных)
+ * @param {Object|null} ticketDetails - Детали тикетов (если уже загружены через API)
+ * @returns {Promise<Array>} Массив подготовленных тикетов для отображения
+ * 
+ * @example
+ * const preparedTickets = await prepareTicketsForDisplay(tickets, snapshot, null);
+ */
+export async function prepareTicketsForDisplay(tickets, snapshot = null, ticketDetails = null) {
   if (!tickets || tickets.length === 0) {
     return [];
   }
 
-  // Пока просто возвращаем тикеты как есть
-  // В следующих этапах добавим обогащение данными
-  return tickets;
+  // Определить, какие тикеты нужно загрузить через API
+  const ticketsNeedingDetails = identifyTicketsNeedingDetails(tickets);
+  
+  console.log('[ticketListUtils] Tickets needing details:', {
+    total: tickets.length,
+    needingDetails: ticketsNeedingDetails.length,
+    alreadyHaveDetails: tickets.length - ticketsNeedingDetails.length
+  });
+
+  // Загрузить недостающие данные через API (если нужно)
+  let loadedDetails = ticketDetails || null;
+  if (ticketsNeedingDetails.length > 0 && !ticketDetails) {
+    const ticketIds = ticketsNeedingDetails.map(t => t.id).filter(id => id);
+    
+    if (ticketIds.length > 0) {
+      try {
+        console.log('[ticketListUtils] Loading ticket details via API:', {
+          ticketIdsCount: ticketIds.length,
+          ticketIdsSample: ticketIds.slice(0, 5)
+        });
+        
+        loadedDetails = await TicketDetailsService.getTicketsDetails(ticketIds);
+        
+        console.log('[ticketListUtils] Ticket details loaded:', {
+          loadedCount: loadedDetails?.length || 0,
+          sampleTicket: loadedDetails?.[0] ? {
+            id: loadedDetails[0].id,
+            hasUfSubject: !!loadedDetails[0].ufSubject,
+            hasActionStr: !!loadedDetails[0].actionStr,
+            hasDescription: !!loadedDetails[0].description
+          } : null
+        });
+      } catch (error) {
+        console.warn('[ticketListUtils] Failed to load ticket details:', error);
+        console.error('[ticketListUtils] Error details:', {
+          message: error.message,
+          stack: error.stack,
+          ticketIdsCount: ticketIds.length
+        });
+        loadedDetails = null;
+      }
+    }
+  }
+
+  // Создать Map для быстрого доступа к загруженным деталям
+  const detailsMap = createDetailsMap(loadedDetails);
+
+  // Подготовить каждый тикет
+  const preparedTickets = tickets.map(ticket => {
+    return prepareSingleTicket(ticket, detailsMap);
+  });
+
+  console.log('[ticketListUtils] Tickets prepared for display:', {
+    totalPrepared: preparedTickets.length,
+    sampleTicket: preparedTickets[0] ? {
+      id: preparedTickets[0].id,
+      hasUfSubject: !!preparedTickets[0].ufSubject,
+      hasPriorityColors: !!preparedTickets[0].priorityColors,
+      hasServiceColors: !!preparedTickets[0].serviceColors
+    } : null
+  });
+
+  return preparedTickets;
 }
+

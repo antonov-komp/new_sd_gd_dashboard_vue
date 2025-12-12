@@ -844,3 +844,4 @@ const ticketsWithoutAnimation = computed(() => {
 
 **Автор:** Технический писатель  
 **Исполнитель:** Bitrix24 Программист (Vue.js)
+

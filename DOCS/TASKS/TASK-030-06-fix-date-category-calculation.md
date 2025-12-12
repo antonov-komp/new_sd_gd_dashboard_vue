@@ -534,3 +534,4 @@ export function getDateAccentCategory(createdDate, currentDate = new Date()) {
 - `DOCS/TASKS/TASK-030-02-create-date-utils-and-accent-config.md` — создание утилит для работы с датами
 - `DOCS/TASKS/TASK-030-04-add-created-date-with-accents-to-ticket-card.md` — добавление отображения даты создания
 - `vue-app/src/services/dashboard-sector-1c/utils/date-utils.js` — файл для изменений
+

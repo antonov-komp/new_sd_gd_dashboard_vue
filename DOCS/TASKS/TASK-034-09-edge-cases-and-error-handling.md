@@ -1070,3 +1070,4 @@ const loadTicketDetailsLazy = async (ticketId) => {
 
 **Автор:** Технический писатель  
 **Исполнитель:** Bitrix24 Программист (Vue.js)
+

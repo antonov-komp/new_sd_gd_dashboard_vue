@@ -724,20 +724,11 @@ async function handleDepartmentClickFromLevel3(department) {
   }
 
   try {
-    // Импортировать функции создания контекста и фильтрации
-    const { 
-      createContextFromLevel3,
-      filterTicketsByContext 
-    } = await import('@/utils/graph-state/ticketListUtils.js');
+    // Импортировать функции создания контекста
+    const { createContextFromLevel3 } = await import('@/utils/graph-state/ticketListUtils.js');
     
-    // Создать контекст перехода на уровень 4
-    let context = createContextFromLevel3(level3Data.value, department);
-    
-    // Если тикеты не переданы в контексте, фильтруем из snapshot
-    if (!context.tickets || context.tickets.length === 0) {
-      // Фильтровать тикеты по контексту
-      context.tickets = await filterTicketsByContext(context);
-    }
+    // Создать контекст перехода на уровень 4 (функция уже фильтрует тикеты)
+    const context = await createContextFromLevel3(level3Data.value, department);
     
     console.log('[EmployeeDetailsModal] Transitioning to level 4 from level 3:', {
       employeeName: context.employeeName,
@@ -775,20 +766,11 @@ async function handleDepartmentClickFromLevel1(department) {
   }
 
   try {
-    // Импортировать функции создания контекста и фильтрации
-    const { 
-      createContextFromLevel1Department,
-      filterTicketsByContext 
-    } = await import('@/utils/graph-state/ticketListUtils.js');
+    // Импортировать функции создания контекста
+    const { createContextFromLevel1Department } = await import('@/utils/graph-state/ticketListUtils.js');
     
-    // Создать контекст перехода на уровень 4
-    let context = createContextFromLevel1Department(level1Data.value, department);
-    
-    // Если тикеты не переданы в контексте, фильтруем из snapshot
-    if (!context.tickets || context.tickets.length === 0) {
-      // Фильтровать тикеты стадии по заказчику
-      context.tickets = await filterTicketsByContext(context);
-    }
+    // Создать контекст перехода на уровень 4 (функция уже фильтрует тикеты)
+    const context = createContextFromLevel1Department(level1Data.value, department);
     
     console.log('[EmployeeDetailsModal] Transitioning to level 4 from level 1 (department):', {
       stageName: context.stageName,

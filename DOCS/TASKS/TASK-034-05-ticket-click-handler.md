@@ -653,3 +653,4 @@ import { useNotifications } from '@/composables/useNotifications.js';
 
 **Автор:** Технический писатель  
 **Исполнитель:** Bitrix24 Программист (Vue.js)
+
