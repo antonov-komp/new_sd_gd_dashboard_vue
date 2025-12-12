@@ -51,7 +51,7 @@
 <script>
 import { computed, ref } from 'vue';
 import { DISABLE_TICKET_DRAG, getTicketIframeUrl } from '@/services/dashboard-sector-1c/utils/constants.js';
-import { parseBitrixDate, formatDate, getDateAccentCategory } from '@/services/dashboard-sector-1c/utils/date-utils.js';
+import { parseBitrixDate, formatDate, getDateAccentCategory, formatDateRelative } from '@/services/dashboard-sector-1c/utils/date-utils.js';
 import { DATE_ACCENT_CONFIG } from '@/services/dashboard-sector-1c/utils/date-accent-config.js';
 
 /**
@@ -185,12 +185,18 @@ export default {
     }));
 
     /**
-     * Отформатированная дата создания
+     * Отформатированная дата создания с относительным форматированием
+     * 
+     * Для недавних дат показывает "Сегодня" или "Вчера",
+     * для остальных - формат DD.MM.YYYY
      */
     const formattedCreatedDate = computed(() => {
       if (!props.ticket.createdAt) return '';
       const date = parseBitrixDate(props.ticket.createdAt);
-      return formatDate(date);
+      if (!date) return '';
+      
+      // Использование относительного форматирования
+      return formatDateRelative(date);
     });
 
     /**

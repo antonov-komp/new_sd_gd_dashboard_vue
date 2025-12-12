@@ -23,7 +23,10 @@ export const DATE_ACCENT_CATEGORIES = {
   /** Сегодня */
   TODAY: 'today',
   
-  /** На этой неделе (не сегодня) */
+  /** Вчера */
+  YESTERDAY: 'yesterday',
+  
+  /** На этой неделе (не сегодня, не вчера) */
   THIS_WEEK: 'this_week',
   
   /** На прошлой неделе */
@@ -64,6 +67,13 @@ export const DATE_ACCENT_CONFIG = {
     color: '#28a745',           // Зелёный (Bootstrap success)
     backgroundColor: '#d4edda',  // Светло-зелёный фон
     textColor: '#155724'         // Тёмно-зелёный текст
+  },
+  
+  [DATE_ACCENT_CATEGORIES.YESTERDAY]: {
+    label: 'ВЧЕРА',
+    color: '#20c997',           // Бирюзовый (Bootstrap teal)
+    backgroundColor: '#d1f2eb',  // Светло-бирюзовый фон
+    textColor: '#0c5460'         // Тёмно-бирюзовый текст
   },
   
   [DATE_ACCENT_CATEGORIES.THIS_WEEK]: {
