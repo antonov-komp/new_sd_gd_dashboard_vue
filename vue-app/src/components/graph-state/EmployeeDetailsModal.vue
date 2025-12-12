@@ -130,6 +130,7 @@
                       <tr>
                         <th class="col-department">Заказчик</th>
                         <th class="col-count">Количество тикетов</th>
+                        <th class="col-action"></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -137,12 +138,17 @@
                         v-for="(department, index) in level1Departments"
                         :key="index"
                         class="department-row"
+                        @click.stop="handleDepartmentClickFromLevel1(department)"
+                        title="Кликните для просмотра тикетов"
                       >
                         <td class="col-department">
                           <span class="department-name">{{ department.departmentName }}</span>
                         </td>
                         <td class="col-count">
                           <span class="count-value">{{ department.count }}</span>
+                        </td>
+                        <td class="col-action">
+                          <span class="department-arrow">→</span>
                         </td>
                       </tr>
                     </tbody>
@@ -744,6 +750,56 @@ async function handleDepartmentClickFromLevel3(department) {
     await goToLevel4(context);
   } catch (error) {
     console.error('[EmployeeDetailsModal] Error transitioning to level 4 from level 3:', error);
+    notifications.error('Ошибка перехода на список тикетов: ' + error.message);
+  }
+}
+
+/**
+ * Обработка клика на строку заказчика в виде "По заказчикам" (уровень 1)
+ * 
+ * Переходит на уровень 4 со списком всех тикетов стадии у выбранного заказчика
+ * 
+ * @param {Object} department - Объект заказчика
+ */
+async function handleDepartmentClickFromLevel1(department) {
+  if (!department || department.count === 0) {
+    notifications.info(`У заказчика "${department?.departmentName || 'неизвестный'}" нет тикетов`);
+    return;
+  }
+
+  // Проверить наличие данных уровня 1
+  if (!level1Data.value) {
+    console.error('[EmployeeDetailsModal] Level 1 data not found');
+    notifications.error('Ошибка: данные уровня 1 не найдены');
+    return;
+  }
+
+  try {
+    // Импортировать функции создания контекста и фильтрации
+    const { 
+      createContextFromLevel1Department,
+      filterTicketsByContext 
+    } = await import('@/utils/graph-state/ticketListUtils.js');
+    
+    // Создать контекст перехода на уровень 4
+    let context = createContextFromLevel1Department(level1Data.value, department);
+    
+    // Если тикеты не переданы в контексте, фильтруем из snapshot
+    if (!context.tickets || context.tickets.length === 0) {
+      // Фильтровать тикеты стадии по заказчику
+      context.tickets = await filterTicketsByContext(context);
+    }
+    
+    console.log('[EmployeeDetailsModal] Transitioning to level 4 from level 1 (department):', {
+      stageName: context.stageName,
+      departmentName: context.departmentName,
+      ticketsCount: context.tickets.length
+    });
+
+    // Перейти на уровень 4
+    await goToLevel4(context);
+  } catch (error) {
+    console.error('[EmployeeDetailsModal] Error transitioning to level 4 from level 1 (department):', error);
     notifications.error('Ошибка перехода на список тикетов: ' + error.message);
   }
 }
@@ -1614,6 +1670,35 @@ function close() {
 
 .departments-table tbody tr:first-child:hover {
   background-color: var(--b24-primary-light, #cfe2ff);
+}
+
+/* Стилизация кликабельных строк уровня 1 (По заказчикам) */
+.level-1 .view-departments .department-row {
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.level-1 .view-departments .department-row:hover {
+  background-color: var(--b24-bg-light, #f3f4f6);
+  transform: translateX(2px);
+}
+
+.level-1 .view-departments .col-action {
+  width: 40px;
+  text-align: center;
+}
+
+.level-1 .view-departments .department-arrow {
+  font-size: 18px;
+  color: var(--b24-text-secondary, #6b7280);
+  opacity: 0.6;
+  transition: all 0.2s ease;
+}
+
+.level-1 .view-departments .department-row:hover .department-arrow {
+  opacity: 1;
+  color: var(--b24-primary, #007bff);
+  transform: translateX(4px);
 }
 
 /* Анимации переходов между уровнями */
