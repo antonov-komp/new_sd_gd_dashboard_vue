@@ -785,3 +785,4 @@ console.assert(count2 === 2, 'На позиции 0 должно быть 2 пе
 **Реализовано:** Утилита lineChartUtils.js создана, функции findOverlappingPoints и getOverlapCount реализованы
 
 
+

@@ -544,3 +544,4 @@ try {
 **Реализовано:** Плагин интегрирован в GraphStateChart.vue, зарегистрирован через ChartJS.register()
 
 
+

@@ -585,3 +585,4 @@ window.open(iframeUrl, '_blank');
 **Исполнитель:** Bitrix24 Программист (Vue.js)
 
 
+

@@ -536,3 +536,4 @@ export function getDateAccentCategory(createdDate, currentDate = new Date()) {
 - `vue-app/src/services/dashboard-sector-1c/utils/date-utils.js` — файл для изменений
 
 
+
