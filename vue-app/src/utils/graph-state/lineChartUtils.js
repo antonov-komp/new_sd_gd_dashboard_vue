@@ -476,10 +476,11 @@ export function calculatePointJitter(chart, positionIndex, threshold = 0.5) {
     
     if (groupPoints.length > 1) {
       // Применить смещение только если точек больше одной
-      const jitterStep = 2.5; // Шаг смещения в пикселях
+      // Увеличено смещение для лучшей видимости (было 2.5px, стало 4px)
+      const jitterStep = 4; // Шаг смещения в пикселях
       
       groupPoints.forEach((point, index) => {
-        // Равномерное распределение: для 3 точек: -2.5, 0, +2.5
+        // Равномерное распределение: для 2 точек: -2, +2; для 3 точек: -4, 0, +4
         const offset = (index - (groupPoints.length - 1) / 2) * jitterStep;
         jitterResults.push({
           datasetIndex: point.datasetIndex,

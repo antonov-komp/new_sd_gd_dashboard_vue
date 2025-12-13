@@ -77,8 +77,8 @@ export const pointLabelsPlugin = {
           const y = point._jitteredY !== undefined ? point._jitteredY : point.y;
           
           // Позиция подписи (справа от точки с небольшим смещением)
-          const labelX = x + 6; // Отступ справа от точки
-          const labelY = y - 4; // Небольшое смещение вверх
+          const labelX = x + 8; // Увеличен отступ справа от точки для лучшей видимости (было 6)
+          const labelY = y - 5; // Увеличен отступ вверх для лучшей видимости (было 4)
           
           // Форматирование значения (целое число без десятичных знаков)
           const labelText = String(Math.round(value));
@@ -88,26 +88,32 @@ export const pointLabelsPlugin = {
           
           try {
             // Измерение текста для правильного размера фона
-            ctx.font = '10px Arial, sans-serif';
+            ctx.font = '11px Arial, sans-serif'; // Соответствует размеру шрифта при отрисовке
             ctx.textAlign = 'left';
             ctx.textBaseline = 'middle';
             const textMetrics = ctx.measureText(labelText);
             const textWidth = textMetrics.width;
-            const textHeight = 10; // Высота текста
+            const textHeight = 11; // Высота текста (соответствует размеру шрифта)
             
             // Отрисовка фона для читаемости
-            const padding = 2;
+            const padding = 3; // Увеличен padding для лучшей читаемости (было 2)
             const bgX = labelX - padding;
             const bgY = labelY - textHeight / 2 - padding;
             const bgWidth = textWidth + padding * 2;
             const bgHeight = textHeight + padding * 2;
             
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'; // Белый фон с прозрачностью
+            // Улучшенный фон с обводкой для лучшей видимости
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.95)'; // Более непрозрачный фон (было 0.8)
             ctx.fillRect(bgX, bgY, bgWidth, bgHeight);
+            
+            // Добавляем обводку для лучшей видимости
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(bgX, bgY, bgWidth, bgHeight);
             
             // Отрисовка текста
             ctx.fillStyle = pointColor;
-            ctx.font = '10px Arial, sans-serif';
+            ctx.font = '11px Arial, sans-serif'; // Увеличен размер шрифта для лучшей читаемости (было 10px)
             ctx.textAlign = 'left';
             ctx.textBaseline = 'middle';
             ctx.fillText(labelText, labelX, labelY);

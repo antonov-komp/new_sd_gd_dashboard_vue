@@ -150,7 +150,8 @@ export const pointJitterPlugin = {
           try {
             // Получить стиль точки из dataset
             const pointStyle = dataset.pointStyle || 'circle';
-            const pointRadius = dataset.pointRadius || 6;
+            // Увеличен размер точек для лучшей видимости при смещении
+            const pointRadius = (dataset.pointRadius || 7) + 1; // +1px для смещённых точек
             const pointBackgroundColor = Array.isArray(dataset.pointBackgroundColor)
               ? dataset.pointBackgroundColor[dataIndex] || dataset.pointBackgroundColor[0]
               : dataset.pointBackgroundColor;

@@ -155,6 +155,8 @@ import {
   formatEmployeeProgressBarData
 } from '@/utils/graph-state/employeeChartUtils.js';
 import { overlappingPointsPlugin } from './plugins/overlappingPointsPlugin.js';
+import { pointJitterPlugin } from './plugins/pointJitterPlugin.js';
+import { pointLabelsPlugin } from './plugins/pointLabelsPlugin.js';
 
 const cssVar = (name, fallback) => {
   if (typeof window === 'undefined') {
@@ -1308,8 +1310,8 @@ function prepareChartData(snapshotsData) {
       }),
       pointBackgroundColor: Array.isArray(pointBackgroundColor) ? pointBackgroundColor : pointBackgroundColor,
       pointBorderColor: Array.isArray(borderColor) ? borderColor : borderColor,
-      pointRadius: 6,
-      pointHoverRadius: 8,
+      pointRadius: 7, // Увеличен размер точек для лучшей видимости (было 6)
+      pointHoverRadius: 10, // Увеличен размер при наведении (было 8)
       fill: chartType.value === 'line' ? false : true,
       tension: chartType.value === 'line' ? 0.4 : 0,
       meta: meta // Метаданные о сотрудниках для линейного графика
@@ -1529,7 +1531,7 @@ watch(comparisonType, () => {
 
 .chart-container {
   position: relative;
-  height: 300px;
+  height: 400px; /* Увеличена высота графика для лучшей видимости точек (было 300px) */
   width: 100%;
 }
 
@@ -1690,9 +1692,9 @@ watch(comparisonType, () => {
 .chart-canvas-container {
   position: relative;
   width: 100%;
-  height: 380px; /* Увеличена высота для размещения подписей */
-  max-height: 380px;
-  min-height: 380px;
+  height: 450px; /* Увеличена высота для лучшей видимости точек и подписей (было 380px) */
+  max-height: 450px;
+  min-height: 450px;
   overflow: visible; /* Разрешаем отображение подписей за пределами контейнера */
   padding-bottom: 0;
   margin-bottom: 0;
