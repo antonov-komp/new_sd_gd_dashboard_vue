@@ -320,5 +320,198 @@ export function findOverlappingPoints(chart, threshold = 0.5) {
   return overlaps;
 }
 
+/**
+ * Группирует точки по значениям Y для вычисления смещения
+ * 
+ * @param {Array} points - Массив точек с информацией о datasetIndex, value, x, y
+ * @param {number} threshold - Порог для определения одинаковых значений
+ * @returns {Array} Массив групп точек
+ */
+function groupPointsByValue(points, threshold) {
+  const groups = [];
+  
+  points.forEach(point => {
+    let foundGroup = false;
+    
+    for (const group of groups) {
+      const groupY = group.y;
+      if (Math.abs(point.y - groupY) < threshold) {
+        group.points.push(point);
+        // Обновить среднее значение Y группы
+        group.y = group.points.reduce((sum, p) => sum + p.y, 0) / group.points.length;
+        foundGroup = true;
+        break;
+      }
+    }
+    
+    if (!foundGroup) {
+      groups.push({
+        points: [point],
+        y: point.y
+      });
+    }
+  });
+  
+  return groups;
+}
+
+/**
+ * Вычисляет смещение (jitter) для точек с одинаковыми значениями Y
+ * 
+ * Функция анализирует все точки на указанной временной позиции графика,
+ * группирует точки с одинаковыми или близкими значениями Y (в пределах threshold),
+ * и вычисляет оптимальное смещение по оси X для каждой точки, чтобы они не перекрывались.
+ * 
+ * @param {Object} chart - Экземпляр Chart.js (должен быть типа 'line')
+ * @param {number} positionIndex - Индекс временной позиции (0, 1, 2...)
+ * @param {number} [threshold=0.5] - Порог для определения одинаковых значений (в единицах Y)
+ * @returns {Array<Object>} Массив объектов с информацией о смещении для каждой точки
+ * @returns {number} returns[].datasetIndex - Индекс dataset точки
+ * @returns {number} returns[].jitterX - Смещение по оси X в пикселях (может быть отрицательным, 0 или положительным)
+ * @returns {number} returns[].value - Значение точки (Y-координата)
+ * 
+ * @example
+ * // Базовое использование
+ * const chart = chartInstance; // Экземпляр Chart.js линейного графика
+ * const jitter = calculatePointJitter(chart, 0, 0.5);
+ * // Возвращает массив: [
+ * //   { datasetIndex: 0, jitterX: -2, value: 10 },
+ * //   { datasetIndex: 1, jitterX: 0, value: 10 },
+ * //   { datasetIndex: 2, jitterX: 2, value: 10 }
+ * // ]
+ * 
+ * @example
+ * // Использование с кастомным threshold
+ * const jitter = calculatePointJitter(chart, 1, 1.0); // Более строгий порог
+ * 
+ * @throws {Error} Не выбрасывает ошибки, но логирует предупреждения в консоль
+ *   при невалидных входных данных.
+ * 
+ * @see {@link findOverlappingPoints} для поиска перекрывающихся точек
+ */
+export function calculatePointJitter(chart, positionIndex, threshold = 0.5) {
+  // Валидация входных данных
+  if (!chart) {
+    console.warn('calculatePointJitter: chart не передан');
+    return [];
+  }
+  
+  if (!chart.config || chart.config.type !== 'line') {
+    // Не линейный график - возвращаем пустой массив без предупреждения
+    return [];
+  }
+  
+  if (typeof positionIndex !== 'number' || positionIndex < 0) {
+    console.warn('calculatePointJitter: positionIndex должен быть неотрицательным числом');
+    return [];
+  }
+  
+  if (typeof threshold !== 'number' || threshold <= 0) {
+    console.warn('calculatePointJitter: threshold должен быть положительным числом, используется 0.5');
+    threshold = 0.5;
+  }
+  
+  const datasets = chart.data?.datasets;
+  const labels = chart.data?.labels || [];
+  
+  // Проверка наличия данных
+  if (!datasets || !Array.isArray(datasets) || datasets.length === 0) {
+    return [];
+  }
+  
+  if (!Array.isArray(labels) || positionIndex >= labels.length) {
+    return [];
+  }
+  
+  // Сбор всех точек на данной позиции
+  const points = [];
+  
+  datasets.forEach((dataset, datasetIndex) => {
+    // Проверка наличия данных в dataset
+    if (!dataset || !dataset.data || !Array.isArray(dataset.data)) {
+      return; // Пропустить dataset без данных
+    }
+    
+    const value = dataset.data[positionIndex];
+    
+    // Пропустить null, undefined, NaN
+    if (value === undefined || value === null || isNaN(value)) {
+      return;
+    }
+    
+    // Получить метаданные точки для получения координат на canvas
+    try {
+      const meta = chart.getDatasetMeta(datasetIndex);
+      if (meta && meta.data && meta.data[positionIndex]) {
+        const pointElement = meta.data[positionIndex];
+        if (pointElement && typeof pointElement.x === 'number' && typeof pointElement.y === 'number') {
+          points.push({
+            datasetIndex,
+            value: Number(value),
+            x: pointElement.x,
+            y: pointElement.y
+          });
+        }
+      }
+    } catch (error) {
+      // Пропустить dataset, если не удалось получить meta
+      console.warn(`calculatePointJitter: ошибка при получении meta для dataset ${datasetIndex}:`, error);
+    }
+  });
+  
+  // Нет точек - возвращаем пустой массив
+  if (points.length === 0) {
+    return [];
+  }
+  
+  // Группировать точки с одинаковыми значениями Y
+  const groups = groupPointsByValue(points, threshold);
+  
+  // Вычислить смещение для каждой группы
+  const jitterResults = [];
+  
+  groups.forEach(group => {
+    // group имеет структуру { points: [...], y: ... }
+    const groupPoints = group.points || [];
+    
+    if (groupPoints.length > 1) {
+      // Применить смещение только если точек больше одной
+      const jitterStep = 2.5; // Шаг смещения в пикселях
+      
+      groupPoints.forEach((point, index) => {
+        // Равномерное распределение: для 3 точек: -2.5, 0, +2.5
+        const offset = (index - (groupPoints.length - 1) / 2) * jitterStep;
+        jitterResults.push({
+          datasetIndex: point.datasetIndex,
+          jitterX: offset,
+          value: point.value
+        });
+      });
+    } else if (groupPoints.length === 1) {
+      // Для одиночных точек смещение не нужно
+      jitterResults.push({
+        datasetIndex: groupPoints[0].datasetIndex,
+        jitterX: 0,
+        value: groupPoints[0].value
+      });
+    }
+  });
+  
+  // Также добавить точки, которые не попали ни в одну группу (не перекрываются)
+  // Это точки, которые были в исходном массиве, но не в группах
+  const processedDatasetIndices = new Set(jitterResults.map(r => r.datasetIndex));
+  points.forEach(point => {
+    if (!processedDatasetIndices.has(point.datasetIndex)) {
+      jitterResults.push({
+        datasetIndex: point.datasetIndex,
+        jitterX: 0,
+        value: point.value
+      });
+    }
+  });
+  
+  return jitterResults;
+}
+
 
 
