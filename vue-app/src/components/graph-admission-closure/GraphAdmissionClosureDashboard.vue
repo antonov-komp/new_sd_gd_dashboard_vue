@@ -108,16 +108,17 @@ async function loadData() {
   isLoading.value = true;
   error.value = null;
   try {
-    // Используем выбранную неделю или вычисляем текущую
+    // Используем выбранную неделю или вычисляем текущую неделю
     let weekStartUtc, weekEndUtc;
     
     if (selectedWeek.value) {
       weekStartUtc = selectedWeek.value.startUtc;
       weekEndUtc = selectedWeek.value.endUtc;
     } else {
-      const period = getPeriodBounds();
-      weekStartUtc = period.weekStartUtc;
-      weekEndUtc = period.weekEndUtc;
+      // При первом открытии всегда используем текущую неделю
+      const currentWeek = getCurrentWeekBounds();
+      weekStartUtc = currentWeek.weekStartUtc;
+      weekEndUtc = currentWeek.weekEndUtc;
     }
     
     const { meta, data } = await fetchAdmissionClosureStats({
@@ -188,6 +189,26 @@ function applyFilters() {
 onMounted(() => {
   loadData();
 });
+
+/**
+ * Получает границы текущей недели (ISO-8601, пн-вс, UTC)
+ */
+function getCurrentWeekBounds() {
+  const now = new Date();
+  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const day = d.getUTCDay();
+  const diff = d.getUTCDate() - day + (day === 0 ? -6 : 1); // Понедельник
+  
+  const weekStart = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), diff, 0, 0, 0));
+  const weekEnd = new Date(weekStart);
+  weekEnd.setUTCDate(weekEnd.getUTCDate() + 6);
+  weekEnd.setUTCHours(23, 59, 59, 999);
+  
+  return {
+    weekStartUtc: weekStart.toISOString(),
+    weekEndUtc: weekEnd.toISOString()
+  };
+}
 
 /**
  * Рассчитывает границы периода в UTC на основе выбранного фильтра.
