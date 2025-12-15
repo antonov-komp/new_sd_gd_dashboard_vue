@@ -87,15 +87,21 @@ try {
     // Границы недели
     [$weekStart, $weekEnd] = getWeekBounds($weekStartParam, $weekEndParam);
 
-    // Опорные значения
+    // Опорные значения (совпадают с модулями 1/2)
+    $targetStages = [
+        'DT140_12:UC_0VHWE2',   // formed
+        'DT140_12:PREPARATION', // review
+        'DT140_12:CLIENT'       // execution
+    ];
     $closingStages = [
         'DT140_12:SUCCESS',
         'DT140_12:FAIL',
         'DT140_12:UC_0GBU8Z'
     ];
+    $allStages = array_values(array_unique(array_merge($targetStages, $closingStages)));
     $keeperId = 1051; // KEEPER_OBJECTS_ID
 
-    // Запрос всех элементов смарт-процесса 140, фильтр по продукту как первый шаг
+    // Запрос элементов смарт-процесса 140, как в TicketRepository: targetStages + closingStages
     $entityTypeId = 140;
     $pageSize = 50;
     $start = 0;
@@ -105,12 +111,16 @@ try {
     do {
         $result = CRest::call('crm.item.list', [
             'entityTypeId' => $entityTypeId,
+            'filter' => [
+                'stageId' => $allStages
+            ],
             'select' => [
                 'id',
                 'title',
                 'stageId',
                 'assignedById',
                 'createdTime',
+                'updatedTime',
                 'movedTime',
                 'UF_CRM_7_TYPE_PRODUCT',
                 'ufCrm7TypeProduct'
