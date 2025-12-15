@@ -195,35 +195,28 @@ try {
 
     // Фильтруем по product=1C (первым шагом, как в модулях 1/2)
     foreach ($allTickets as $item) {
-
-        if (isset($result['error'])) {
-            throw new Exception($result['error_description'] ?? $result['error']);
+        // Фильтр product первым шагом
+        $tagRaw = $item['UF_CRM_7_TYPE_PRODUCT'] ?? $item['ufCrm7TypeProduct'] ?? null;
+        $tags = [];
+        if (is_array($tagRaw)) {
+            $tags = $tagRaw;
+        } elseif (is_string($tagRaw)) {
+            $parts = array_map('trim', explode(',', $tagRaw));
+            $tags = $parts;
+        }
+        $normalized = array_map(function ($v) {
+            return mb_strtoupper(str_replace('С', 'C', trim((string)$v)));
+        }, $tags);
+        $is1C = in_array('1C', $normalized, true);
+        if (!$is1C && mb_strtoupper($product) === '1C') {
+            continue;
         }
 
-        $items = $result['result']['items'] ?? [];
-        foreach ($items as $item) {
-            // Фильтр product первым шагом
-            $tagRaw = $item['UF_CRM_7_TYPE_PRODUCT'] ?? $item['ufCrm7TypeProduct'] ?? null;
-            $tags = [];
-            if (is_array($tagRaw)) {
-                $tags = $tagRaw;
-            } elseif (is_string($tagRaw)) {
-                $parts = array_map('trim', explode(',', $tagRaw));
-                $tags = $parts;
-            }
-            $normalized = array_map(function ($v) {
-                return mb_strtoupper(str_replace('С', 'C', trim((string)$v)));
-            }, $tags);
-            $is1C = in_array('1C', $normalized, true);
-            if (!$is1C && mb_strtoupper($product) === '1C') {
-                continue;
-            }
-
-            if ($debug && count($debugRaw) < 10) {
-                $debugRaw[] = $item;
-            }
-            $tickets[] = $item;
+        if ($debug && count($debugRaw) < 10) {
+            $debugRaw[] = $item;
         }
+        $tickets[] = $item;
+    }
 
     // Агрегации
     $newCount = 0;
