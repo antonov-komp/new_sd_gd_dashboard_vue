@@ -48,53 +48,66 @@
       
       <!-- Секция: Период -->
       <div class="filter-section">
-        <h3 class="section-title">
-          <span class="section-icon">📅</span>
-          Период
-        </h3>
-        <div class="section-content">
-          <select
-            :value="dateRange"
-            @change="handleDateRangeChange($event.target.value)"
-            class="date-range-select"
-          >
-            <option value="last-week">Последняя неделя</option>
-            <option value="last-2-weeks">Последние 2 недели</option>
-            <option value="last-month">Последний месяц</option>
-            <option value="custom">Произвольный период</option>
-          </select>
-          
-          <!-- Календарь для произвольного периода -->
-          <div v-if="dateRange === 'custom'" class="custom-date-range">
-            <div class="date-range-inputs">
-              <div class="date-input-group">
-                <label>С:</label>
-                <input
-                  type="date"
-                  :value="customDateRange.startDate"
-                  @change="handleCustomDateChange('startDate', $event.target.value)"
-                  :max="customDateRange.endDate || maxDate"
-                  class="date-input"
-                />
-              </div>
-              <div class="date-input-group">
-                <label>По:</label>
-                <input
-                  type="date"
-                  :value="customDateRange.endDate"
-                  @change="handleCustomDateChange('endDate', $event.target.value)"
-                  :min="customDateRange.startDate || minDate"
-                  :max="maxDate"
-                  class="date-input"
-                />
-              </div>
-            </div>
-            <small v-if="dateRangeError" class="filter-error">{{ dateRangeError }}</small>
-            <small v-else class="filter-hint">
-              Выберите начальную и конечную дату для отображения данных
-            </small>
-          </div>
+        <!-- Выбор недели (барабан прокрутки) -->
+        <div v-if="weekPickerMode" class="section-content">
+          <WeekPicker
+            :selectedWeek="selectedWeek"
+            :weeksCount="weeksCount"
+            @update:selectedWeek="handleWeekChange"
+            @change="handleWeekChange"
+          />
         </div>
+        
+        <!-- Обычный выбор периода -->
+        <template v-else>
+          <h3 class="section-title">
+            <span class="section-icon">📅</span>
+            Период
+          </h3>
+          <div class="section-content">
+            <select
+              :value="dateRange"
+              @change="handleDateRangeChange($event.target.value)"
+              class="date-range-select"
+            >
+              <option value="last-week">Последняя неделя</option>
+              <option value="last-2-weeks">Последние 2 недели</option>
+              <option value="last-month">Последний месяц</option>
+              <option value="custom">Произвольный период</option>
+            </select>
+            
+            <!-- Календарь для произвольного периода -->
+            <div v-if="dateRange === 'custom'" class="custom-date-range">
+              <div class="date-range-inputs">
+                <div class="date-input-group">
+                  <label>С:</label>
+                  <input
+                    type="date"
+                    :value="customDateRange.startDate"
+                    @change="handleCustomDateChange('startDate', $event.target.value)"
+                    :max="customDateRange.endDate || maxDate"
+                    class="date-input"
+                  />
+                </div>
+                <div class="date-input-group">
+                  <label>По:</label>
+                  <input
+                    type="date"
+                    :value="customDateRange.endDate"
+                    @change="handleCustomDateChange('endDate', $event.target.value)"
+                    :min="customDateRange.startDate || minDate"
+                    :max="maxDate"
+                    class="date-input"
+                  />
+                </div>
+              </div>
+              <small v-if="dateRangeError" class="filter-error">{{ dateRangeError }}</small>
+              <small v-else class="filter-hint">
+                Выберите начальную и конечную дату для отображения данных
+              </small>
+            </div>
+          </div>
+        </template>
       </div>
     </div>
   </div>
@@ -110,6 +123,7 @@
 import { computed, ref } from 'vue';
 import EmployeeSelect from './EmployeeSelect.vue';
 import StageSelect from './StageSelect.vue';
+import WeekPicker from './WeekPicker.vue';
 
 const props = defineProps({
   /**
@@ -161,6 +175,27 @@ const props = defineProps({
   hideStages: {
     type: Boolean,
     default: false
+  },
+  /**
+   * Режим выбора недели (барабан прокрутки вместо обычного выбора периода)
+   */
+  weekPickerMode: {
+    type: Boolean,
+    default: false
+  },
+  /**
+   * Выбранная неделя (объект с weekNumber, startUtc, endUtc)
+   */
+  selectedWeek: {
+    type: Object,
+    default: null
+  },
+  /**
+   * Количество недель для отображения в барабане
+   */
+  weeksCount: {
+    type: Number,
+    default: 52
   }
 });
 
@@ -169,6 +204,7 @@ const emit = defineEmits([
   'update:employees',
   'update:dateRange',
   'update:customDateRange',
+  'update:selectedWeek',
   'reset',
   'apply'
 ]);
@@ -253,6 +289,14 @@ function handleCustomDateChange(field, value) {
   
   dateRangeError.value = null;
   emit('update:customDateRange', newRange);
+  emit('apply');
+}
+
+/**
+ * Обработка изменения недели
+ */
+function handleWeekChange(week) {
+  emit('update:selectedWeek', week);
   emit('apply');
 }
 

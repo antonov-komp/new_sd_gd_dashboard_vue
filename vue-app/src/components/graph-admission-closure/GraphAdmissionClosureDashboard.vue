@@ -21,10 +21,14 @@
             :customDateRange="filters.customDateRange"
             :hasActiveFilters="hasActiveFilters"
             :hideStages="true"
+            :weekPickerMode="true"
+            :selectedWeek="selectedWeek"
+            :weeksCount="52"
             @update:stages="updateStages"
             @update:employees="updateEmployees"
             @update:dateRange="updateDateRange"
             @update:customDateRange="updateCustomDateRange"
+            @update:selectedWeek="updateSelectedWeek"
             @reset="resetFilters"
             @apply="applyFilters"
           />
@@ -91,6 +95,9 @@ const filters = ref({
   }
 });
 
+// Выбранная неделя для барабана прокрутки
+const selectedWeek = ref(null);
+
 const hasActiveFilters = computed(() => {
   const hasCustomDates = filters.value.customDateRange.startDate || filters.value.customDateRange.endDate;
   const onlyAllEmployees = filters.value.employees.length === 1 && filters.value.employees.includes('all');
@@ -101,14 +108,34 @@ async function loadData() {
   isLoading.value = true;
   error.value = null;
   try {
-    const period = getPeriodBounds();
+    // Используем выбранную неделю или вычисляем текущую
+    let weekStartUtc, weekEndUtc;
+    
+    if (selectedWeek.value) {
+      weekStartUtc = selectedWeek.value.startUtc;
+      weekEndUtc = selectedWeek.value.endUtc;
+    } else {
+      const period = getPeriodBounds();
+      weekStartUtc = period.weekStartUtc;
+      weekEndUtc = period.weekEndUtc;
+    }
+    
     const { meta, data } = await fetchAdmissionClosureStats({
       product: '1C',
-      weekStartUtc: period.weekStartUtc,
-      weekEndUtc: period.weekEndUtc
+      weekStartUtc,
+      weekEndUtc
     });
     chartMeta.value = meta;
     chartData.value = data;
+    
+    // Обновляем selectedWeek из meta, если она не была установлена
+    if (!selectedWeek.value && meta) {
+      selectedWeek.value = {
+        weekNumber: meta.weekNumber,
+        startUtc: meta.weekStartUtc,
+        endUtc: meta.weekEndUtc
+      };
+    }
   } catch (err) {
     error.value = err instanceof Error ? err : new Error('Неизвестная ошибка загрузки');
     console.error('[GraphAdmissionClosureDashboard] loadData error:', err);
@@ -131,6 +158,10 @@ function updateDateRange(newRange) {
 
 function updateCustomDateRange(newRange) {
   filters.value.customDateRange = newRange;
+}
+
+function updateSelectedWeek(week) {
+  selectedWeek.value = week;
 }
 
 function resetFilters() {
@@ -231,7 +262,6 @@ function getPeriodBounds() {
 }
 
 .filters-container > * {
-  max-width: 800px;
   width: 100%;
 }
 
