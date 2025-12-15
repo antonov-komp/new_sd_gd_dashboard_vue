@@ -214,34 +214,95 @@
               <button class="modal-close" @click="close" aria-label="Закрыть">×</button>
             </div>
             <div class="modal-body">
-              <div class="stage-info">
+              <div class="stage-info level2-stage-row">
                 <span class="stage-badge">{{ level2Data.stageName }}</span>
+                <div class="level2-sort-switch" role="group" aria-label="Переключение сортировки">
+                  <button
+                    :class="['level2-sort-btn', { active: level2ViewMode === 'time' }]"
+                    @click="level2ViewMode = 'time'"
+                    title="Сортировка по времени"
+                  >
+                    По времени
+                  </button>
+                  <button
+                    :class="['level2-sort-btn', { active: level2ViewMode === 'departments' }]"
+                    @click="level2ViewMode = 'departments'"
+                    title="Сортировка по заказчикам"
+                  >
+                    По заказчикам
+                  </button>
+                </div>
               </div>
               
-              <div v-if="level2Data.dateCategories.length === 0" class="no-data">
-                Нет данных о тикетах
-              </div>
-              
-              <div v-else class="date-categories-list">
-                <div
-                  v-for="category in level2Data.dateCategories"
-                  :key="category.category"
-                  class="category-item"
-                  @click.stop="handleCategoryClick(category)"
-                >
-                  <span class="category-label">{{ category.label }}</span>
-                  <div class="category-progress">
-                    <div
-                      class="progress-bar"
-                      :style="{
-                        width: category.progressBarWidth + '%',
-                        backgroundColor: category.progressBarColor
-                      }"
-                    ></div>
+              <div v-if="level2ViewMode === 'time'">
+                <div v-if="level2Data.dateCategories.length === 0" class="no-data">
+                  Нет данных о тикетах
+                </div>
+                
+                <div v-else class="date-categories-list">
+                  <div
+                    v-for="category in level2Data.dateCategories"
+                    :key="category.category"
+                    class="category-item"
+                    @click.stop="handleCategoryClick(category)"
+                  >
+                    <span class="category-label">{{ category.label }}</span>
+                    <div class="category-progress">
+                      <div
+                        class="progress-bar"
+                        :style="{
+                          width: category.progressBarWidth + '%',
+                          backgroundColor: category.progressBarColor
+                        }"
+                      ></div>
+                    </div>
+                    <span class="category-count">
+                      {{ category.count }} тикетов ({{ category.percentage }}%)
+                    </span>
                   </div>
-                  <span class="category-count">
-                    {{ category.count }} тикетов ({{ category.percentage }}%)
-                  </span>
+                </div>
+              </div>
+
+              <div v-else class="view-departments">
+                <div v-if="!level2Data.departments || level2Data.departments.length === 0" class="no-data">
+                  Для выбранного сотрудника заказчики не найдены
+                  <button
+                    class="btn-retry-stage"
+                    @click="handleEmployeeClick({ id: level2Data.employeeId, name: level2Data.employeeName })"
+                  >
+                    Обновить
+                  </button>
+                </div>
+
+                <div v-else class="departments-table-container">
+                  <table class="departments-table">
+                    <thead>
+                      <tr>
+                        <th class="col-department">Заказчик</th>
+                        <th class="col-count">Количество тикетов</th>
+                        <th class="col-action"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr
+                        v-for="(department, index) in level2Data.departments"
+                        :key="index"
+                        class="department-row"
+                        @click.stop="handleEmployeeDepartmentClick(department)"
+                        title="Кликните для просмотра тикетов"
+                      >
+                        <td class="col-department">
+                          <span class="department-name">{{ department.departmentName }}</span>
+                        </td>
+                        <td class="col-count">
+                          <span class="count-value">{{ department.count }}</span>
+                        </td>
+                        <td class="col-action">
+                          <span class="department-arrow">→</span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>
@@ -411,6 +472,7 @@ import {
   groupTicketsByDateCategory,
   groupTicketsByDepartment
 } from '@/utils/graph-state/popupNavigationUtils.js';
+import { filterTicketsByDepartment } from '@/utils/graph-state/ticketListUtils.js';
 import { useNotifications } from '@/composables/useNotifications.js';
 import TicketDetailsService from '@/services/graph-state/TicketDetailsService.js';
 import { mapStageId } from '@/services/dashboard-sector-1c/mappers/stage-mapper.js';
@@ -492,6 +554,11 @@ const notifications = useNotifications();
  * Текущий уровень попапа (1, 2, 3, или 4)
  */
 const popupLevel = ref(1);
+
+/**
+ * Режим сортировки уровня 2 (для выбранного сотрудника): 'time' | 'departments'
+ */
+const level2ViewMode = ref('time');
 
 /**
  * Режим отображения уровня 1: 'employees' | 'time' | 'departments'
@@ -660,6 +727,7 @@ function initializeLevel1() {
   level3Data.value = null;
   level4Data.value = null;
   popupLevel.value = 1;
+  level2ViewMode.value = 'time';
   viewMode.value = 'employees';
   
   // Загрузить данные для других видов отображения
@@ -960,6 +1028,7 @@ async function reloadLevel1ForStage(nextStageId) {
     level3Data.value = null;
     level4Data.value = null;
     popupLevel.value = 1;
+    level2ViewMode.value = 'time';
     viewMode.value = 'employees';
 
     // Перезагрузка доп. представлений уровня 1
@@ -1215,6 +1284,13 @@ async function handleEmployeeClick(employee, event = null) {
     const dateCategories = groupTicketsByDateCategory(tickets);
     console.log('[EmployeeDetailsModal] Date categories:', dateCategories?.length || 0, dateCategories);
 
+    // Группировать по заказчикам для сотрудника (альтернативный подрежим)
+    const employeeDepartments = groupTicketsByDepartment(tickets).map(department => ({
+      ...department,
+      tickets: filterTicketsByDepartment(tickets, department.departmentName)
+    }));
+    console.log('[EmployeeDetailsModal] Employee departments:', employeeDepartments?.length || 0, employeeDepartments);
+
     // Сохранить данные уровня 2
     level2Data.value = {
       employeeId: employee.id,
@@ -1223,14 +1299,18 @@ async function handleEmployeeClick(employee, event = null) {
       stageName: level1Data.value.stageName,
       totalCount: tickets.length,
       dateCategories: dateCategories,
+      departments: employeeDepartments,
+      tickets,
       snapshot: level1Data.value.snapshot,
       ticketDetails: level1Data.value.ticketDetails
     };
+    level2ViewMode.value = 'time';
 
     console.log('[EmployeeDetailsModal] Level 2 data set:', {
       employeeName: level2Data.value.employeeName,
       totalCount: level2Data.value.totalCount,
-      dateCategoriesCount: level2Data.value.dateCategories.length
+      dateCategoriesCount: level2Data.value.dateCategories.length,
+      departmentsCount: level2Data.value.departments.length
     });
 
     // Перейти на уровень 2
@@ -1256,6 +1336,39 @@ async function handleEmployeeClick(employee, event = null) {
     console.error('[EmployeeDetailsModal] ERROR loading employee tickets:', error);
     console.error('[EmployeeDetailsModal] Error stack:', error.stack);
     notifications.error('Ошибка загрузки данных о тикетах: ' + error.message);
+  }
+}
+
+/**
+ * Обработка клика на заказчика в режиме сотрудника (переход на уровень 4)
+ * 
+ * @param {Object} department - Объект заказчика
+ */
+async function handleEmployeeDepartmentClick(department) {
+  if (!department || department.count === 0) {
+    notifications.info(`У заказчика "${department?.departmentName || 'неизвестный'}" нет тикетов`);
+    return;
+  }
+
+  if (!level2Data.value) {
+    notifications.error('Ошибка: данные сотрудника не найдены');
+    return;
+  }
+
+  try {
+    const { createContextFromLevel2Department } = await import('@/utils/graph-state/ticketListUtils.js');
+    const context = createContextFromLevel2Department(level2Data.value, department);
+
+    console.log('[EmployeeDetailsModal] Transitioning to level 4 from level 2 (department):', {
+      employeeName: context.employeeName,
+      departmentName: context.departmentName,
+      ticketsCount: context.tickets.length
+    });
+
+    await goToLevel4(context);
+  } catch (error) {
+    console.error('[EmployeeDetailsModal] Error transitioning to level 4 from level 2 (department):', error);
+    notifications.error('Ошибка перехода на список тикетов: ' + error.message);
   }
 }
 
@@ -1504,6 +1617,7 @@ function resetPopup() {
   level2Data.value = null;
   level3Data.value = null;
   level4Data.value = null;
+  level2ViewMode.value = 'time';
 }
 
 /**
@@ -1520,6 +1634,10 @@ function getEmptyStateTitle() {
 
   if (sourceLevel === 2 && employeeName && dateCategoryLabel) {
     return `Нет тикетов у ${employeeName} в категории "${dateCategoryLabel}"`;
+  }
+
+  if (sourceLevel === 2 && employeeName && departmentName) {
+    return `Нет тикетов у ${employeeName} у заказчика "${departmentName}"`;
   }
 
   if (sourceLevel === 3 && employeeName && departmentName) {
@@ -2090,6 +2208,52 @@ function handleEsc(event) {
   border-radius: var(--radius-xl, 9999px);
   font-size: 12px;
   font-weight: 600;
+}
+
+.level2-stage-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.level2-sort-switch {
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.level2-sort-btn {
+  padding: 8px 14px;
+  border-radius: var(--radius-md, 6px);
+  border: 1px solid var(--b24-border-light, #e5e7eb);
+  background: var(--b24-bg-white, #ffffff);
+  color: var(--b24-text-primary, #1f2937);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 130px;
+}
+
+.level2-sort-btn:hover {
+  border-color: var(--b24-primary, #007bff);
+  color: var(--b24-primary, #007bff);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.level2-sort-btn.active {
+  background: var(--b24-primary, #007bff);
+  color: #fff;
+  border-color: var(--b24-primary, #007bff);
+  box-shadow: 0 6px 12px rgba(0, 123, 255, 0.18);
+}
+
+.level2-sort-btn:focus-visible {
+  outline: 2px solid var(--b24-primary, #007bff);
+  outline-offset: 2px;
 }
 
 .date-categories-list {

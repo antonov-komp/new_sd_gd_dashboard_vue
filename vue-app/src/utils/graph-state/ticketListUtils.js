@@ -59,6 +59,54 @@ export function createContextFromLevel2(level2Data, category) {
 }
 
 /**
+ * Создать контекст перехода на уровень 4 из уровня 2 с сортировкой по заказчикам
+ * 
+ * Использует тикеты сотрудника на стадии и фильтрует их по выбранному заказчику.
+ * 
+ * @param {Object} level2Data - Данные уровня 2 (содержат все тикеты сотрудника)
+ * @param {Object} department - Объект заказчика из группировки
+ * @returns {Level4Context} Контекст перехода
+ */
+export function createContextFromLevel2Department(level2Data, department) {
+  // Без данных или названия заказчика возвращаем пустой контекст
+  if (!level2Data || !department) {
+    return {
+      sourceLevel: 2,
+      employeeId: level2Data?.employeeId || null,
+      employeeName: level2Data?.employeeName || null,
+      stageId: level2Data?.stageId || null,
+      stageName: level2Data?.stageName || null,
+      dateCategory: null,
+      dateCategoryLabel: null,
+      departmentName: department?.departmentName || null,
+      tickets: [],
+      snapshot: level2Data?.snapshot || null,
+      ticketDetails: level2Data?.ticketDetails || null
+    };
+  }
+
+  // Фильтруем тикеты сотрудника по выбранному заказчику
+  const departmentTickets = filterTicketsByDepartment(
+    level2Data.tickets || [],
+    department.departmentName
+  );
+
+  return {
+    sourceLevel: 2,
+    employeeId: level2Data.employeeId,
+    employeeName: level2Data.employeeName,
+    stageId: level2Data.stageId,
+    stageName: level2Data.stageName,
+    dateCategory: null,
+    dateCategoryLabel: null,
+    departmentName: department.departmentName,
+    tickets: departmentTickets,
+    snapshot: level2Data.snapshot,
+    ticketDetails: level2Data.ticketDetails
+  };
+}
+
+/**
  * Создать контекст перехода на уровень 4 из уровня 3
  * 
  * Получает тикеты сотрудника в выбранной временной градации и фильтрует по заказчику.
@@ -249,7 +297,7 @@ function filterTicketsByDateCategory(tickets, dateCategory) {
  * @param {String} departmentName - Название заказчика
  * @returns {Array} Отфильтрованные тикеты
  */
-function filterTicketsByDepartment(tickets, departmentName) {
+export function filterTicketsByDepartment(tickets, departmentName) {
   if (!tickets || tickets.length === 0) {
     return [];
   }
@@ -614,6 +662,7 @@ export async function prepareTicketsForDisplay(tickets, snapshot = null, ticketD
   console.timeEnd('[Performance] prepareTicketsForDisplay');
   return preparedTickets;
 }
+
 
 
 
