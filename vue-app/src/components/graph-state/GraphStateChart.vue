@@ -91,7 +91,10 @@
     </div>
     
     <!-- График -->
-    <div v-else-if="filteredChartData" class="chart-container">
+    <div
+      v-else-if="filteredChartData"
+      :class="['chart-container', `chart-type-${chartType}`]"
+    >
       <div class="chart-wrapper">
         <div class="chart-canvas-container">
           <component
@@ -1531,8 +1534,19 @@ watch(comparisonType, () => {
 
 .chart-container {
   position: relative;
-  height: 400px; /* Увеличена высота графика для лучшей видимости точек (было 300px) */
   width: 100%;
+  min-height: 520px;
+  padding: var(--spacing-md);
+  box-sizing: border-box;
+}
+
+.chart-container.chart-type-doughnut {
+  min-height: 420px;
+}
+
+.chart-container.chart-type-bar,
+.chart-container.chart-type-line {
+  min-height: 540px;
 }
 
 .error-container {
@@ -1578,6 +1592,20 @@ watch(comparisonType, () => {
 
 /* Адаптивность */
 @media (max-width: 768px) {
+  .chart-container {
+    min-height: 420px;
+    padding: var(--spacing-sm);
+  }
+
+  .chart-container.chart-type-bar,
+  .chart-container.chart-type-line {
+    min-height: 480px;
+  }
+
+  .chart-container.chart-type-doughnut {
+    min-height: 380px;
+  }
+
   .chart-header {
     flex-direction: column;
     align-items: flex-start;
@@ -1685,19 +1713,28 @@ watch(comparisonType, () => {
   display: flex;
   flex-direction: column;
   width: 100%;
-  min-height: 400px; /* Минимальная высота для размещения подписей */
+  min-height: 100%;
 }
 
 /* Контейнер для canvas графика */
 .chart-canvas-container {
   position: relative;
   width: 100%;
-  height: 450px; /* Увеличена высота для лучшей видимости точек и подписей (было 380px) */
-  max-height: 450px;
-  min-height: 450px;
+  min-height: 420px;
+  height: 100%;
+  max-height: none;
   overflow: visible; /* Разрешаем отображение подписей за пределами контейнера */
-  padding-bottom: 0;
+  padding-bottom: 12px;
   margin-bottom: 0;
+}
+
+.chart-container.chart-type-doughnut .chart-canvas-container {
+  min-height: 360px;
+}
+
+.chart-container.chart-type-bar .chart-canvas-container,
+.chart-container.chart-type-line .chart-canvas-container {
+  min-height: 460px;
 }
 
 /* Имена сотрудников теперь рисуются на canvas через плагин Chart.js */
@@ -1708,7 +1745,7 @@ watch(comparisonType, () => {
   justify-content: space-around;
   align-items: center;
   margin-top: 12px;
-  padding: 8px 20px;
+  padding: 12px 20px 4px;
   border-top: 1px solid var(--b24-border-light, #e5e7eb);
 }
 
@@ -1723,7 +1760,7 @@ watch(comparisonType, () => {
 
 @media (max-width: 768px) {
   .bar-chart-stage-labels {
-    padding: 6px 10px;
+    padding: 8px 10px 2px;
   }
 
   .stage-label-item {
