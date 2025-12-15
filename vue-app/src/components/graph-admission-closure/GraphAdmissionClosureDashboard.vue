@@ -101,9 +101,11 @@ async function loadData() {
   isLoading.value = true;
   error.value = null;
   try {
+    const period = getPeriodBounds();
     const { meta, data } = await fetchAdmissionClosureStats({
-      product: '1C'
-      // weekStartUtc/weekEndUtc рассчитываются на бэке по текущей неделе
+      product: '1C',
+      weekStartUtc: period.weekStartUtc,
+      weekEndUtc: period.weekEndUtc
     });
     chartMeta.value = meta;
     chartData.value = data;
@@ -149,13 +151,50 @@ function resetFilters() {
 }
 
 function applyFilters() {
-  // На первом этапе бэкенд сам считает неделю; фильтры используются для совместимости UI.
   loadData();
 }
 
 onMounted(() => {
   loadData();
 });
+
+/**
+ * Рассчитывает границы периода в UTC на основе выбранного фильтра.
+ * Неделя: пн 00:00:00 — вс 23:59:59.
+ */
+function getPeriodBounds() {
+  const tz = 'UTC';
+  const now = new Date();
+  let start = new Date(now);
+  let end = new Date(now);
+
+  switch (filters.value.dateRange) {
+    case 'last-2-weeks':
+      start.setDate(now.getDate() - 14);
+      break;
+    case 'last-month':
+      start.setMonth(now.getMonth() - 1);
+      break;
+    case 'custom':
+      if (filters.value.customDateRange.startDate) {
+        start = new Date(filters.value.customDateRange.startDate + 'T00:00:00Z');
+      }
+      if (filters.value.customDateRange.endDate) {
+        end = new Date(filters.value.customDateRange.endDate + 'T23:59:59Z');
+      }
+      break;
+    case 'last-week':
+    default:
+      start.setDate(now.getDate() - 7);
+      break;
+  }
+
+  // Нормализуем к началу/концу дней в UTC
+  const weekStartUtc = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate(), 0, 0, 0)).toISOString();
+  const weekEndUtc = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate(), 23, 59, 59)).toISOString();
+
+  return { weekStartUtc, weekEndUtc };
+}
 </script>
 
 <style scoped>
