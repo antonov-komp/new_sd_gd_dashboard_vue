@@ -82,6 +82,7 @@ try {
     $product = isset($body['product']) ? (string)$body['product'] : '1C';
     $weekStartParam = isset($body['weekStartUtc']) ? (string)$body['weekStartUtc'] : null;
     $weekEndParam = isset($body['weekEndUtc']) ? (string)$body['weekEndUtc'] : null;
+    $debug = isset($body['debug']) ? (bool)$body['debug'] : false;
 
     // Границы недели
     [$weekStart, $weekEnd] = getWeekBounds($weekStartParam, $weekEndParam);
@@ -99,6 +100,7 @@ try {
     $pageSize = 50;
     $start = 0;
     $tickets = [];
+    $debugRaw = [];
 
     do {
         $result = CRest::call('crm.item.list', [
@@ -139,6 +141,9 @@ try {
                 continue;
             }
 
+            if ($debug && count($debugRaw) < 10) {
+                $debugRaw[] = $item;
+            }
             $tickets[] = $item;
         }
 
@@ -215,7 +220,17 @@ try {
                 ];
             }, array_keys($stageAgg)),
             'responsible' => array_values($responsibleAgg)
-        ]
+        ],
+        'debug' => $debug ? [
+            'fetchedTotal' => count($tickets),
+            'sample' => array_slice($debugRaw, 0, 5),
+            'stageCounts' => $stageAgg,
+            'params' => [
+                'product' => $product,
+                'weekStartUtc' => $weekStart->format('Y-m-d\TH:i:s\Z'),
+                'weekEndUtc' => $weekEnd->format('Y-m-d\TH:i:s\Z')
+            ]
+        ] : null
     ];
 
     jsonResponse($response);
