@@ -12,8 +12,8 @@
         </div>
       </div>
 
-      <div class="dashboard-grid">
-        <div class="filters-column">
+      <div class="dashboard-layout">
+        <div class="filters-container">
           <FiltersPanel
             :stages="filters.stages"
             :employees="filters.employees"
@@ -30,7 +30,7 @@
           />
         </div>
 
-        <div class="chart-column">
+        <div class="chart-container">
           <StatusMessage
             v-if="error"
             type="error"
@@ -218,30 +218,26 @@ function getPeriodBounds() {
   color: var(--b24-text-secondary, #6b7280);
 }
 
-.dashboard-grid {
-  display: grid;
-  grid-template-columns: 320px 1fr;
-  gap: 20px;
+.dashboard-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
 }
 
-.filters-column {
-  position: sticky;
-  top: 12px;
-  align-self: flex-start;
+.filters-container {
+  display: flex;
+  justify-content: center;
+  width: 100%;
 }
 
-.chart-column {
+.filters-container > * {
+  max-width: 800px;
+  width: 100%;
+}
+
+.chart-container {
+  width: 100%;
   min-height: 360px;
-}
-
-@media (max-width: 1023px) {
-  .dashboard-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .filters-column {
-    position: static;
-  }
 }
 </style>
 
