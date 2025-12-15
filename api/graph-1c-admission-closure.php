@@ -153,8 +153,10 @@ try {
 
     foreach ($tickets as $ticket) {
         $createdTime = $ticket['createdTime'] ?? null;
-        $movedTime = $ticket['movedTime'] ?? null;
+        // Для закрытых используем movedTime, если нет — fallback на updatedTime
+        $movedTime = $ticket['movedTime'] ?? $ticket['updatedTime'] ?? null;
         $stageId = $ticket['stageId'] ?? null;
+        $stageId = $stageId ? strtoupper($stageId) : null;
         $assignedRaw = $ticket['assignedById'] ?? null;
 
         // Новые за неделю
