@@ -776,3 +776,4 @@ console.log('Registered plugins:', ChartJS.registry.plugins.getAll());
 
 
 
+
