@@ -152,6 +152,7 @@ import { useNotifications } from '@/composables/useNotifications.js';
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue';
 import StageChips from '@/components/filters/StageChips.vue';
 import EmployeeDetailsModal from '@/components/graph-state/EmployeeDetailsModal.vue';
+import { loadStageLevel1 } from '@/utils/graph-state/stageLevel1Loader.js';
 import {
   prepareLineChartEmployeeData,
   prepareBarChartEmployeeData,
@@ -381,8 +382,56 @@ const employeeLabelsPlugin = {
   }
 };
 
+/**
+ * Плагин для вывода текста в центре donut
+ */
+const doughnutCenterTextPlugin = {
+  id: 'doughnutCenterTextPlugin',
+  afterDraw: (chart) => {
+    if (chart.config.type !== 'doughnut') return;
+
+    const { ctx, chartArea, width, height } = chart;
+    if (!chart.data || !chart.data.datasets || chart.data.datasets.length === 0) return;
+
+    const meta = chart.data.datasets[0].meta;
+    const totalTickets = meta?.totals?.overall ?? null;
+    if (totalTickets === null || typeof totalTickets === 'undefined') return;
+
+    const titleLines = [
+      'Всего в секторе 1С',
+      'тикетов в работе:',
+      `${totalTickets}`
+    ];
+
+    ctx.save();
+    ctx.font = '600 16px "Roboto", sans-serif';
+    ctx.fillStyle = cssVar('--b24-text-primary', '#1f2937');
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    const centerX = (chartArea.left + chartArea.right) / 2;
+    const centerY = (chartArea.top + chartArea.bottom) / 2;
+    const lineHeight = 18;
+    const totalHeight = lineHeight * titleLines.length;
+    const startY = centerY - totalHeight / 2 + 4; // небольшая поправка вниз
+
+    titleLines.forEach((line, index) => {
+      // Уменьшаем шрифт для цифр при длинных числах
+      if (index === titleLines.length - 1 && `${line}`.length > 4) {
+        ctx.font = '700 18px "Roboto", sans-serif';
+      } else {
+        ctx.font = '600 16px "Roboto", sans-serif';
+      }
+      ctx.fillText(line, centerX, startY + index * lineHeight);
+    });
+
+    ctx.restore();
+  }
+};
+
 // Регистрация плагина глобально
 ChartJS.register(employeeLabelsPlugin);
+ChartJS.register(doughnutCenterTextPlugin);
 
 /**
  * Извлечь список доступных сотрудников из слепков
@@ -489,13 +538,19 @@ function performComparison() {
  * @param {string} label - Название этапа
  * @returns {string} Ключ этапа
  */
+function normalizeStageLabel(label) {
+  if (!label) return '';
+  return label.replace(/\s*\(\d+\)\s*$/, '').trim();
+}
+
 function getStageKeyFromLabel(label) {
+  const normalized = normalizeStageLabel(label);
   const mapping = {
     'Сформировано обращение': 'formed',
     'Рассмотрение ТЗ': 'review',
     'Исполнение': 'execution'
   };
-  return mapping[label] || 'formed';
+  return mapping[normalized] || 'formed';
 }
 
 /**
@@ -572,60 +627,14 @@ function openEmployeeDetailsModal(stageName, stageId, totalCount, employees, oth
  * @param {string} timePoint - Временная точка ('weekStart' | 'weekEnd' | 'current')
  * @param {Array} employeeData - Данные сотрудников
  */
-function openEmployeeDetailsModalForLine(stageId, timePoint, employeeData) {
-  console.log('[GraphStateChart] openEmployeeDetailsModalForLine:', { stageId, timePoint, employeeDataCount: employeeData?.length });
+async function openEmployeeDetailsModalForLine(stageId, timePoint, datasetMeta) {
+  console.log('[GraphStateChart] openEmployeeDetailsModalForLine:', { stageId, timePoint, hasMeta: !!datasetMeta });
   
   const stage = stages.find(s => s.id === stageId);
   if (!stage) {
     console.warn('[GraphStateChart] Stage not found:', stageId);
     return;
   }
-
-  const snapshot = getSnapshotByTimePoint(timePoint);
-  console.log('[GraphStateChart] Snapshot for timePoint:', timePoint, snapshot ? 'found' : 'not found');
-  
-  if (!snapshot) {
-    console.warn('[GraphStateChart] Snapshot not found for timePoint:', timePoint);
-    console.warn('[GraphStateChart] Available snapshots:', {
-      weekStart: !!snapshots.value.weekStart,
-      weekEnd: !!snapshots.value.weekEnd,
-      current: !!snapshots.value.current
-    });
-    return;
-  }
-
-  // Проверка структуры snapshot
-  console.log('[GraphStateChart] Snapshot structure:', {
-    hasTickets: !!snapshot.tickets,
-    ticketsIsArray: Array.isArray(snapshot.tickets),
-    ticketsLength: snapshot.tickets?.length || 0,
-    hasTicketIds: !!snapshot.ticketIds,
-    ticketIdsLength: snapshot.ticketIds?.length || 0,
-    hasMetadata: !!snapshot.metadata,
-    hasStatistics: !!snapshot.statistics,
-    snapshotKeys: Object.keys(snapshot),
-    snapshotType: typeof snapshot
-  });
-  
-  // Критическая проверка: snapshot должен иметь tickets
-  if (!snapshot.tickets || !Array.isArray(snapshot.tickets)) {
-    console.error('[GraphStateChart] ERROR: Snapshot does not have tickets array!');
-    console.error('[GraphStateChart] Snapshot:', snapshot);
-    notifications.warning('Слепок не содержит данных о тикетах');
-    return;
-  }
-
-  // Получить общее количество тикетов этапа
-  const totalCount = snapshot.statistics?.stages?.[stageId]?.count || 0;
-  console.log('[GraphStateChart] Total count for stage:', totalCount);
-
-  // Форматирование данных для прогресс-баров
-  const formatted = formatEmployeeProgressBarData(
-    employeeData,
-    totalCount,
-    stage.color,
-    10
-  );
 
   const switchContext = {
     graphType: 'line',
@@ -634,22 +643,47 @@ function openEmployeeDetailsModalForLine(stageId, timePoint, employeeData) {
     timePoint,
     snapshots: snapshots.value,
     meta: {
-      line: dataset.meta
+      line: datasetMeta || null,
+      doughnut: chartData.value?.datasets?.[0]?.meta || null
     },
     stageColorMap: stageColors,
     stageNameMap: stageNameMap.value
   };
 
-  console.log('[GraphStateChart] Opening modal with:', {
-    stageName: stage.name,
-    stageId,
-    totalCount,
-    employeesCount: formatted.employees?.length || 0,
-    hasSnapshot: !!snapshot,
-    snapshotHasTickets: !!snapshot.tickets
-  });
+  try {
+    const level1 = await loadStageLevel1({
+      stageId,
+      graphType: 'line',
+      timePoint,
+      snapshots: snapshots.value,
+      meta: { line: datasetMeta || null, doughnut: chartData.value?.datasets?.[0]?.meta || null },
+      stageColorMap: stageColors,
+      stageNameMap: stageNameMap.value,
+      maxVisible: 10
+    });
 
-  openEmployeeDetailsModal(stage.name, stageId, totalCount, formatted.employees, formatted.others, snapshot, null, switchContext);
+    console.log('[GraphStateChart] Opening modal with level1:', {
+      stageName: level1.stageName,
+      stageId,
+      totalCount: level1.totalCount,
+      employeesCount: level1.employees?.length || 0,
+      hasSnapshot: !!level1.snapshot
+    });
+
+    openEmployeeDetailsModal(
+      level1.stageName,
+      stageId,
+      level1.totalCount,
+      level1.employees,
+      level1.others,
+      level1.snapshot,
+      null,
+      switchContext
+    );
+  } catch (error) {
+    console.error('[GraphStateChart] Failed to open modal for line point:', error);
+    notifications.error('Не удалось открыть попап для выбранной точки графика');
+  }
 }
 
 /**
@@ -713,7 +747,7 @@ function closeEmployeeModal() {
  * @param {Array} elements - Массив элементов графика под курсором
  * @param {Object} chart - Экземпляр Chart.js
  */
-function handleLineChartClick(event, elements, chart) {
+async function handleLineChartClick(event, elements, chart) {
   if (chartType.value !== 'line' || elements.length === 0) {
     return;
   }
@@ -724,7 +758,7 @@ function handleLineChartClick(event, elements, chart) {
 
   // Получить данные этапа
   const dataset = chart.data.datasets[datasetIndex];
-  if (!dataset || !dataset.meta) {
+  if (!dataset) {
     return;
   }
 
@@ -733,15 +767,8 @@ function handleLineChartClick(event, elements, chart) {
   // Определить временную точку по индексу
   const timePoint = getTimePointFromIndex(dataIndex);
 
-  // Получить данные сотрудников из метаданных
-  const employeeData = dataset.meta?.employees?.[timePoint];
-
-  if (!employeeData || employeeData.length === 0) {
-    return;
-  }
-
-  // Открыть модальное окно с детализацией
-  openEmployeeDetailsModalForLine(stageId, timePoint, employeeData);
+  // Открыть модальное окно с детализацией через единый загрузчик
+  await openEmployeeDetailsModalForLine(stageId, timePoint, dataset.meta || null);
 }
 
 /**
@@ -916,6 +943,15 @@ const chartOptions = computed(() => {
       legend: {
         display: chartType.value !== 'bar', // Скрываем стандартную легенду для столбчатого графика
         position: chartType.value === 'doughnut' ? 'right' : 'top',
+      labels: {
+        font: {
+          size: chartType.value === 'doughnut' ? 14 : 12,
+          weight: chartType.value === 'doughnut' ? '600' : '500'
+        },
+        boxWidth: chartType.value === 'doughnut' ? 18 : 12,
+        boxHeight: chartType.value === 'doughnut' ? 18 : 12,
+        padding: chartType.value === 'doughnut' ? 14 : 10
+      },
         onClick: (e, legendItem, legend) => {
           // Для столбчатого графика - переключение видимости столбца сотрудника
           if (chartType.value === 'bar') {
@@ -1170,14 +1206,16 @@ function prepareDoughnutData(snapshotsData) {
   const backgroundColor = [];
   const borderColor = [];
   const employeesMeta = {}; // Метаданные о сотрудниках
+  const stageCounts = {};
 
   stages.forEach(stage => {
     const count = source.statistics.stages[stage.id]?.count || 0;
     if (count > 0) {
-      labels.push(stage.name);
+      labels.push(`${stage.name} (${count})`);
       data.push(count);
       backgroundColor.push(stage.color + '80'); // С прозрачностью
       borderColor.push(stage.color);
+      stageCounts[stage.id] = count;
       
       // Подготовка данных сотрудников для этапа
       const employeeData = prepareDoughnutChartEmployeeData(stage.id, source, stages);
@@ -1191,6 +1229,8 @@ function prepareDoughnutData(snapshotsData) {
     return null;
   }
 
+  const totalCount = data.reduce((sum, value) => sum + value, 0);
+
   return {
     labels,
     datasets: [{
@@ -1200,7 +1240,11 @@ function prepareDoughnutData(snapshotsData) {
       borderColor,
       borderWidth: 2,
       meta: {
-        employees: employeesMeta
+        employees: employeesMeta,
+        totals: {
+          overall: totalCount,
+          stages: stageCounts
+        }
       }
     }]
   };
