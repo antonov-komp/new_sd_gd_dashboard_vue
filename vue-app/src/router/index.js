@@ -39,6 +39,16 @@ const routes = [
     component: () => import('@/components/dashboard/DashboardSector1C.vue')
   },
   {
+    path: '/dashboard/graph-admission-closure',
+    name: 'dashboard-graph-admission-closure',
+    component: () => import('@/components/graph-admission-closure/GraphAdmissionClosureDashboard.vue'),
+    meta: {
+      title: 'График приёма и закрытий сектора 1С',
+      description: 'Недельные агрегаты новых и закрытых тикетов сектора 1С',
+      requiresAuth: true
+    }
+  },
+  {
     path: '/dashboard/graph-state',
     name: 'dashboard-graph-state',
     component: () => import('@/components/graph-state/GraphStateDashboard.vue'),

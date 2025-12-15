@@ -178,3 +178,12 @@
 - Для ответственных используем подход из `vue-app/src/services/dashboard-sector-1c/utils/ticket-utils.js`; бэкенд желательно нормализует поле сразу (числовой ID).  
 - Если понадобится вывод названий стадий, используем те же label/цвета, что и в существующем модуле; список закрывающих стадий меняется только на бэкенде.
 
+## Прогресс (обновлено 2025-12-15 12:49 (UTC+03:00, Brest))
+- [x] Этап 1 — анализ: изучены текущие графики/доступы/фильтры (`GraphStateDashboard.vue`, `GraphStateChart.vue`), подтверждён первичный фильтр по `UF_CRM_7_TYPE_PRODUCT` через `sector-filter.js`, логика ответственных/нулевой точки подтверждена в `ticket-utils.js`.  
+- [x] Этап 2 — контракт: зафиксирован REST-контракт в `TASK-041-02-backend-contract-and-data.md` (endpoint `/api/graph-1c-admission-closure.php`, вход `product + weekStartUtc/weekEndUtc`, UTC-ответ `meta/data/series/stages/responsible`, нормализация ответственных и списка закрывающих стадий).  
+- [x] Этап 3 — UI без селектора этапов: создан новый дашборд `GraphAdmissionClosureDashboard.vue` с `FiltersPanel` (hideStages), селектор этапов скрыт.  
+- [x] Этап 4 — графики с недельной агрегацией: реализован `GraphAdmissionClosureChart.vue` (line/bar/doughnut, недельные агрегаты new/closed, стадж-теги).  
+- [x] Этап 5 — изолированный попап 1-го уровня: добавлен `ResponsibleModal.vue`, открывается по клику на график/кнопку, отображает агрегат ответственных.  
+- [x] Этап 6 — интеграция/навигация/доступы: добавлен маршрут `/dashboard/graph-admission-closure`, кнопка в `reports-config.js`, подключена проверка доступа через навигацию.  
+- [ ] Этап 7 — тестирование кейсов/пустых данных (после реализации).
+

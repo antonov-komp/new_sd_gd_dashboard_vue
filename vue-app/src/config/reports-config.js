@@ -75,6 +75,16 @@ export const reportsConfig = {
       active: true,
       category: 'analytics',
       order: 6
+    },
+    {
+      id: 7,
+      title: 'График приёма/закрытий 1С',
+      icon: '📈',
+      route: '/dashboard/graph-admission-closure',
+      description: 'Недельные новые и закрытые тикеты сектора 1С',
+      active: true,
+      category: 'analytics',
+      order: 7
     }
     // Добавьте другие отчёты по мере необходимости
     // Чтобы скрыть отчёт, установите active: false

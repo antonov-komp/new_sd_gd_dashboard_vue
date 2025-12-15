@@ -1,0 +1,208 @@
+<template>
+  <div class="ac-dashboard">
+    <LoadingSpinner v-if="isLoading" message="Загрузка данных..." />
+
+    <div v-else>
+      <div class="dashboard-header">
+        <div>
+          <h1 class="dashboard-title">График приёма и закрытий сектора 1С</h1>
+          <p class="dashboard-subtitle">
+            Доступы и фильтры аналогичны «Графику состояния», селектор этапов скрыт.
+          </p>
+        </div>
+      </div>
+
+      <div class="dashboard-grid">
+        <div class="filters-column">
+          <FiltersPanel
+            :stages="filters.stages"
+            :employees="filters.employees"
+            :dateRange="filters.dateRange"
+            :customDateRange="filters.customDateRange"
+            :hasActiveFilters="hasActiveFilters"
+            :hideStages="true"
+            @update:stages="updateStages"
+            @update:employees="updateEmployees"
+            @update:dateRange="updateDateRange"
+            @update:customDateRange="updateCustomDateRange"
+            @reset="resetFilters"
+            @apply="applyFilters"
+          />
+        </div>
+
+        <div class="chart-column">
+          <StatusMessage
+            v-if="error"
+            type="error"
+            title="Ошибка загрузки"
+            :message="error.message"
+          />
+
+          <GraphAdmissionClosureChart
+            v-else
+            :meta="chartMeta"
+            :data="chartData"
+            @open-responsible="showResponsibleModal = true"
+          />
+        </div>
+      </div>
+    </div>
+
+    <ResponsibleModal
+      :is-visible="showResponsibleModal"
+      :responsible="chartData.responsible || []"
+      @close="showResponsibleModal = false"
+    />
+  </div>
+</template>
+
+<script setup>
+import { computed, onMounted, ref } from 'vue';
+import LoadingSpinner from '@/components/common/LoadingSpinner.vue';
+import StatusMessage from '@/components/common/StatusMessage.vue';
+import FiltersPanel from '@/components/filters/FiltersPanel.vue';
+import GraphAdmissionClosureChart from './GraphAdmissionClosureChart.vue';
+import ResponsibleModal from './ResponsibleModal.vue';
+import { fetchAdmissionClosureStats } from '@/services/graph-admission-closure/admissionClosureService.js';
+
+const isLoading = ref(true);
+const error = ref(null);
+const chartMeta = ref(null);
+const chartData = ref({
+  newTickets: 0,
+  closedTickets: 0,
+  series: { new: [0], closed: [0] },
+  stages: [],
+  responsible: []
+});
+const showResponsibleModal = ref(false);
+
+const filters = ref({
+  stages: {
+    formed: true,
+    review: true,
+    execution: true
+  },
+  employees: ['all'],
+  dateRange: 'last-week',
+  customDateRange: {
+    startDate: null,
+    endDate: null
+  }
+});
+
+const hasActiveFilters = computed(() => {
+  const hasCustomDates = filters.value.customDateRange.startDate || filters.value.customDateRange.endDate;
+  const onlyAllEmployees = filters.value.employees.length === 1 && filters.value.employees.includes('all');
+  return hasCustomDates || !onlyAllEmployees;
+});
+
+async function loadData() {
+  isLoading.value = true;
+  error.value = null;
+  try {
+    const { meta, data } = await fetchAdmissionClosureStats({
+      product: '1C'
+      // weekStartUtc/weekEndUtc рассчитываются на бэке по текущей неделе
+    });
+    chartMeta.value = meta;
+    chartData.value = data;
+  } catch (err) {
+    error.value = err instanceof Error ? err : new Error('Неизвестная ошибка загрузки');
+    console.error('[GraphAdmissionClosureDashboard] loadData error:', err);
+  } finally {
+    isLoading.value = false;
+  }
+}
+
+function updateStages(newStages) {
+  filters.value.stages = newStages;
+}
+
+function updateEmployees(newEmployees) {
+  filters.value.employees = newEmployees;
+}
+
+function updateDateRange(newRange) {
+  filters.value.dateRange = newRange;
+}
+
+function updateCustomDateRange(newRange) {
+  filters.value.customDateRange = newRange;
+}
+
+function resetFilters() {
+  filters.value = {
+    stages: {
+      formed: true,
+      review: true,
+      execution: true
+    },
+    employees: ['all'],
+    dateRange: 'last-week',
+    customDateRange: {
+      startDate: null,
+      endDate: null
+    }
+  };
+  applyFilters();
+}
+
+function applyFilters() {
+  // На первом этапе бэкенд сам считает неделю; фильтры используются для совместимости UI.
+  loadData();
+}
+
+onMounted(() => {
+  loadData();
+});
+</script>
+
+<style scoped>
+.ac-dashboard {
+  padding: var(--spacing-lg, 20px);
+}
+
+.dashboard-header {
+  margin-bottom: 16px;
+}
+
+.dashboard-title {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--b24-text-primary, #111827);
+}
+
+.dashboard-subtitle {
+  margin: 6px 0 0;
+  color: var(--b24-text-secondary, #6b7280);
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 20px;
+}
+
+.filters-column {
+  position: sticky;
+  top: 12px;
+  align-self: flex-start;
+}
+
+.chart-column {
+  min-height: 360px;
+}
+
+@media (max-width: 1023px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .filters-column {
+    position: static;
+  }
+}
+</style>
+

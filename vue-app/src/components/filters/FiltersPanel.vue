@@ -13,7 +13,10 @@
     
     <div class="filters-content">
       <!-- Секция: Этапы -->
-      <div class="filter-section">
+      <div
+        v-if="!hideStages"
+        class="filter-section"
+      >
         <h3 class="section-title">
           <span class="section-icon">📊</span>
           Этапы
@@ -149,6 +152,13 @@ const props = defineProps({
    * Есть ли активные фильтры
    */
   hasActiveFilters: {
+    type: Boolean,
+    default: false
+  },
+  /**
+   * Скрыть выбор этапов (для модулей, где все стадии всегда отображаются)
+   */
+  hideStages: {
     type: Boolean,
     default: false
   }

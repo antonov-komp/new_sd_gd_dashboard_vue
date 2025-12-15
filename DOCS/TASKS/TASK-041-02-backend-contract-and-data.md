@@ -96,3 +96,13 @@
 - При отсутствии данных возвращать нули и пустые массивы (`series.new = [0]`, `series.closed = [0]`, `stages = []`, `responsible = []`), чтобы UI не ломался.  
 - Логи (`logs/YYYY-MM-DD/HH/*log.json`) использовать для верификации схемы полей; при изменениях Bitrix полей фиксировать их маппинг на бэкенде.
 
+## Промежуточная фиксация 2025-12-15 12:49 (UTC+03:00, Brest)
+- **Endpoint (предложение фронта):** `POST /api/graph-1c-admission-closure.php` (аналогично `api/get-sector-data.php`, X-Requested-With + cookie auth как в текущем дашборде).  
+- **Вход:** `product` (required, строка, default=`"1C"`), `weekStartUtc`/`weekEndUtc` (ISO8601, рассчитываются на бэке для текущей недели, фронт передаёт пустыми), опционально `useCache`/`forceRefresh` для согласования.  
+- **Ответ (UTC, camelCase):** `meta { weekNumber, weekStartUtc, weekEndUtc }`, `data { newTickets, closedTickets, series { new[], closed[] }, stages[{stageId,count}], responsible[{id,name,count}] }`. Пустые выборки → нули/пустые массивы.  
+- **Нормализация ответственных:** бэкенд приводит `responsible.id` к числу из полей `assignedById/ASSIGNED_BY_ID/assignedByIdId/{id|ID|value}`; нулевая точка = отсутствует либо keeper=1051 (как в `ticket-utils.js`).  
+- **Фильтр продукта:** первый шаг на бэке — `UF_CRM_7_TYPE_PRODUCT` через аналог `sector-filter.js` (поддержка `1C`/`1С`).  
+- **Поля в исходных данных:** подтверждены в фронтовом маппере `ticket-mapper.js` — `createdTime|CREATED_DATE`, `movedTime|UPDATED_TIME`, `stageId|STAGE_ID`, `UF_CRM_7_TYPE_PRODUCT`, `assignedById|ASSIGNED_BY_ID`.  
+- **Закрывающие стадии:** список фиксирован на бэке `{DT140_12:SUCCESS, DT140_12:FAIL, DT140_12:UC_0GBU8Z}`, хранить в конфиге для расширения без правок фронта.  
+- **Риски/допущения:** (1) нужны явные имена в ответах для stage labels/цветов — фронт переиспользует текущий маппинг, ждём подтверждения; (2) поведение для keeper/без ответственного — оставить как в модуле 1/2 (агрегируется в «Не назначен» либо отдельная группа) — требуется финальное решение бэка; (3) желателен кэш недельных агрегаций на бэке из логов для снижения нагрузки Bitrix.
+
