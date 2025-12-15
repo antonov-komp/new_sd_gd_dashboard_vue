@@ -33,6 +33,7 @@
 1) **Собрать и задокументировать API загрузки:**  
    - Выявить доступные источники метаданных в `GraphStateChart.vue` для line/bar/doughnut.  
    - Составить интерфейс единой функции `loadStageLevel1(stageId, context)` с описанием входов (stageId, timePoint/snapshotId/graphType) и выходов (структура уровня 1).  
+   - **Реализовано:** `vue-app/src/utils/graph-state/stageLevel1Loader.js` — принимает `{ stageId, graphType, timePoint|snapshotType, snapshots, meta:{line|doughnut|bar}, stageColorMap, stageNameMap, restLoader? }`, возвращает `{ stageId, stageName, color, totalCount, employees, others, snapshot }`, приоритет: метаданные → REST-фолбэк.
 2) **Реализовать загрузчик с приоритетами:**  
    - Сначала попытка получить данные из метаданных (без доп. запросов).  
    - Если пусто — запросить REST и заполнить структуру уровня 1.  
@@ -40,6 +41,7 @@
 3) **Интеграция в попап:**  
    - При выборе стадии из dropdown: вызвать загрузчик, показывать лоадер, по успеху обновить `level1Data` и `currentStageId`.  
    - Сбросить `level2/level3` данные и ошибки; закрыть список стадий.  
+   - **Подготовлено:** в `EmployeeDetailsModal.vue` добавлен метод `reloadLevel1ForStage` (expose) с флагами `isStageLoading/loadError`, откатом к предыдущей стадии, сбросом уровней 2/3/4; использует контекст `stageSwitchContext` из родителя.
 4) **Обработка ошибок/таймаутов:**  
    - Таймаут (конфигurable, например 10–15s) → уведомление и кнопка “Повторить”.  
    - Нет данных/пустой ответ → сообщение в попапе, оставить старую стадию активной.  

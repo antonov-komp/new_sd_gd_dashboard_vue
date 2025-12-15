@@ -6,13 +6,48 @@
       @click.self="close"
       @keydown.esc="close"
     >
-      <div class="modal-content">
+      <div class="modal-content" @click="handleClickOutside">
         <!-- Transition для плавной анимации -->
         <Transition name="level" mode="out-in">
           <!-- Уровень 1: Список сотрудников -->
           <div v-if="popupLevel === 1" key="level-1" class="level-1">
             <div class="modal-header">
-              <h3>{{ level1Data?.stageName || stageName }}</h3>
+              <div class="stage-header">
+                <button
+                  ref="stageTriggerRef"
+                  class="stage-trigger"
+                  :aria-expanded="isStageListOpen"
+                  aria-haspopup="listbox"
+                  @click.stop="toggleStageList"
+                  @keydown.enter.prevent="toggleStageList"
+                  @keydown.space.prevent="toggleStageList"
+                  @keydown.esc.stop.prevent="closeStageList"
+                >
+                  <span class="stage-color" :style="{ backgroundColor: (level1Data?.stageColor) || (stageSwitchContext?.stageColorMap?.[level1Data?.stageId] || stageSwitchContext?.stageColorMap?.[stageId]) || '#007bff' }"></span>
+                  <span class="stage-title">{{ level1Data?.stageName || stageName }}</span>
+                  <span class="stage-caret" :class="{ open: isStageListOpen }">▾</span>
+                </button>
+                <div
+                  v-if="isStageListOpen"
+                  ref="stageDropdownRef"
+                  class="stage-dropdown"
+                  role="listbox"
+                >
+                  <div
+                    v-for="stage in availableStages"
+                    :key="stage.id"
+                    class="stage-option"
+                    :class="{ disabled: stage.disabled }"
+                    role="option"
+                    :aria-selected="stage.disabled"
+                    @click.stop="handleStageSelect(stage)"
+                    @keydown.enter.prevent="handleStageSelect(stage)"
+                  >
+                    <span class="stage-color" :style="{ backgroundColor: stage.color }"></span>
+                    <span class="stage-name">{{ stage.name }}</span>
+                  </div>
+                </div>
+              </div>
               <span class="modal-total">Всего: {{ level1Data?.totalCount || totalCount }} тикетов</span>
               <button class="modal-close" @click="close" aria-label="Закрыть">×</button>
             </div>
@@ -43,6 +78,13 @@
             </div>
             
             <div class="modal-body">
+              <div v-if="loadError" class="load-error">
+                <span>Ошибка: {{ loadError }}</span>
+              </div>
+              <div v-if="isStageLoading" class="stage-loader">
+                <div class="loading-spinner small"></div>
+                <span>Загрузка стадии...</span>
+              </div>
               <!-- Вид: По сотрудникам -->
               <div v-if="viewMode === 'employees'">
                 <div v-if="(level1Data?.employees || employees).length === 0 && (!(level1Data?.others || others) || (level1Data?.others || others).count === 0)" class="no-employees">
@@ -371,6 +413,7 @@ import TicketDetailsService from '@/services/graph-state/TicketDetailsService.js
 import { mapStageId } from '@/services/dashboard-sector-1c/mappers/stage-mapper.js';
 import TicketCard from '@/components/dashboard/TicketCard.vue';
 import { getTicketIframeUrl } from '@/services/dashboard-sector-1c/utils/constants.js';
+import { loadStageLevel1 } from '@/utils/graph-state/stageLevel1Loader.js';
 
 const props = defineProps({
   /**
@@ -428,6 +471,13 @@ const props = defineProps({
   ticketDetails: {
     type: Object,
     default: null
+  },
+  /**
+   * Контекст для переключения стадий (graphType, timePoint/snapshotType, snapshots, meta, stageColorMap, stageNameMap)
+   */
+  stageSwitchContext: {
+    type: Object,
+    default: null
   }
 });
 
@@ -474,6 +524,39 @@ const level3Data = ref(null);
  * Данные уровня 4 (список тикетов)
  */
 const level4Data = ref(null);
+
+/**
+ * Контекст переключения стадий (получен от родителя)
+ */
+const stageSwitchContext = ref(props.stageSwitchContext || null);
+
+/**
+ * Флаги загрузки/ошибок при смене стадии
+ */
+const isStageLoading = ref(false);
+const loadError = ref(null);
+const previousStageId = ref(null);
+
+/**
+ * Управление списком стадий
+ */
+const isStageListOpen = ref(false);
+const stageDropdownRef = ref(null);
+const stageTriggerRef = ref(null);
+
+/**
+ * Доступные стадии (из словаря в контексте), текущая стадия — disabled
+ */
+const availableStages = computed(() => {
+  const map = stageSwitchContext.value?.stageNameMap || {};
+  const colors = stageSwitchContext.value?.stageColorMap || {};
+  return Object.keys(map).map(id => ({
+    id,
+    name: map[id],
+    color: colors[id] || '#007bff',
+    disabled: id === (level1Data.value?.stageId || props.stageId)
+  }));
+});
 
 /**
  * Computed-свойства для удобного доступа
@@ -830,6 +913,67 @@ async function loadLevel1ViewData() {
 }
 
 /**
+ * Перезагрузка уровня 1 для выбранной стадии (используется этап 2/3 TASK-038)
+ */
+async function reloadLevel1ForStage(nextStageId) {
+  if (!nextStageId) {
+    notifications.error('Не указан stageId для загрузки данных');
+    return;
+  }
+
+  if (level1Data.value?.stageId === nextStageId) {
+    return; // Ничего не делаем, стадия уже активна
+  }
+
+  if (!stageSwitchContext.value) {
+    notifications.error('Нет контекста для смены стадии (stageSwitchContext)');
+    return;
+  }
+
+  isStageLoading.value = true;
+  loadError.value = null;
+  const previousLevel1 = level1Data.value ? { ...level1Data.value } : null;
+  previousStageId.value = previousLevel1?.stageId || null;
+
+  try {
+    const result = await loadStageLevel1({
+      ...stageSwitchContext.value,
+      stageId: nextStageId
+    });
+
+    level1Data.value = {
+      stageId: result.stageId,
+      stageName: result.stageName,
+      stageColor: result.color,
+      totalCount: result.totalCount,
+      employees: result.employees,
+      others: result.others,
+      snapshot: result.snapshot || previousLevel1?.snapshot || null,
+      ticketDetails: result.ticketDetails || null
+    };
+
+    // Сброс уровней 2/3/4 при смене стадии (этап 4)
+    level2Data.value = null;
+    level3Data.value = null;
+    level4Data.value = null;
+    popupLevel.value = 1;
+    viewMode.value = 'employees';
+
+    // Перезагрузка доп. представлений уровня 1
+    await loadLevel1ViewData();
+  } catch (error) {
+    console.error('[EmployeeDetailsModal] Failed to reload stage data:', error);
+    loadError.value = error?.message || 'Не удалось загрузить данные стадии';
+    if (previousLevel1) {
+      level1Data.value = previousLevel1; // откат к предыдущим данным
+    }
+    notifications.error(loadError.value);
+  } finally {
+    isStageLoading.value = false;
+  }
+}
+
+/**
  * Обработка клика на строку заказчика в уровне 3 (переход на уровень 4)
  * 
  * Переходит на уровень 4 со списком тикетов сотрудника у выбранного заказчика
@@ -968,8 +1112,13 @@ watch(() => props.isVisible, (newValue) => {
   } else {
     // При закрытии сбрасываем все данные
     resetPopup();
+    closeStageList();
   }
 });
+
+watch(() => props.stageSwitchContext, (newValue) => {
+  stageSwitchContext.value = newValue;
+}, { deep: true });
 
 /**
  * Инициализация при монтировании компонента (если попап уже открыт)
@@ -1503,6 +1652,45 @@ function close() {
   resetPopup();
   emit('close');
 }
+
+// Экспонируем метод для переключения стадии (используется этап 3)
+defineExpose({
+  reloadLevel1ForStage
+});
+
+/**
+ * Управление выпадающим списком стадий
+ */
+function toggleStageList(event) {
+  if (event) {
+    event.stopPropagation();
+  }
+  isStageListOpen.value = !isStageListOpen.value;
+}
+
+function closeStageList() {
+  if (isStageListOpen.value) {
+    isStageListOpen.value = false;
+  }
+}
+
+function handleClickOutside(event) {
+  if (!isStageListOpen.value) return;
+  const dropdownEl = stageDropdownRef.value;
+  const triggerEl = stageTriggerRef.value;
+  if (dropdownEl && dropdownEl.contains(event.target)) return;
+  if (triggerEl && triggerEl.contains(event.target)) return;
+  isStageListOpen.value = false;
+}
+
+async function handleStageSelect(stage) {
+  if (stage.disabled) {
+    isStageListOpen.value = false;
+    return;
+  }
+  isStageListOpen.value = false;
+  await reloadLevel1ForStage(stage.id);
+}
 </script>
 
 <style scoped>
@@ -1540,12 +1728,88 @@ function close() {
   gap: 12px;
 }
 
-.modal-header h3 {
-  margin: 0;
-  font-size: 18px;
+.stage-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+}
+
+.stage-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  min-height: 36px;
+  min-width: 220px;
+}
+
+.stage-trigger:focus {
+  outline: 2px solid var(--b24-primary, #007bff);
+  outline-offset: 2px;
+}
+
+.stage-color {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.stage-title {
+  font-size: 16px;
   font-weight: 600;
   color: var(--b24-text-primary, #1f2937);
-  flex: 1;
+}
+
+.stage-caret {
+  font-size: 12px;
+  transition: transform 0.2s ease;
+  color: var(--b24-text-secondary, #6b7280);
+  margin-left: auto;
+}
+
+.stage-caret.open {
+  transform: rotate(180deg);
+}
+
+.stage-dropdown {
+  position: absolute;
+  top: 105%;
+  left: 0;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+  min-width: 240px;
+  z-index: 2;
+  padding: 6px 0;
+}
+
+.stage-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.stage-option:hover:not(.disabled),
+.stage-option:focus-visible {
+  background: #f3f4f6;
+}
+
+.stage-option.disabled {
+  color: #9ca3af;
+  cursor: default;
+}
+
+.stage-option .stage-name {
+  font-size: 14px;
 }
 
 .modal-total {
@@ -1580,6 +1844,29 @@ function close() {
 
 .modal-body {
   padding: 20px;
+}
+
+.stage-loader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  color: #374151;
+}
+
+.loading-spinner.small {
+  width: 16px;
+  height: 16px;
+  border-width: 2px;
+}
+
+.load-error {
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecdd3;
+  border-radius: 6px;
 }
 
 .no-employees {

@@ -64,3 +64,47 @@
 - `vue-app/src/components/graph-state/EmployeeDetailsModal.vue`
 - `vue-app/src/components/graph-state/GraphStateChart.vue`
 
+## Результаты анализа (этап 1)
+
+### UX-флоу переключения стадий
+- Открытие попапа 1-го уровня происходит из `GraphStateChart.vue` при клике по line/doughnut (данные мета передаются в `openEmployeeDetailsModal`).
+- Клик/Enter по названию текущей стадии в попапе → открыть список двух альтернативных стадий (всего 3 фиксированные).
+- Выбор стадии → закрыть список, загрузить данные уровня 1 для выбранной стадии, обновить заголовок и прогресс-бары, попап остаётся открыт.
+- Повторный выбор исходной стадии допустим: данные не меняются, список закрывается.
+- ESC: при открытом списке — закрывает список; повторный ESC — закрывает модалку.
+
+### Словарь стадий (id/label/color, единый источник)
+| id | label | color (cssVar fallback) | источник |
+| --- | --- | --- | --- |
+| formed | Сформировано обращение | `--b24-primary` (`#007bff`) | `GraphStateChart.vue` `stageColors` |
+| review | Рассмотрение ТЗ | `--b24-warning` (`#ffc107`) | `GraphStateChart.vue` `stageColors` |
+| execution | Исполнение | `--b24-success` (`#28a745`) | `GraphStateChart.vue` `stageColors` |
+
+### Источники данных для уровня 1 (приоритет: мета → REST-фолбэк)
+- Line: `dataset.meta.employees[timePoint]` + `snapshot.statistics.stages[stageId].count`; timePoint определяется через `getTimePointFromIndex` (`weekStart|weekEnd|current`). Слепок доступен из `snapshots.value`.
+- Doughnut: `chartData.datasets[0].meta.employees[stageId]` + `statistics.stages[stageId].count` из выбранного слепка (`current`|`weekEnd`|`weekStart`).
+- Bar: `chartData.meta.employeesByStage[stageId]` (топ-10 сотрудников по этапу) из выбранного слепка (`current` если есть, иначе `weekEnd`, иначе `weekStart`); totalCount можно брать из `snapshots.value.[snapshotType].statistics.stages[stageId].count`.
+- Если в метаданных нет сотрудников/totalCount → вызвать REST-фолбэк по `{ snapshotId|timePoint, stageId, graphType }`, ожидать `stageName,totalCount,employees[],others?`.
+
+### Состояние попапа при переключении
+- Сохранять: видимость модалки, текущий scroll/focus в уровне 1.
+- Сбрасывать: `level2Data`, `level3Data`, ошибки, `popupLevel` → 1, `isStageListOpen` → false перед загрузкой новой стадии.
+- Флаги: `currentStageId`, `availableStages[]`, `isStageLoading`, `loadError`, `level1Data`.
+- Хранить `previousStageId` для отката при ошибке загрузки новой стадии.
+
+### Доступность и клавиатура
+- TAB — обход пунктов списка стадий; Enter/Space — выбор; ESC — закрыть список (не глушить глобальный ESC модалки).
+- После закрытия списка возвращать фокус на триггер (заголовок/кнопку стадии).
+
+### Карта доступных точек данных (line/bar/doughnut)
+- Line: timePoint `weekStart|weekEnd|current`, stageId, stageName, totalCount, employees (top10 + others), snapshot (tickets, metadata).
+- Doughnut: stageId, stageName, totalCount, employees (top10 + others), snapshot (current/последний доступный).
+- Bar: stageId, stageName (из словаря), totalCount (из выбранного слепка), employees (top10 по этапу) из `meta.employeesByStage`.
+
+### Чек-лист для реализации (использовать на этапах 2–4)
+- Общий загрузчик `loadStageLevel1(stageId, context)` с приоритетом метаданных и REST-фолбэком.
+- Проброс контекста из `GraphStateChart` в модалку: `graphType`, `timePoint|snapshotId`, `stageId`, `stageColorMap`.
+- Dropdown в заголовке стадии: управление `isStageListOpen`, disabled для `currentStageId`, клик/Enter → загрузка.
+- Лоадер в области уровня 1 на время переключения стадии; ошибки → уведомление, стейт откатывается к предыдущему.
+- Сброс уровней 2/3 и ошибок при смене стадии; сохранение попапа открытым.
+

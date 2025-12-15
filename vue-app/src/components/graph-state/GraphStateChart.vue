@@ -133,6 +133,7 @@
       :others="modalOthers"
       :snapshot="currentSnapshot"
       :ticket-details="ticketDetails"
+      :stage-switch-context="stageSwitchContext"
       @close="closeEmployeeModal"
     />
 
@@ -234,6 +235,7 @@ const modalEmployees = ref([]);
 const modalOthers = ref(null);
 const currentSnapshot = ref(null);
 const ticketDetails = ref(null);
+const stageSwitchContext = ref(null);
 
 /**
  * Список доступных сотрудников
@@ -270,6 +272,11 @@ const stages = [
   { id: 'review', name: 'Рассмотрение ТЗ', color: stageColors.review },
   { id: 'execution', name: 'Исполнение', color: stageColors.execution }
 ];
+
+const stageNameMap = computed(() => stages.reduce((acc, stage) => {
+  acc[stage.id] = stage.name;
+  return acc;
+}, {}));
 
 /**
  * Массив стилей точек для линейного графика
@@ -532,7 +539,7 @@ function getSnapshotByTimePoint(timePoint) {
  * @param {Array} employees - Массив сотрудников
  * @param {Object} others - Данные о группе "Другие" (опционально)
  */
-function openEmployeeDetailsModal(stageName, stageId, totalCount, employees, others = null, snapshot = null, ticketDetailsData = null) {
+function openEmployeeDetailsModal(stageName, stageId, totalCount, employees, others = null, snapshot = null, ticketDetailsData = null, switchContext = null) {
   console.log('[GraphStateChart] openEmployeeDetailsModal called:', {
     stageName,
     stageId,
@@ -549,6 +556,7 @@ function openEmployeeDetailsModal(stageName, stageId, totalCount, employees, oth
   modalOthers.value = others && others.count > 0 ? others : null;
   currentSnapshot.value = snapshot;
   ticketDetails.value = ticketDetailsData;
+  stageSwitchContext.value = switchContext;
   showEmployeeModal.value = true;
   
   console.log('[GraphStateChart] Modal state set:', {
@@ -619,6 +627,19 @@ function openEmployeeDetailsModalForLine(stageId, timePoint, employeeData) {
     10
   );
 
+  const switchContext = {
+    graphType: 'line',
+    stageId,
+    stageName: stage.name,
+    timePoint,
+    snapshots: snapshots.value,
+    meta: {
+      line: dataset.meta
+    },
+    stageColorMap: stageColors,
+    stageNameMap: stageNameMap.value
+  };
+
   console.log('[GraphStateChart] Opening modal with:', {
     stageName: stage.name,
     stageId,
@@ -628,7 +649,7 @@ function openEmployeeDetailsModalForLine(stageId, timePoint, employeeData) {
     snapshotHasTickets: !!snapshot.tickets
   });
 
-  openEmployeeDetailsModal(stage.name, stageId, totalCount, formatted.employees, formatted.others, snapshot, null);
+  openEmployeeDetailsModal(stage.name, stageId, totalCount, formatted.employees, formatted.others, snapshot, null, switchContext);
 }
 
 /**
@@ -647,6 +668,18 @@ function openEmployeeDetailsModalForDoughnut(stageId, employeeData) {
   // Получить слепок (используем текущий или последний доступный)
   const snapshot = snapshots.value.current || snapshots.value.weekEnd || snapshots.value.weekStart;
 
+  const switchContext = {
+    graphType: 'doughnut',
+    stageId,
+    stageName: employeeData.stageName,
+    snapshots: snapshots.value,
+    meta: {
+      doughnut: chartData.value?.datasets?.[0]?.meta || null
+    },
+    stageColorMap: stageColors,
+    stageNameMap: stageNameMap.value
+  };
+
   openEmployeeDetailsModal(
     employeeData.stageName,
     stageId,
@@ -654,7 +687,8 @@ function openEmployeeDetailsModalForDoughnut(stageId, employeeData) {
     employeeData.employees,
     employeeData.others,
     snapshot,
-    null
+    null,
+    switchContext
   );
 }
 
