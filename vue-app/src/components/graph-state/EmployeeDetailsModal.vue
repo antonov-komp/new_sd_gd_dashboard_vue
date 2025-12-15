@@ -4,7 +4,7 @@
       v-if="isVisible"
       class="employee-details-modal"
       @click.self="close"
-      @keydown.esc="close"
+      @keydown.esc="handleEsc"
     >
       <div class="modal-content" @click="handleClickOutside">
         <!-- Transition для плавной анимации -->
@@ -80,6 +80,9 @@
             <div class="modal-body">
               <div v-if="loadError" class="load-error">
                 <span>Ошибка: {{ loadError }}</span>
+                <button class="btn-retry-stage" @click="reloadLevel1ForStage(level1Data?.stageId || stageId)">
+                  Повторить
+                </button>
               </div>
               <div v-if="isStageLoading" class="stage-loader">
                 <div class="loading-spinner small"></div>
@@ -1691,6 +1694,15 @@ async function handleStageSelect(stage) {
   isStageListOpen.value = false;
   await reloadLevel1ForStage(stage.id);
 }
+
+function handleEsc(event) {
+  if (isStageListOpen.value) {
+    event.stopPropagation();
+    closeStageList();
+    return;
+  }
+  close();
+}
 </script>
 
 <style scoped>
@@ -1867,6 +1879,22 @@ async function handleStageSelect(stage) {
   color: #b91c1c;
   border: 1px solid #fecdd3;
   border-radius: 6px;
+}
+
+.btn-retry-stage {
+  margin-top: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--b24-primary, #007bff);
+  border-radius: 6px;
+  background: var(--b24-primary, #007bff);
+  color: #fff;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.btn-retry-stage:hover {
+  background: #0056b3;
+  border-color: #0056b3;
 }
 
 .no-employees {
