@@ -87,7 +87,8 @@ try {
     // Границы недели
     [$weekStart, $weekEnd] = getWeekBounds($weekStartParam, $weekEndParam);
 
-    // Опорные значения (совпадают с модулями 1/2)
+    // Опорные значения (совпадают с модулями 1/2), но выборку делаем по всем стадиям,
+    // чтобы не потерять новые тикеты, которые появляются вне targetStages.
     $targetStages = [
         'DT140_12:UC_0VHWE2',   // formed
         'DT140_12:PREPARATION', // review
@@ -98,21 +99,34 @@ try {
         'DT140_12:FAIL',
         'DT140_12:UC_0GBU8Z'
     ];
-    $allStages = array_values(array_unique(array_merge($targetStages, $closingStages)));
     $keeperId = 1051; // KEEPER_OBJECTS_ID
 
-    // Запрос элементов смарт-процесса 140, как в TicketRepository: targetStages + closingStages
+    // Запрос элементов смарт-процесса 140
+    // Стратегия: запрашиваем тикеты, которые либо созданы в неделю, либо закрыты в неделю
     $entityTypeId = 140;
     $pageSize = 50;
     $start = 0;
     $tickets = [];
     $debugRaw = [];
+    
+    // Форматируем даты для фильтра Bitrix24 (нужен формат YYYY-MM-DD HH:MI:SS)
+    $weekStartStr = $weekStart->format('Y-m-d H:i:s');
+    $weekEndStr = $weekEnd->format('Y-m-d H:i:s');
 
+    // Запрос 1: тикеты, созданные в неделю (для новых)
+    // Запрос 2: тикеты, закрытые в неделю (movedTime в неделе + закрывающие стадии)
+    // Объединяем оба запроса
+    
+    $allTicketsMap = []; // Используем map по ID, чтобы избежать дублей
+    
+    // Запрос тикетов, созданных в неделю
+    $start = 0;
     do {
         $result = CRest::call('crm.item.list', [
             'entityTypeId' => $entityTypeId,
             'filter' => [
-                'stageId' => $allStages
+                '>=createdTime' => $weekStartStr,
+                '<=createdTime' => $weekEndStr
             ],
             'select' => [
                 'id',
@@ -127,6 +141,60 @@ try {
             ],
             'start' => $start
         ]);
+
+        if (isset($result['error'])) {
+            throw new Exception($result['error_description'] ?? $result['error']);
+        }
+
+        $items = $result['result']['items'] ?? [];
+        foreach ($items as $item) {
+            $allTicketsMap[$item['id']] = $item;
+        }
+
+        $start += $pageSize;
+    } while (isset($result['result']['next']));
+    
+    // Запрос тикетов, закрытых в неделю (movedTime в неделе + закрывающие стадии)
+    $start = 0;
+    do {
+        $result = CRest::call('crm.item.list', [
+            'entityTypeId' => $entityTypeId,
+            'filter' => [
+                '>=movedTime' => $weekStartStr,
+                '<=movedTime' => $weekEndStr,
+                'stageId' => $closingStages
+            ],
+            'select' => [
+                'id',
+                'title',
+                'stageId',
+                'assignedById',
+                'createdTime',
+                'updatedTime',
+                'movedTime',
+                'UF_CRM_7_TYPE_PRODUCT',
+                'ufCrm7TypeProduct'
+            ],
+            'start' => $start
+        ]);
+
+        if (isset($result['error'])) {
+            throw new Exception($result['error_description'] ?? $result['error']);
+        }
+
+        $items = $result['result']['items'] ?? [];
+        foreach ($items as $item) {
+            $allTicketsMap[$item['id']] = $item;
+        }
+
+        $start += $pageSize;
+    } while (isset($result['result']['next']));
+    
+    // Преобразуем map в массив
+    $allTickets = array_values($allTicketsMap);
+
+    // Фильтруем по product=1C (первым шагом, как в модулях 1/2)
+    foreach ($allTickets as $item) {
 
         if (isset($result['error'])) {
             throw new Exception($result['error_description'] ?? $result['error']);
@@ -156,9 +224,6 @@ try {
             }
             $tickets[] = $item;
         }
-
-        $start += $pageSize;
-    } while (isset($result['result']['next']));
 
     // Агрегации
     $newCount = 0;
