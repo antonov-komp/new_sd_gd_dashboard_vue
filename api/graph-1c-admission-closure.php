@@ -2,48 +2,226 @@
 /**
  * API endpoint: График приёма и закрытий сектора 1С
  *
- * Черновая заглушка для фронта (TASK-041): возвращает недельные агрегаты в нужном контракте.
- * Все даты в UTC. Неделя по ISO-8601 (пн–вс).
+ * Реализует контракт из TASK-041-02:
+ * - Неделя ISO-8601 (пн–вс), расчёт в UTC.
+ * - product=1C фильтруется первым шагом.
+ * - Закрывающие стадии: DT140_12:SUCCESS, DT140_12:FAIL, DT140_12:UC_0GBU8Z.
+ * - Ответ: meta + data (newTickets, closedTickets, series, stages, responsible).
+ *
+ * Примечание: минимальная реализация напрямую читает Bitrix24 через CRest.
+ * При необходимости можно заменить на кеш/логи.
  */
 
-header('Content-Type: application/json');
+require_once __DIR__ . '/../crest.php';
 
-// Безопасное чтение тела запроса
-$input = file_get_contents('php://input');
-$payload = json_decode($input, true);
+header('Content-Type: application/json; charset=utf-8');
 
-// Определяем ISO-неделю в UTC
-$nowUtc = new DateTimeImmutable('now', new DateTimeZone('UTC'));
-$isoYear = (int)$nowUtc->format('o');
-$isoWeek = (int)$nowUtc->format('W');
+function jsonResponse($data)
+{
+    echo json_encode($data, JSON_UNESCAPED_UNICODE);
+    exit;
+}
 
-$weekStart = (new DateTimeImmutable('now', new DateTimeZone('UTC')))
-    ->setISODate($isoYear, $isoWeek, 1)
-    ->setTime(0, 0, 0);
-$weekEnd = $weekStart
-    ->modify('+6 days')
-    ->setTime(23, 59, 59);
+function parseJsonBody(): array
+{
+    $input = file_get_contents('php://input');
+    if (!$input) {
+        return [];
+    }
+    $decoded = json_decode($input, true);
+    return is_array($decoded) ? $decoded : [];
+}
 
-// Заглушка данных — нули/пустые массивы, чтобы фронт не падал 404
-$response = [
-    'success' => true,
-    'meta' => [
-        'weekNumber' => $isoWeek,
-        'weekStartUtc' => $weekStart->format('Y-m-d\TH:i:s\Z'),
-        'weekEndUtc' => $weekEnd->format('Y-m-d\TH:i:s\Z')
-    ],
-    'data' => [
-        'newTickets' => 0,
-        'closedTickets' => 0,
-        'series' => [
-            'new' => [0],
-            'closed' => [0]
+/**
+ * Возвращает границы текущей ISO-недели (UTC) если не переданы в запросе.
+ */
+function getWeekBounds(?string $start, ?string $end): array
+{
+    $tz = new DateTimeZone('UTC');
+
+    if ($start && $end) {
+        return [
+            new DateTimeImmutable($start, $tz),
+            new DateTimeImmutable($end, $tz)
+        ];
+    }
+
+    $now = new DateTimeImmutable('now', $tz);
+    $isoYear = (int)$now->format('o');
+    $isoWeek = (int)$now->format('W');
+
+    $weekStart = (new DateTimeImmutable('now', $tz))
+        ->setISODate($isoYear, $isoWeek, 1)
+        ->setTime(0, 0, 0);
+    $weekEnd = $weekStart
+        ->modify('+6 days')
+        ->setTime(23, 59, 59);
+
+    return [$weekStart, $weekEnd];
+}
+
+/**
+ * Проверка попадания даты в интервал [start, end]
+ */
+function isInRange(?string $dateStr, DateTimeImmutable $start, DateTimeImmutable $end): bool
+{
+    if (!$dateStr) {
+        return false;
+    }
+    $ts = strtotime($dateStr);
+    if ($ts === false) {
+        return false;
+    }
+    $dt = (new DateTimeImmutable('@' . $ts))->setTimezone(new DateTimeZone('UTC'));
+    return $dt >= $start && $dt <= $end;
+}
+
+try {
+    $body = parseJsonBody();
+
+    $product = isset($body['product']) ? (string)$body['product'] : '1C';
+    $weekStartParam = isset($body['weekStartUtc']) ? (string)$body['weekStartUtc'] : null;
+    $weekEndParam = isset($body['weekEndUtc']) ? (string)$body['weekEndUtc'] : null;
+
+    // Границы недели
+    [$weekStart, $weekEnd] = getWeekBounds($weekStartParam, $weekEndParam);
+
+    // Опорные значения
+    $closingStages = [
+        'DT140_12:SUCCESS',
+        'DT140_12:FAIL',
+        'DT140_12:UC_0GBU8Z'
+    ];
+    $keeperId = 1051; // KEEPER_OBJECTS_ID
+
+    // Запрос всех элементов смарт-процесса 140, фильтр по продукту как первый шаг
+    $entityTypeId = 140;
+    $pageSize = 50;
+    $start = 0;
+    $tickets = [];
+
+    do {
+        $result = CRest::call('crm.item.list', [
+            'entityTypeId' => $entityTypeId,
+            'select' => [
+                'id',
+                'title',
+                'stageId',
+                'assignedById',
+                'createdTime',
+                'movedTime',
+                'UF_CRM_7_TYPE_PRODUCT',
+                'ufCrm7TypeProduct'
+            ],
+            'start' => $start
+        ]);
+
+        if (isset($result['error'])) {
+            throw new Exception($result['error_description'] ?? $result['error']);
+        }
+
+        $items = $result['result']['items'] ?? [];
+        foreach ($items as $item) {
+            // Фильтр product первым шагом
+            $tagRaw = $item['UF_CRM_7_TYPE_PRODUCT'] ?? $item['ufCrm7TypeProduct'] ?? null;
+            $tags = [];
+            if (is_array($tagRaw)) {
+                $tags = $tagRaw;
+            } elseif (is_string($tagRaw)) {
+                $parts = array_map('trim', explode(',', $tagRaw));
+                $tags = $parts;
+            }
+            $normalized = array_map(function ($v) {
+                return mb_strtoupper(str_replace('С', 'C', trim((string)$v)));
+            }, $tags);
+            $is1C = in_array('1C', $normalized, true);
+            if (!$is1C && mb_strtoupper($product) === '1C') {
+                continue;
+            }
+
+            $tickets[] = $item;
+        }
+
+        $start += $pageSize;
+    } while (isset($result['result']['next']));
+
+    // Агрегации
+    $newCount = 0;
+    $closedCount = 0;
+    $stageAgg = [];
+    $responsibleAgg = [];
+
+    foreach ($tickets as $ticket) {
+        $createdTime = $ticket['createdTime'] ?? null;
+        $movedTime = $ticket['movedTime'] ?? null;
+        $stageId = $ticket['stageId'] ?? null;
+        $assignedRaw = $ticket['assignedById'] ?? null;
+
+        // Новые за неделю
+        if (isInRange($createdTime, $weekStart, $weekEnd)) {
+            $newCount++;
+        }
+
+        // Закрытые за неделю
+        if ($stageId && in_array($stageId, $closingStages, true) && isInRange($movedTime, $weekStart, $weekEnd)) {
+            $closedCount++;
+
+            // Агрегация по стадиям
+            if (!isset($stageAgg[$stageId])) {
+                $stageAgg[$stageId] = 0;
+            }
+            $stageAgg[$stageId]++;
+
+            // Агрегация по ответственным (для попапа 1-го уровня)
+            $responsibleId = $assignedRaw;
+            if (is_array($responsibleId)) {
+                $responsibleId = $responsibleId['id'] ?? $responsibleId['ID'] ?? $responsibleId['value'] ?? null;
+            }
+            $responsibleId = $responsibleId ? (int)$responsibleId : null;
+            $responsibleKey = ($responsibleId === null || $responsibleId === $keeperId) ? 'unassigned' : (string)$responsibleId;
+
+            if (!isset($responsibleAgg[$responsibleKey])) {
+                $responsibleAgg[$responsibleKey] = [
+                    'id' => $responsibleId,
+                    'name' => ($responsibleId === null || $responsibleId === $keeperId) ? 'Не назначен' : ('ID ' . $responsibleId),
+                    'count' => 0
+                ];
+            }
+            $responsibleAgg[$responsibleKey]['count']++;
+        }
+    }
+
+    // Формирование ответа
+    $response = [
+        'success' => true,
+        'meta' => [
+            'weekNumber' => (int)$weekStart->format('W'),
+            'weekStartUtc' => $weekStart->format('Y-m-d\TH:i:s\Z'),
+            'weekEndUtc' => $weekEnd->format('Y-m-d\TH:i:s\Z')
         ],
-        'stages' => [],
-        'responsible' => []
-    ]
-];
+        'data' => [
+            'newTickets' => $newCount,
+            'closedTickets' => $closedCount,
+            'series' => [
+                'new' => [$newCount],
+                'closed' => [$closedCount]
+            ],
+            'stages' => array_map(function ($stageId) use ($stageAgg) {
+                return [
+                    'stageId' => $stageId,
+                    'count' => $stageAgg[$stageId]
+                ];
+            }, array_keys($stageAgg)),
+            'responsible' => array_values($responsibleAgg)
+        ]
+    ];
 
-echo json_encode($response, JSON_UNESCAPED_UNICODE);
-exit;
+    jsonResponse($response);
+} catch (Exception $e) {
+    http_response_code(500);
+    jsonResponse([
+        'success' => false,
+        'message' => 'Ошибка получения данных: ' . $e->getMessage()
+    ]);
+}
 
