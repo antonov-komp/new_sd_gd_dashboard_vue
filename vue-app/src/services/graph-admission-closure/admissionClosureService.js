@@ -55,6 +55,7 @@ function normalizeResponse(raw) {
  * @param {string|null} [params.weekEndUtc=null] - Конец недели ISO8601 (опционально).
  * @param {boolean} [params.useCache=true] - Флаг кэша для бэкенда.
  * @param {boolean} [params.forceRefresh=false] - Принудительная перезагрузка данных.
+ * @param {boolean} [params.includeTickets=false] - Включить тикеты для каждого сотрудника в responsible[].
  * @returns {Promise<{meta: object|null, data: object}>}
  */
 export async function fetchAdmissionClosureStats(params = {}) {
@@ -64,7 +65,8 @@ export async function fetchAdmissionClosureStats(params = {}) {
     weekStartUtc = null,
     weekEndUtc = null,
     useCache = true,
-    forceRefresh = false
+    forceRefresh = false,
+    includeTickets = false
   } = params;
 
   const body = {
@@ -72,7 +74,8 @@ export async function fetchAdmissionClosureStats(params = {}) {
     weekStartUtc,
     weekEndUtc,
     useCache,
-    forceRefresh
+    forceRefresh,
+    includeTickets
   };
 
   const response = await fetch(endpoint, {

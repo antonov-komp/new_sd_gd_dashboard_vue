@@ -82,6 +82,7 @@ try {
     $product = isset($body['product']) ? (string)$body['product'] : '1C';
     $weekStartParam = isset($body['weekStartUtc']) ? (string)$body['weekStartUtc'] : null;
     $weekEndParam = isset($body['weekEndUtc']) ? (string)$body['weekEndUtc'] : null;
+    $includeTickets = isset($body['includeTickets']) ? (bool)$body['includeTickets'] : false;
     $debug = isset($body['debug']) ? (bool)$body['debug'] : false;
 
     // Границы недели
@@ -259,10 +260,23 @@ try {
                 $responsibleAgg[$responsibleKey] = [
                     'id' => $responsibleId,
                     'name' => ($responsibleId === null || $responsibleId === $keeperId) ? 'Не назначен' : ('ID ' . $responsibleId),
-                    'count' => 0
+                    'count' => 0,
+                    'tickets' => [] // Добавить массив для тикетов
                 ];
             }
             $responsibleAgg[$responsibleKey]['count']++;
+            
+            // Если нужно включить тикеты, сохранить данные тикета
+            if ($includeTickets) {
+                $responsibleAgg[$responsibleKey]['tickets'][] = [
+                    'id' => (int)$ticket['id'],
+                    'title' => $ticket['title'] ?? 'Без названия',
+                    'createdTime' => $ticket['createdTime'] ?? null,
+                    'movedTime' => $movedTime,
+                    'stageId' => $stageId,
+                    'assignedById' => $responsibleId
+                ];
+            }
         }
     }
 
@@ -287,7 +301,20 @@ try {
                     'count' => $stageAgg[$stageId]
                 ];
             }, array_keys($stageAgg)),
-            'responsible' => array_values($responsibleAgg)
+            'responsible' => array_map(function ($item) use ($includeTickets) {
+                $result = [
+                    'id' => $item['id'],
+                    'name' => $item['name'],
+                    'count' => $item['count']
+                ];
+                
+                // Включить тикеты только если запрошено
+                if ($includeTickets && isset($item['tickets'])) {
+                    $result['tickets'] = $item['tickets'];
+                }
+                
+                return $result;
+            }, array_values($responsibleAgg))
         ],
         'debug' => $debug ? [
             'fetchedTotal' => count($tickets),

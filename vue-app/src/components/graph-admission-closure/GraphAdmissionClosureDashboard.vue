@@ -55,6 +55,8 @@
     <ResponsibleModal
       :is-visible="showResponsibleModal"
       :responsible="chartData.responsible || []"
+      :week-start-utc="chartMeta?.weekStartUtc || null"
+      :week-end-utc="chartMeta?.weekEndUtc || null"
       @close="showResponsibleModal = false"
     />
   </div>
