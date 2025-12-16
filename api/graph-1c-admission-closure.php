@@ -83,6 +83,7 @@ try {
     $weekStartParam = isset($body['weekStartUtc']) ? (string)$body['weekStartUtc'] : null;
     $weekEndParam = isset($body['weekEndUtc']) ? (string)$body['weekEndUtc'] : null;
     $includeTickets = isset($body['includeTickets']) ? (bool)$body['includeTickets'] : false;
+    $includeNewTicketsByStages = isset($body['includeNewTicketsByStages']) ? (bool)$body['includeNewTicketsByStages'] : false;
     $debug = isset($body['debug']) ? (bool)$body['debug'] : false;
 
     // Границы недели
@@ -219,6 +220,30 @@ try {
         $tickets[] = $item;
     }
 
+    // Определение всех стадий с названиями и цветами
+    $allStages = [
+        'DT140_12:UC_0VHWE2' => ['name' => 'Сформировано обращение', 'color' => '#007bff'],
+        'DT140_12:PREPARATION' => ['name' => 'Рассмотрение ТЗ', 'color' => '#ffc107'],
+        'DT140_12:CLIENT' => ['name' => 'Исполнение', 'color' => '#28a745'],
+        'DT140_12:SUCCESS' => ['name' => 'Успешное закрытие', 'color' => '#28a745'],
+        'DT140_12:FAIL' => ['name' => 'Отклонено', 'color' => '#dc3545'],
+        'DT140_12:UC_0GBU8Z' => ['name' => 'Закрыли без задачи', 'color' => '#6c757d']
+    ];
+
+    // Инициализация агрегации новых тикетов по стадиям
+    $newTicketsByStagesAgg = [];
+    if ($includeNewTicketsByStages) {
+        foreach ($allStages as $stageId => $stageInfo) {
+            $newTicketsByStagesAgg[$stageId] = [
+                'stageId' => $stageId,
+                'stageName' => $stageInfo['name'],
+                'color' => $stageInfo['color'],
+                'count' => 0,
+                'tickets' => []
+            ];
+        }
+    }
+
     // Агрегации
     $newCount = 0;
     $closedCount = 0;
@@ -236,6 +261,29 @@ try {
         // Новые за неделю
         if (isInRange($createdTime, $weekStart, $weekEnd)) {
             $newCount++;
+            
+            // Если нужно включить новые тикеты по стадиям
+            if ($includeNewTicketsByStages && $stageId && isset($newTicketsByStagesAgg[$stageId])) {
+                $newTicketsByStagesAgg[$stageId]['count']++;
+                
+                // Если нужно включить тикеты, сохранить данные тикета
+                if ($includeTickets) {
+                    // Нормализация assignedById (как для закрытых тикетов)
+                    $responsibleId = $assignedRaw;
+                    if (is_array($responsibleId)) {
+                        $responsibleId = $responsibleId['id'] ?? $responsibleId['ID'] ?? $responsibleId['value'] ?? null;
+                    }
+                    $responsibleId = $responsibleId ? (int)$responsibleId : null;
+                    
+                    $newTicketsByStagesAgg[$stageId]['tickets'][] = [
+                        'id' => (int)$ticket['id'],
+                        'title' => $ticket['title'] ?? 'Без названия',
+                        'createdTime' => $ticket['createdTime'] ?? null,
+                        'stageId' => $stageId,
+                        'assignedById' => $responsibleId
+                    ];
+                }
+            }
         }
 
         // Закрытые за неделю
@@ -295,9 +343,11 @@ try {
                 'new' => [$newCount],
                 'closed' => [$closedCount]
             ],
-            'stages' => array_map(function ($stageId) use ($stageAgg) {
+            'stages' => array_map(function ($stageId) use ($stageAgg, $allStages) {
+                $stageName = isset($allStages[$stageId]) ? $allStages[$stageId]['name'] : $stageId;
                 return [
                     'stageId' => $stageId,
+                    'stageName' => $stageName,
                     'count' => $stageAgg[$stageId]
                 ];
             }, array_keys($stageAgg)),
@@ -314,7 +364,24 @@ try {
                 }
                 
                 return $result;
-            }, array_values($responsibleAgg))
+            }, array_values($responsibleAgg)),
+            'newTicketsByStages' => $includeNewTicketsByStages 
+                ? array_map(function ($item) use ($includeTickets) {
+                    $result = [
+                        'stageId' => $item['stageId'],
+                        'stageName' => $item['stageName'],
+                        'color' => $item['color'],
+                        'count' => $item['count']
+                    ];
+                    
+                    // Включить тикеты только если запрошено
+                    if ($includeTickets && isset($item['tickets'])) {
+                        $result['tickets'] = $item['tickets'];
+                    }
+                    
+                    return $result;
+                }, array_values($newTicketsByStagesAgg))
+                : null
         ],
         'debug' => $debug ? [
             'fetchedTotal' => count($tickets),

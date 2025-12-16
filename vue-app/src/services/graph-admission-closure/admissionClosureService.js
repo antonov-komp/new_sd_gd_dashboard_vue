@@ -41,7 +41,8 @@ function normalizeResponse(raw) {
         closed: payload.data?.series?.closed ?? payload.series?.closed ?? [0]
       },
       stages: payload.data?.stages ?? payload.stages ?? [],
-      responsible: payload.data?.responsible ?? payload.responsible ?? []
+      responsible: payload.data?.responsible ?? payload.responsible ?? [],
+      newTicketsByStages: payload.data?.newTicketsByStages ?? payload.newTicketsByStages ?? null
     }
   };
 }
@@ -56,6 +57,7 @@ function normalizeResponse(raw) {
  * @param {boolean} [params.useCache=true] - Флаг кэша для бэкенда.
  * @param {boolean} [params.forceRefresh=false] - Принудительная перезагрузка данных.
  * @param {boolean} [params.includeTickets=false] - Включить тикеты для каждого сотрудника в responsible[].
+ * @param {boolean} [params.includeNewTicketsByStages=false] - Включить новые тикеты по стадиям в newTicketsByStages[].
  * @returns {Promise<{meta: object|null, data: object}>}
  */
 export async function fetchAdmissionClosureStats(params = {}) {
@@ -66,7 +68,8 @@ export async function fetchAdmissionClosureStats(params = {}) {
     weekEndUtc = null,
     useCache = true,
     forceRefresh = false,
-    includeTickets = false
+    includeTickets = false,
+    includeNewTicketsByStages = false
   } = params;
 
   const body = {
@@ -75,7 +78,8 @@ export async function fetchAdmissionClosureStats(params = {}) {
     weekEndUtc,
     useCache,
     forceRefresh,
-    includeTickets
+    includeTickets,
+    includeNewTicketsByStages
   };
 
   const response = await fetch(endpoint, {

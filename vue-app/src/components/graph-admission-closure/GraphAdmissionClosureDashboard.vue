@@ -47,6 +47,7 @@
             :meta="chartMeta"
             :data="chartData"
             @open-responsible="showResponsibleModal = true"
+            @open-stages="showStagesModal = true"
           />
         </div>
       </div>
@@ -59,6 +60,13 @@
       :week-end-utc="chartMeta?.weekEndUtc || null"
       @close="showResponsibleModal = false"
     />
+
+    <StagesModal
+      :is-visible="showStagesModal"
+      :week-start-utc="chartMeta?.weekStartUtc || null"
+      :week-end-utc="chartMeta?.weekEndUtc || null"
+      @close="showStagesModal = false"
+    />
   </div>
 </template>
 
@@ -69,6 +77,7 @@ import StatusMessage from '@/components/common/StatusMessage.vue';
 import FiltersPanel from '@/components/filters/FiltersPanel.vue';
 import GraphAdmissionClosureChart from './GraphAdmissionClosureChart.vue';
 import ResponsibleModal from './ResponsibleModal.vue';
+import StagesModal from './StagesModal.vue';
 import { fetchAdmissionClosureStats } from '@/services/graph-admission-closure/admissionClosureService.js';
 
 const isLoading = ref(true);
@@ -82,6 +91,7 @@ const chartData = ref({
   responsible: []
 });
 const showResponsibleModal = ref(false);
+const showStagesModal = ref(false);
 
 const filters = ref({
   stages: {

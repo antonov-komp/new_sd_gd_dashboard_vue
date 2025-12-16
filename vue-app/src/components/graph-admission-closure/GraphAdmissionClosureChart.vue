@@ -20,9 +20,6 @@
             <span class="chart-type-label">{{ type.label }}</span>
           </button>
         </div>
-        <button class="btn-link" @click="$emit('open-responsible')">
-          👥 Ответственные
-        </button>
       </div>
     </header>
 
@@ -43,7 +40,7 @@
             :key="stage.stageId"
             class="stage-tag"
           >
-            {{ stage.stageId }} — {{ stage.count }}
+            {{ stage.stageName || stage.stageId }} — {{ stage.count }}
           </span>
           <span v-if="!data.stages || data.stages.length === 0" class="stage-tag stage-tag--empty">
             Нет данных
@@ -84,7 +81,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['open-responsible']);
+const emit = defineEmits(['open-responsible', 'open-stages']);
 
 const chartTypes = [
   { value: 'line', label: 'Линейный', icon: '📈' },
@@ -160,9 +157,30 @@ const chartOptions = computed(() => ({
     tooltip: { enabled: true },
     legend: { position: 'top' }
   },
-  onClick: () => {
-    if ((props.data?.responsible || []).length > 0) {
-      emit('open-responsible');
+  onClick: (event, elements, chart) => {
+    if (elements.length === 0) {
+      return;
+    }
+    
+    const element = elements[0];
+    const datasetIndex = element.datasetIndex;
+    const dataset = chart.data.datasets[datasetIndex];
+    
+    if (!dataset || !dataset.label) {
+      return;
+    }
+    
+    // Определяем тип по label
+    if (dataset.label === 'Закрытые') {
+      // Проверяем, есть ли данные для закрытых
+      if ((props.data?.responsible || []).length > 0) {
+        emit('open-responsible');
+      }
+    } else if (dataset.label === 'Новые') {
+      // Проверяем, есть ли новые тикеты
+      if ((props.data?.newTickets || 0) > 0) {
+        emit('open-stages');
+      }
     }
   },
   scales: chartType.value === 'doughnut'
@@ -236,14 +254,6 @@ const chartOptions = computed(() => ({
 
 .chart-type-icon {
   font-size: 16px;
-}
-
-.btn-link {
-  border: none;
-  background: transparent;
-  color: var(--b24-primary, #007bff);
-  cursor: pointer;
-  font-weight: 600;
 }
 
 .ac-chart__summary {
