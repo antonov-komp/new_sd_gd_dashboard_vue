@@ -14,42 +14,97 @@ const DEFAULT_ENDPOINT = '/api/graph-1c-admission-closure.php';
 /**
  * Нормализует ответ бэкенда в ожидаемый формат фронта.
  * Гарантирует наличие meta/data и пустых значений по умолчанию.
+ * TASK-048: Обновлено для поддержки данных за 4 недели.
  */
 function normalizeResponse(raw) {
   if (!raw) {
     return {
       meta: null,
       data: {
-      newTickets: 0,
-      closedTickets: 0,
-      closedTicketsCreatedThisWeek: 0, // TASK-047
-      closedTicketsCreatedOtherWeek: 0, // TASK-047
-      series: { new: [0], closed: [0] },
-      stages: [],
-      responsible: [],
-      responsibleCreatedThisWeek: [], // TASK-047
-      responsibleCreatedOtherWeek: [] // TASK-047
+        currentWeek: { // TASK-048
+          newTickets: 0,
+          closedTickets: 0,
+          closedTicketsCreatedThisWeek: 0,
+          closedTicketsCreatedOtherWeek: 0,
+          carryoverTickets: 0,
+          carryoverTicketsCreatedThisWeek: 0,
+          carryoverTicketsCreatedOtherWeek: 0
+        },
+        newTickets: 0,
+        closedTickets: 0,
+        closedTicketsCreatedThisWeek: 0, // TASK-047
+        closedTicketsCreatedOtherWeek: 0, // TASK-047
+        series: { 
+          new: [0], 
+          closed: [0],
+          closedCreatedThisWeek: [0], // TASK-048
+          closedCreatedOtherWeek: [0], // TASK-048
+          carryover: [0],
+          carryoverCreatedThisWeek: [0], // TASK-048
+          carryoverCreatedOtherWeek: [0] // TASK-048
+        },
+        weeksData: [], // TASK-048
+        stages: [],
+        responsible: [],
+        responsibleCreatedThisWeek: [], // TASK-047
+        responsibleCreatedOtherWeek: [] // TASK-047
       }
     };
   }
 
   const payload = raw.data || raw.result || raw;
+  const meta = payload.meta || raw.meta || null;
 
   return {
-    meta: payload.meta || raw.meta || null,
+    meta: {
+      ...meta,
+      // TASK-048: Добавляем currentWeek и weeks в meta
+      currentWeek: meta?.currentWeek || (meta ? {
+        weekNumber: meta.weekNumber,
+        weekStartUtc: meta.weekStartUtc,
+        weekEndUtc: meta.weekEndUtc
+      } : null),
+      weeks: meta?.weeks || []
+    },
     data: {
-      newTickets: payload.data?.newTickets ?? payload.newTickets ?? 0,
-      closedTickets: payload.data?.closedTickets ?? payload.closedTickets ?? 0,
-      closedTicketsCreatedThisWeek: payload.data?.closedTicketsCreatedThisWeek ?? payload.closedTicketsCreatedThisWeek ?? 0, // TASK-047
-      closedTicketsCreatedOtherWeek: payload.data?.closedTicketsCreatedOtherWeek ?? payload.closedTicketsCreatedOtherWeek ?? 0, // TASK-047
-      carryoverTickets: payload.data?.carryoverTickets ?? payload.carryoverTickets ?? 0,
-      carryoverTicketsCreatedThisWeek: payload.data?.carryoverTicketsCreatedThisWeek ?? payload.carryoverTicketsCreatedThisWeek ?? 0, // TASK-047: НОВОЕ
-      carryoverTicketsCreatedOtherWeek: payload.data?.carryoverTicketsCreatedOtherWeek ?? payload.carryoverTicketsCreatedOtherWeek ?? 0, // TASK-047: НОВОЕ
+      // TASK-048: Добавляем currentWeek в data
+      currentWeek: payload.data?.currentWeek || (payload.data ? {
+        newTickets: payload.data.newTickets ?? 0,
+        closedTickets: payload.data.closedTickets ?? 0,
+        closedTicketsCreatedThisWeek: payload.data.closedTicketsCreatedThisWeek ?? 0,
+        closedTicketsCreatedOtherWeek: payload.data.closedTicketsCreatedOtherWeek ?? 0,
+        carryoverTickets: payload.data.carryoverTickets ?? 0,
+        carryoverTicketsCreatedThisWeek: payload.data.carryoverTicketsCreatedThisWeek ?? 0,
+        carryoverTicketsCreatedOtherWeek: payload.data.carryoverTicketsCreatedOtherWeek ?? 0
+      } : {
+        newTickets: 0,
+        closedTickets: 0,
+        closedTicketsCreatedThisWeek: 0,
+        closedTicketsCreatedOtherWeek: 0,
+        carryoverTickets: 0,
+        carryoverTicketsCreatedThisWeek: 0,
+        carryoverTicketsCreatedOtherWeek: 0
+      }),
+      // Для обратной совместимости
+      newTickets: payload.data?.currentWeek?.newTickets ?? payload.data?.newTickets ?? payload.newTickets ?? 0,
+      closedTickets: payload.data?.currentWeek?.closedTickets ?? payload.data?.closedTickets ?? payload.closedTickets ?? 0,
+      closedTicketsCreatedThisWeek: payload.data?.currentWeek?.closedTicketsCreatedThisWeek ?? payload.data?.closedTicketsCreatedThisWeek ?? payload.closedTicketsCreatedThisWeek ?? 0, // TASK-047
+      closedTicketsCreatedOtherWeek: payload.data?.currentWeek?.closedTicketsCreatedOtherWeek ?? payload.data?.closedTicketsCreatedOtherWeek ?? payload.closedTicketsCreatedOtherWeek ?? 0, // TASK-047
+      carryoverTickets: payload.data?.currentWeek?.carryoverTickets ?? payload.data?.carryoverTickets ?? payload.carryoverTickets ?? 0,
+      carryoverTicketsCreatedThisWeek: payload.data?.currentWeek?.carryoverTicketsCreatedThisWeek ?? payload.data?.carryoverTicketsCreatedThisWeek ?? payload.carryoverTicketsCreatedThisWeek ?? 0, // TASK-047
+      carryoverTicketsCreatedOtherWeek: payload.data?.currentWeek?.carryoverTicketsCreatedOtherWeek ?? payload.data?.carryoverTicketsCreatedOtherWeek ?? payload.carryoverTicketsCreatedOtherWeek ?? 0, // TASK-047
+      // TASK-048: Обновляем series для поддержки 4 недель и разбивок
       series: {
         new: payload.data?.series?.new ?? payload.series?.new ?? [0],
         closed: payload.data?.series?.closed ?? payload.series?.closed ?? [0],
-        carryover: payload.data?.series?.carryover ?? payload.series?.carryover ?? [0]
+        closedCreatedThisWeek: payload.data?.series?.closedCreatedThisWeek ?? payload.series?.closedCreatedThisWeek ?? [0], // TASK-048
+        closedCreatedOtherWeek: payload.data?.series?.closedCreatedOtherWeek ?? payload.series?.closedCreatedOtherWeek ?? [0], // TASK-048
+        carryover: payload.data?.series?.carryover ?? payload.series?.carryover ?? [0],
+        carryoverCreatedThisWeek: payload.data?.series?.carryoverCreatedThisWeek ?? payload.series?.carryoverCreatedThisWeek ?? [0], // TASK-048
+        carryoverCreatedOtherWeek: payload.data?.series?.carryoverCreatedOtherWeek ?? payload.series?.carryoverCreatedOtherWeek ?? [0] // TASK-048
       },
+      // TASK-048: Добавляем weeksData
+      weeksData: payload.data?.weeksData ?? payload.weeksData ?? [],
       stages: payload.data?.stages ?? payload.stages ?? [],
       responsible: payload.data?.responsible ?? payload.responsible ?? [],
       responsibleCreatedThisWeek: payload.data?.responsibleCreatedThisWeek ?? payload.responsibleCreatedThisWeek ?? [], // TASK-047
