@@ -616,3 +616,4 @@ function groupTicketsByDepartment(tickets) {
 
 
 
+

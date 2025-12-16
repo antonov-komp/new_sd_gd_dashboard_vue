@@ -151,3 +151,4 @@ export async function loadStageLevel1({
   throw new Error('Данные для выбранной стадии недоступны (meta/REST)');
 }
 
+
