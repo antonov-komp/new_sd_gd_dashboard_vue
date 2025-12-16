@@ -49,6 +49,13 @@
             </router-link>
             <span class="breadcrumb-separator" aria-hidden="true">/</span>
             <span class="breadcrumb-current">График состояния</span>
+            <span class="breadcrumb-separator" aria-hidden="true">/</span>
+            <router-link 
+              :to="{ name: 'dashboard-graph-admission-closure' }"
+              class="breadcrumb-link"
+            >
+              График приёма и закрытий
+            </router-link>
           </nav>
         </div>
         <h1 class="dashboard-title">График состояния сектора 1С</h1>

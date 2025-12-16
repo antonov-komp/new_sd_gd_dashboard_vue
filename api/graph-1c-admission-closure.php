@@ -280,19 +280,30 @@ try {
     
     // Запрос 3: переходящие тикеты (созданные до начала недели, в рабочих стадиях)
     // Запрашиваем только если includeCarryoverTickets === true
-    // ВАЖНО: Запрашиваем каждую стадию отдельно, так как Bitrix24 может некорректно обрабатывать фильтр по массиву стадий
+    // ВАЖНО: Запрашиваем ВСЕ тикеты в рабочих стадиях (без фильтра по createdTime),
+    // затем фильтруем на PHP, чтобы не пропустить тикеты, которые могли перемещаться между стадиями
     if ($includeCarryoverTickets) {
         $carryoverQueryCount = 0; // Счётчик для отладки
+        $carryoverByStageBeforeFilter = [];
+        $carryoverByStageAfterFilter = [];
         
-        // Запрашиваем тикеты для каждой рабочей стадии отдельно
+        error_log("[CARRYOVER] Начало загрузки переходящих тикетов. weekStart: {$weekStartStr}");
+        
+        // Запрашиваем ВСЕ тикеты для каждой рабочей стадии отдельно (без фильтра по createdTime)
         foreach ($targetStages as $stageId) {
             $start = 0;
-            do {
+            $pageNum = 0;
+            $hasMore = true;
+            $stageTotalBeforeFilter = 0;
+            $stageTotalAfterFilter = 0;
+            
+            error_log("[CARRYOVER] Стадия: {$stageId}");
+            
+            while ($hasMore) {
                 $result = CRest::call('crm.item.list', [
                     'entityTypeId' => $entityTypeId,
                     'filter' => [
-                        '<createdTime' => $weekStartStr,
-                        'stageId' => $stageId  // Фильтр по одной стадии
+                        'stageId' => $stageId  // Фильтр только по стадии, БЕЗ фильтра по createdTime
                     ],
                     'select' => [
                         'id',
@@ -314,39 +325,71 @@ try {
 
                 $items = $result['result']['items'] ?? [];
                 $carryoverQueryCount += count($items);
+                $pageNum++;
+                $stageTotalBeforeFilter += count($items);
+                
+                $nextValue = $result['result']['next'] ?? $result['next'] ?? null;
+                error_log("[CARRYOVER] Стадия {$stageId}, Страница {$pageNum}: загружено " . count($items) . " тикетов, start={$start}, next=" . ($nextValue ?? 'null'));
+                
+                // Отладочная информация для каждой страницы
+                if ($debug) {
+                    $debugRaw['carryover_stage_' . $stageId . '_page_' . $pageNum] = [
+                        'start' => $start,
+                        'items_count' => count($items),
+                        'next' => $nextValue
+                    ];
+                }
                 
                 foreach ($items as $item) {
                     // Добавляем только если тикет ещё не был добавлен
-                    if (!isset($allTicketsMap[$item['id']])) {
-                        $allTicketsMap[$item['id']] = $item;
+                    // И только если он создан до начала недели (фильтруем на PHP)
+                    $createdTime = $item['createdTime'] ?? null;
+                    if ($createdTime) {
+                        $createdDt = new DateTimeImmutable($createdTime, new DateTimeZone('UTC'));
+                        // Добавляем только тикеты, созданные до начала недели
+                        if ($createdDt < $weekStart && !isset($allTicketsMap[$item['id']])) {
+                            $allTicketsMap[$item['id']] = $item;
+                            $stageTotalAfterFilter++;
+                        }
                     }
                 }
 
-                // Проверяем наличие следующей страницы
-                $hasNext = isset($result['result']['next']) && $result['result']['next'] > 0;
-                $start += $pageSize;
+                // Улучшенная проверка наличия следующей страницы
+                // Bitrix24 может возвращать next в разных форматах
+                $hasNext = $nextValue !== null && 
+                          $nextValue !== '' && 
+                          $nextValue !== '0' && 
+                          (int)$nextValue > 0;
                 
-                // Дополнительная проверка: если получили меньше pageSize элементов, значит это последняя страница
-                if (count($items) < $pageSize) {
-                    $hasNext = false;
+                // Продолжаем загрузку, если:
+                // 1. Получили полный батч (pageSize) И есть next - точно есть ещё данные
+                // 2. Если получили меньше pageSize - это последняя страница (даже если есть next)
+                $hasMore = count($items) === $pageSize && $hasNext;
+                
+                if (!$hasMore) {
+                    error_log("[CARRYOVER] Стадия {$stageId}: пагинация завершена (получено " . count($items) . " тикетов, hasNext=" . ($hasNext ? 'true' : 'false') . ")");
                 }
-            } while ($hasNext);
+                
+                $start += $pageSize;
+            }
+            
+            $carryoverByStageBeforeFilter[$stageId] = $stageTotalBeforeFilter;
+            $carryoverByStageAfterFilter[$stageId] = $stageTotalAfterFilter;
+            error_log("[CARRYOVER] Стадия {$stageId} завершена: всего загружено {$stageTotalBeforeFilter}, после фильтра по createdTime: {$stageTotalAfterFilter}");
         }
         
-        // Отладочная информация
+        error_log("[CARRYOVER] Всего загружено тикетов: {$carryoverQueryCount}");
+        error_log("[CARRYOVER] Уникальных тикетов в allTicketsMap (после фильтра по createdTime): " . count($allTicketsMap));
+        
+        // Отладочная информация (всегда выводим в консоль)
+        error_log("[CARRYOVER] Статистика по стадиям (до фильтра по createdTime): " . json_encode($carryoverByStageBeforeFilter, JSON_UNESCAPED_UNICODE));
+        error_log("[CARRYOVER] Статистика по стадиям (после фильтра по createdTime): " . json_encode($carryoverByStageAfterFilter, JSON_UNESCAPED_UNICODE));
+        
         if ($debug) {
             $debugRaw['carryover_query_total'] = $carryoverQueryCount;
-            $debugRaw['carryover_query_unique'] = count(array_filter($allTicketsMap, function($item) use ($weekStartStr, $targetStages) {
-                $createdTime = $item['createdTime'] ?? null;
-                $stageId = $item['stageId'] ?? null;
-                if (!$createdTime || !$stageId) {
-                    return false;
-                }
-                $stageIdUpper = strtoupper($stageId);
-                $createdDt = new DateTimeImmutable($createdTime, new DateTimeZone('UTC'));
-                $weekStart = new DateTimeImmutable($weekStartStr, new DateTimeZone('UTC'));
-                return $createdDt < $weekStart && in_array($stageIdUpper, $targetStages, true);
-            }));
+            $debugRaw['carryover_query_unique_before_filter'] = count($allTicketsMap);
+            $debugRaw['carryover_by_stage_before_filter'] = $carryoverByStageBeforeFilter;
+            $debugRaw['carryover_by_stage_after_filter'] = $carryoverByStageAfterFilter;
         }
     }
     
@@ -354,6 +397,9 @@ try {
     $allTickets = array_values($allTicketsMap);
 
     // Фильтруем по product=1C (первым шагом, как в модулях 1/2)
+    $ticketsBeforeProductFilter = count($allTickets);
+    error_log("[CARRYOVER] Тикетов до фильтра по продукту 1C: {$ticketsBeforeProductFilter}");
+    
     foreach ($allTickets as $item) {
         // Фильтр product первым шагом
         $tagRaw = $item['UF_CRM_7_TYPE_PRODUCT'] ?? $item['ufCrm7TypeProduct'] ?? null;
@@ -377,6 +423,9 @@ try {
         }
         $tickets[] = $item;
     }
+    
+    $ticketsAfterProductFilter = count($tickets);
+    error_log("[CARRYOVER] Тикетов после фильтра по продукту 1C: {$ticketsAfterProductFilter}");
 
     // Определение всех стадий с названиями и цветами
     $allStages = [
@@ -534,6 +583,11 @@ try {
         if ($includeCarryoverTickets && isCarryoverTicket($ticket, $weekStart, $targetStages, $closingStages)) {
             $carryoverCount++;
             
+            // Логируем первые 10 и каждый 10-й переходящий тикет для диагностики
+            if ($carryoverCount <= 10 || $carryoverCount % 10 === 0) {
+                error_log("[CARRYOVER] Переходящий тикет #{$carryoverCount}: ID={$ticket['id']}, stageId={$stageId}, createdTime={$createdTime}");
+            }
+            
             // Нормализация assignedById (как для закрытых тикетов)
             $responsibleId = $assignedRaw;
             if (is_array($responsibleId)) {
@@ -627,6 +681,9 @@ try {
     if ($includeCarryoverTickets) {
         $responseData['carryoverTickets'] = $carryoverCount;
         $responseData['series']['carryover'] = [$carryoverCount];
+        
+        error_log("[CARRYOVER] ИТОГО переходящих тикетов после всех фильтров: {$carryoverCount}");
+        error_log("[CARRYOVER] ========================================");
     }
     
     // Добавить переходящие тикеты по срокам, если запрошено (TASK-044-04)

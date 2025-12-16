@@ -31,6 +31,14 @@
           <span class="icon">📊</span>
           <span>График состояния</span>
         </button>
+        <button 
+          @click="navigateToAdmissionClosure"
+          class="btn-navigate-admission-closure"
+          title="Перейти к графику приёма и закрытий сектора"
+        >
+          <span class="icon">📈</span>
+          <span>График приёма и закрытий</span>
+        </button>
       </div>
     </div>
 
@@ -240,6 +248,13 @@ export default {
       router.push({ name: 'dashboard-graph-state' });
     };
 
+    /**
+     * Переход к графику приёма и закрытий
+     */
+    const navigateToAdmissionClosure = () => {
+      router.push({ name: 'dashboard-graph-admission-closure' });
+    };
+
     // Извлекаем loadingProgress для удобства доступа
     const loadingProgress = actions.loadingProgress;
 
@@ -301,6 +316,7 @@ export default {
       preloaderFadeOutTransform,
       dashboardFadeInTransform,
       navigateToGraphState,
+      navigateToAdmissionClosure,
       
       // Диагностика
       isDiagnosticsEnabled: isDiagnosticsEnabledFlag,
@@ -368,6 +384,29 @@ export default {
 }
 
 .btn-navigate-graph-state .icon {
+  font-size: 18px;
+}
+
+.btn-navigate-admission-closure {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background-color: #10b981;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-navigate-admission-closure:hover {
+  background-color: #059669;
+}
+
+.btn-navigate-admission-closure .icon {
   font-size: 18px;
 }
 
