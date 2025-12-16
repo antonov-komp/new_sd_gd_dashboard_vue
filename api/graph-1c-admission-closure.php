@@ -280,43 +280,74 @@ try {
     
     // Запрос 3: переходящие тикеты (созданные до начала недели, в рабочих стадиях)
     // Запрашиваем только если includeCarryoverTickets === true
+    // ВАЖНО: Запрашиваем каждую стадию отдельно, так как Bitrix24 может некорректно обрабатывать фильтр по массиву стадий
     if ($includeCarryoverTickets) {
-        $start = 0;
-        do {
-            $result = CRest::call('crm.item.list', [
-                'entityTypeId' => $entityTypeId,
-                'filter' => [
-                    '<createdTime' => $weekStartStr,
-                    'stageId' => $targetStages
-                ],
-                'select' => [
-                    'id',
-                    'title',
-                    'stageId',
-                    'assignedById',
-                    'createdTime',
-                    'updatedTime',
-                    'movedTime',
-                    'UF_CRM_7_TYPE_PRODUCT',
-                    'ufCrm7TypeProduct'
-                ],
-                'start' => $start
-            ]);
+        $carryoverQueryCount = 0; // Счётчик для отладки
+        
+        // Запрашиваем тикеты для каждой рабочей стадии отдельно
+        foreach ($targetStages as $stageId) {
+            $start = 0;
+            do {
+                $result = CRest::call('crm.item.list', [
+                    'entityTypeId' => $entityTypeId,
+                    'filter' => [
+                        '<createdTime' => $weekStartStr,
+                        'stageId' => $stageId  // Фильтр по одной стадии
+                    ],
+                    'select' => [
+                        'id',
+                        'title',
+                        'stageId',
+                        'assignedById',
+                        'createdTime',
+                        'updatedTime',
+                        'movedTime',
+                        'UF_CRM_7_TYPE_PRODUCT',
+                        'ufCrm7TypeProduct'
+                    ],
+                    'start' => $start
+                ]);
 
-            if (isset($result['error'])) {
-                throw new Exception($result['error_description'] ?? $result['error']);
-            }
-
-            $items = $result['result']['items'] ?? [];
-            foreach ($items as $item) {
-                // Добавляем только если тикет ещё не был добавлен
-                if (!isset($allTicketsMap[$item['id']])) {
-                    $allTicketsMap[$item['id']] = $item;
+                if (isset($result['error'])) {
+                    throw new Exception($result['error_description'] ?? $result['error']);
                 }
-            }
 
-            $start += $pageSize;
-        } while (isset($result['result']['next']));
+                $items = $result['result']['items'] ?? [];
+                $carryoverQueryCount += count($items);
+                
+                foreach ($items as $item) {
+                    // Добавляем только если тикет ещё не был добавлен
+                    if (!isset($allTicketsMap[$item['id']])) {
+                        $allTicketsMap[$item['id']] = $item;
+                    }
+                }
+
+                // Проверяем наличие следующей страницы
+                $hasNext = isset($result['result']['next']) && $result['result']['next'] > 0;
+                $start += $pageSize;
+                
+                // Дополнительная проверка: если получили меньше pageSize элементов, значит это последняя страница
+                if (count($items) < $pageSize) {
+                    $hasNext = false;
+                }
+            } while ($hasNext);
+        }
+        
+        // Отладочная информация
+        if ($debug) {
+            $debugRaw['carryover_query_total'] = $carryoverQueryCount;
+            $debugRaw['carryover_query_unique'] = count(array_filter($allTicketsMap, function($item) use ($weekStartStr, $targetStages) {
+                $createdTime = $item['createdTime'] ?? null;
+                $stageId = $item['stageId'] ?? null;
+                if (!$createdTime || !$stageId) {
+                    return false;
+                }
+                $stageIdUpper = strtoupper($stageId);
+                $createdDt = new DateTimeImmutable($createdTime, new DateTimeZone('UTC'));
+                $weekStart = new DateTimeImmutable($weekStartStr, new DateTimeZone('UTC'));
+                return $createdDt < $weekStart && in_array($stageIdUpper, $targetStages, true);
+            }));
+        }
     }
     
     // Преобразуем map в массив
