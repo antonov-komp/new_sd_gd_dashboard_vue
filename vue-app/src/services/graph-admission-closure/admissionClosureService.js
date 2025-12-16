@@ -20,11 +20,15 @@ function normalizeResponse(raw) {
     return {
       meta: null,
       data: {
-        newTickets: 0,
-        closedTickets: 0,
-        series: { new: [0], closed: [0] },
-        stages: [],
-        responsible: []
+      newTickets: 0,
+      closedTickets: 0,
+      closedTicketsCreatedThisWeek: 0, // TASK-047
+      closedTicketsCreatedOtherWeek: 0, // TASK-047
+      series: { new: [0], closed: [0] },
+      stages: [],
+      responsible: [],
+      responsibleCreatedThisWeek: [], // TASK-047
+      responsibleCreatedOtherWeek: [] // TASK-047
       }
     };
   }
@@ -36,7 +40,11 @@ function normalizeResponse(raw) {
     data: {
       newTickets: payload.data?.newTickets ?? payload.newTickets ?? 0,
       closedTickets: payload.data?.closedTickets ?? payload.closedTickets ?? 0,
+      closedTicketsCreatedThisWeek: payload.data?.closedTicketsCreatedThisWeek ?? payload.closedTicketsCreatedThisWeek ?? 0, // TASK-047
+      closedTicketsCreatedOtherWeek: payload.data?.closedTicketsCreatedOtherWeek ?? payload.closedTicketsCreatedOtherWeek ?? 0, // TASK-047
       carryoverTickets: payload.data?.carryoverTickets ?? payload.carryoverTickets ?? 0,
+      carryoverTicketsCreatedThisWeek: payload.data?.carryoverTicketsCreatedThisWeek ?? payload.carryoverTicketsCreatedThisWeek ?? 0, // TASK-047: НОВОЕ
+      carryoverTicketsCreatedOtherWeek: payload.data?.carryoverTicketsCreatedOtherWeek ?? payload.carryoverTicketsCreatedOtherWeek ?? 0, // TASK-047: НОВОЕ
       series: {
         new: payload.data?.series?.new ?? payload.series?.new ?? [0],
         closed: payload.data?.series?.closed ?? payload.series?.closed ?? [0],
@@ -44,6 +52,8 @@ function normalizeResponse(raw) {
       },
       stages: payload.data?.stages ?? payload.stages ?? [],
       responsible: payload.data?.responsible ?? payload.responsible ?? [],
+      responsibleCreatedThisWeek: payload.data?.responsibleCreatedThisWeek ?? payload.responsibleCreatedThisWeek ?? [], // TASK-047
+      responsibleCreatedOtherWeek: payload.data?.responsibleCreatedOtherWeek ?? payload.responsibleCreatedOtherWeek ?? [], // TASK-047
       newTicketsByStages: payload.data?.newTicketsByStages ?? payload.newTicketsByStages ?? null,
       carryoverTicketsByDuration: payload.data?.carryoverTicketsByDuration ?? payload.carryoverTicketsByDuration ?? null
     }

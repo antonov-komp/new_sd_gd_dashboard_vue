@@ -125,7 +125,7 @@ function calculateDurationCategory(string $createdTime, DateTimeImmutable $weekS
  * @param array $closingStages Закрывающие стадии
  * @return bool
  */
-function isCarryoverTicket(array $ticket, DateTimeImmutable $weekStart, array $targetStages, array $closingStages): bool
+function isCarryoverTicket(array $ticket, DateTimeImmutable $weekStart, DateTimeImmutable $weekEnd, array $targetStages, array $closingStages): bool
 {
     $createdTime = $ticket['createdTime'] ?? null;
     $stageId = $ticket['stageId'] ?? null;
@@ -137,26 +137,18 @@ function isCarryoverTicket(array $ticket, DateTimeImmutable $weekStart, array $t
     // Нормализация stageId
     $stageId = strtoupper($stageId);
     
-    // Условие 1: Создан до начала недели
-    $ts = strtotime($createdTime);
-    if ($ts === false) {
-        return false;
-    }
-    $createdDt = (new DateTimeImmutable('@' . $ts))->setTimezone(new DateTimeZone('UTC'));
-    if ($createdDt >= $weekStart) {
-        return false; // Создан в текущую неделю, не переходящий
-    }
-    
-    // Условие 2: Находится в рабочих стадиях
+    // Условие 1: Находится в рабочих стадиях
     if (!in_array($stageId, $targetStages, true)) {
         return false; // Не в рабочей стадии
     }
     
-    // Условие 3: Не в закрывающих стадиях (дополнительная проверка)
+    // Условие 2: Не в закрывающих стадиях (дополнительная проверка)
     if (in_array($stageId, $closingStages, true)) {
         return false; // В закрывающей стадии
     }
     
+    // TASK-047: Теперь переходящие тикеты - это все не закрытые тикеты в рабочих стадиях
+    // (независимо от даты создания - включаем и созданные этой неделей, и созданные ранее)
     return true;
 }
 
@@ -483,10 +475,17 @@ try {
     // Агрегации
     $newCount = 0;
     $closedCount = 0;
+    $closedTicketsCreatedThisWeek = 0; // TASK-047: закрытые тикеты, созданные в эту же неделю
+    $closedTicketsCreatedOtherWeek = 0; // TASK-047: закрытые тикеты, созданные в другие недели
     $carryoverCount = 0;
+    // TASK-047: Разбивка переходящих тикетов по критерию создания
+    $carryoverTicketsCreatedThisWeek = 0;
+    $carryoverTicketsCreatedOtherWeek = 0;
     $carryoverTickets = []; // Для будущего использования
     $stageAgg = [];
     $responsibleAgg = [];
+    $responsibleCreatedThisWeekAgg = []; // TASK-047: агрегация по сотрудникам для категории "созданные этой неделей"
+    $responsibleCreatedOtherWeekAgg = []; // TASK-047: агрегация по сотрудникам для категории "созданные ранее"
     
     // Инициализация агрегации переходящих тикетов по срокам (TASK-044-04)
     $carryoverTicketsByDurationAgg = [];
@@ -542,13 +541,10 @@ try {
         if ($stageId && in_array($stageId, $closingStages, true) && isInRange($movedTime, $weekStart, $weekEnd)) {
             $closedCount++;
 
-            // Агрегация по стадиям
-            if (!isset($stageAgg[$stageId])) {
-                $stageAgg[$stageId] = 0;
-            }
-            $stageAgg[$stageId]++;
-
-            // Агрегация по ответственным (для попапа 1-го уровня)
+            // TASK-047: Разбивка по критерию создания
+            $createdInThisWeek = isInRange($createdTime, $weekStart, $weekEnd);
+            
+            // Нормализация assignedById (как для закрытых тикетов)
             $responsibleId = $assignedRaw;
             if (is_array($responsibleId)) {
                 $responsibleId = $responsibleId['id'] ?? $responsibleId['ID'] ?? $responsibleId['value'] ?? null;
@@ -556,6 +552,65 @@ try {
             $responsibleId = $responsibleId ? (int)$responsibleId : null;
             $responsibleKey = ($responsibleId === null || $responsibleId === $keeperId) ? 'unassigned' : (string)$responsibleId;
 
+            if ($createdInThisWeek) {
+                $closedTicketsCreatedThisWeek++;
+                
+                // Агрегация по сотрудникам для категории "созданные этой неделей"
+                if (!isset($responsibleCreatedThisWeekAgg[$responsibleKey])) {
+                    $responsibleCreatedThisWeekAgg[$responsibleKey] = [
+                        'id' => $responsibleId,
+                        'name' => ($responsibleId === null || $responsibleId === $keeperId) ? 'Не назначен' : ('ID ' . $responsibleId),
+                        'count' => 0,
+                        'tickets' => []
+                    ];
+                }
+                $responsibleCreatedThisWeekAgg[$responsibleKey]['count']++;
+                
+                // Если нужно включить тикеты, сохранить данные тикета
+                if ($includeTickets) {
+                    $responsibleCreatedThisWeekAgg[$responsibleKey]['tickets'][] = [
+                        'id' => (int)$ticket['id'],
+                        'title' => $ticket['title'] ?? 'Без названия',
+                        'createdTime' => $ticket['createdTime'] ?? null,
+                        'movedTime' => $movedTime,
+                        'stageId' => $stageId,
+                        'assignedById' => $responsibleId
+                    ];
+                }
+            } else {
+                $closedTicketsCreatedOtherWeek++;
+                
+                // Агрегация по сотрудникам для категории "созданные ранее"
+                if (!isset($responsibleCreatedOtherWeekAgg[$responsibleKey])) {
+                    $responsibleCreatedOtherWeekAgg[$responsibleKey] = [
+                        'id' => $responsibleId,
+                        'name' => ($responsibleId === null || $responsibleId === $keeperId) ? 'Не назначен' : ('ID ' . $responsibleId),
+                        'count' => 0,
+                        'tickets' => []
+                    ];
+                }
+                $responsibleCreatedOtherWeekAgg[$responsibleKey]['count']++;
+                
+                // Если нужно включить тикеты, сохранить данные тикета
+                if ($includeTickets) {
+                    $responsibleCreatedOtherWeekAgg[$responsibleKey]['tickets'][] = [
+                        'id' => (int)$ticket['id'],
+                        'title' => $ticket['title'] ?? 'Без названия',
+                        'createdTime' => $ticket['createdTime'] ?? null,
+                        'movedTime' => $movedTime,
+                        'stageId' => $stageId,
+                        'assignedById' => $responsibleId
+                    ];
+                }
+            }
+
+            // Агрегация по стадиям (общая для всех закрытых)
+            if (!isset($stageAgg[$stageId])) {
+                $stageAgg[$stageId] = 0;
+            }
+            $stageAgg[$stageId]++;
+
+            // Агрегация по ответственным (общая для всех закрытых, для обратной совместимости)
             if (!isset($responsibleAgg[$responsibleKey])) {
                 $responsibleAgg[$responsibleKey] = [
                     'id' => $responsibleId,
@@ -566,7 +621,7 @@ try {
             }
             $responsibleAgg[$responsibleKey]['count']++;
             
-            // Если нужно включить тикеты, сохранить данные тикета
+            // Если нужно включить тикеты, сохранить данные тикета (общая агрегация)
             if ($includeTickets) {
                 $responsibleAgg[$responsibleKey]['tickets'][] = [
                     'id' => (int)$ticket['id'],
@@ -579,13 +634,23 @@ try {
             }
         }
         
-        // Переходящие тикеты (созданные до начала недели, в рабочих стадиях, не закрытые)
-        if ($includeCarryoverTickets && isCarryoverTicket($ticket, $weekStart, $targetStages, $closingStages)) {
+        // Переходящие тикеты (в рабочих стадиях, не закрытые)
+        // TASK-047: Расширено определение - теперь включаем все не закрытые тикеты в рабочих стадиях
+        if ($includeCarryoverTickets && isCarryoverTicket($ticket, $weekStart, $weekEnd, $targetStages, $closingStages)) {
             $carryoverCount++;
+            
+            // TASK-047: Разбивка по критерию создания
+            $createdInThisWeek = isInRange($createdTime, $weekStart, $weekEnd);
+            
+            if ($createdInThisWeek) {
+                $carryoverTicketsCreatedThisWeek++;
+            } else {
+                $carryoverTicketsCreatedOtherWeek++;
+            }
             
             // Логируем первые 10 и каждый 10-й переходящий тикет для диагностики
             if ($carryoverCount <= 10 || $carryoverCount % 10 === 0) {
-                error_log("[CARRYOVER] Переходящий тикет #{$carryoverCount}: ID={$ticket['id']}, stageId={$stageId}, createdTime={$createdTime}");
+                error_log("[CARRYOVER] Переходящий тикет #{$carryoverCount}: ID={$ticket['id']}, stageId={$stageId}, createdTime={$createdTime}, createdInThisWeek=" . ($createdInThisWeek ? 'true' : 'false'));
             }
             
             // Нормализация assignedById (как для закрытых тикетов)
@@ -632,6 +697,8 @@ try {
     $responseData = [
         'newTickets' => $newCount,
         'closedTickets' => $closedCount,
+        'closedTicketsCreatedThisWeek' => $closedTicketsCreatedThisWeek, // TASK-047
+        'closedTicketsCreatedOtherWeek' => $closedTicketsCreatedOtherWeek, // TASK-047
         'series' => [
             'new' => [$newCount],
             'closed' => [$closedCount]
@@ -658,6 +725,34 @@ try {
             
             return $result;
         }, array_values($responsibleAgg)),
+        'responsibleCreatedThisWeek' => array_map(function ($item) use ($includeTickets) { // TASK-047
+            $result = [
+                'id' => $item['id'],
+                'name' => $item['name'],
+                'count' => $item['count']
+            ];
+            
+            // Включить тикеты только если запрошено
+            if ($includeTickets && isset($item['tickets'])) {
+                $result['tickets'] = $item['tickets'];
+            }
+            
+            return $result;
+        }, array_values($responsibleCreatedThisWeekAgg)),
+        'responsibleCreatedOtherWeek' => array_map(function ($item) use ($includeTickets) { // TASK-047
+            $result = [
+                'id' => $item['id'],
+                'name' => $item['name'],
+                'count' => $item['count']
+            ];
+            
+            // Включить тикеты только если запрошено
+            if ($includeTickets && isset($item['tickets'])) {
+                $result['tickets'] = $item['tickets'];
+            }
+            
+            return $result;
+        }, array_values($responsibleCreatedOtherWeekAgg)),
         'newTicketsByStages' => $includeNewTicketsByStages 
             ? array_map(function ($item) use ($includeTickets) {
                 $result = [
@@ -680,9 +775,13 @@ try {
     // Добавить переходящие тикеты, если запрошено
     if ($includeCarryoverTickets) {
         $responseData['carryoverTickets'] = $carryoverCount;
+        // TASK-047: Разбивка переходящих тикетов по критерию создания
+        $responseData['carryoverTicketsCreatedThisWeek'] = $carryoverTicketsCreatedThisWeek;
+        $responseData['carryoverTicketsCreatedOtherWeek'] = $carryoverTicketsCreatedOtherWeek;
         $responseData['series']['carryover'] = [$carryoverCount];
         
         error_log("[CARRYOVER] ИТОГО переходящих тикетов после всех фильтров: {$carryoverCount}");
+        error_log("[CARRYOVER] Созданных этой неделей: {$carryoverTicketsCreatedThisWeek}, созданных прошлыми неделями (жёсткий остаток): {$carryoverTicketsCreatedOtherWeek}");
         error_log("[CARRYOVER] ========================================");
     }
     

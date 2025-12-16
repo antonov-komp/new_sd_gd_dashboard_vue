@@ -88,6 +88,10 @@
     <ResponsibleModal
       :is-visible="showResponsibleModal"
       :responsible="chartData.responsible || []"
+      :closed-tickets-created-this-week="chartData.closedTicketsCreatedThisWeek ?? 0"
+      :closed-tickets-created-other-week="chartData.closedTicketsCreatedOtherWeek ?? 0"
+      :responsible-created-this-week="chartData.responsibleCreatedThisWeek || []"
+      :responsible-created-other-week="chartData.responsibleCreatedOtherWeek || []"
       :week-start-utc="chartMeta?.weekStartUtc || null"
       :week-end-utc="chartMeta?.weekEndUtc || null"
       @close="showResponsibleModal = false"
@@ -215,7 +219,8 @@ async function loadData() {
     const { meta, data } = await fetchAdmissionClosureStats({
       product: '1C',
       weekStartUtc,
-      weekEndUtc
+      weekEndUtc,
+      includeTickets: true // TASK-047: Включаем тикеты для вкладки "По сотрудникам"
     });
     chartMeta.value = meta;
     chartData.value = data;

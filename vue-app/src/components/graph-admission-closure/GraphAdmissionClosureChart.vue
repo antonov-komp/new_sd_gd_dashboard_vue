@@ -28,13 +28,39 @@
         <div class="summary-card__label">Новые за неделю</div>
         <div class="summary-card__value">{{ data.newTickets ?? 0 }}</div>
       </div>
-      <div class="summary-card summary-card--closed" @click="handleSummaryClick('closed')">
+      <!-- TASK-047: Три цифры для закрытых тикетов (компактный вариант) -->
+      <div class="summary-card summary-card--closed-breakdown" @click="handleSummaryClick('closed')">
         <div class="summary-card__label">Закрытые за неделю</div>
-        <div class="summary-card__value">{{ data.closedTickets ?? 0 }}</div>
+        <div class="summary-card__value-main">{{ data.closedTickets ?? 0 }}</div>
+        <div class="summary-card__breakdown">
+          <div class="breakdown-item breakdown-item--this-week">
+            <span class="breakdown-item__icon">✓</span>
+            <span class="breakdown-item__value">{{ data.closedTicketsCreatedThisWeek ?? 0 }}</span>
+            <span class="breakdown-item__label">этой неделей</span>
+          </div>
+          <div class="breakdown-item breakdown-item--other-week">
+            <span class="breakdown-item__icon">↻</span>
+            <span class="breakdown-item__value">{{ data.closedTicketsCreatedOtherWeek ?? 0 }}</span>
+            <span class="breakdown-item__label">другой неделей</span>
+          </div>
+        </div>
       </div>
-      <div class="summary-card summary-card--carryover" @click="handleSummaryClick('carryover')">
+      <!-- TASK-047: Три цифры для переходящих тикетов (компактный вариант) -->
+      <div class="summary-card summary-card--carryover-breakdown" @click="handleSummaryClick('carryover')">
         <div class="summary-card__label">Переходящие</div>
-        <div class="summary-card__value">{{ data.carryoverTickets ?? 0 }}</div>
+        <div class="summary-card__value-main">{{ data.carryoverTickets ?? 0 }}</div>
+        <div class="summary-card__breakdown">
+          <div class="breakdown-item breakdown-item--this-week">
+            <span class="breakdown-item__icon">✓</span>
+            <span class="breakdown-item__value">{{ data.carryoverTicketsCreatedThisWeek ?? 0 }}</span>
+            <span class="breakdown-item__label">этой неделей</span>
+          </div>
+          <div class="breakdown-item breakdown-item--other-week">
+            <span class="breakdown-item__icon">↻</span>
+            <span class="breakdown-item__value">{{ data.carryoverTicketsCreatedOtherWeek ?? 0 }}</span>
+            <span class="breakdown-item__label">другой неделей</span>
+          </div>
+        </div>
       </div>
       <div class="summary-card summary-card--stages">
         <div class="summary-card__label">Закрытия по стадиям</div>
@@ -78,6 +104,11 @@ const props = defineProps({
     default: () => ({
       newTickets: 0,
       closedTickets: 0,
+      closedTicketsCreatedThisWeek: 0, // TASK-047
+      closedTicketsCreatedOtherWeek: 0, // TASK-047
+      carryoverTickets: 0,
+      carryoverTicketsCreatedThisWeek: 0, // TASK-047
+      carryoverTicketsCreatedOtherWeek: 0, // TASK-047
       series: { new: [0], closed: [0] },
       stages: [],
       responsible: []
@@ -353,6 +384,92 @@ const handleSummaryClick = (type) => {
 
 .ac-chart__body {
   min-height: 320px;
+}
+
+/* TASK-047: Компактная карточка с разбивкой закрытых тикетов */
+.summary-card--closed-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* TASK-047: Компактная карточка с разбивкой переходящих тикетов */
+.summary-card--carryover-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.summary-card__value-main {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--b24-primary, #007bff);
+  line-height: 1.2;
+  margin-bottom: 4px;
+}
+
+/* Компактный контейнер для разбивки */
+.summary-card__breakdown {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* Компактный элемент разбивки */
+.breakdown-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: var(--b24-bg, #f9fafb);
+}
+
+.breakdown-item__icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.breakdown-item--this-week .breakdown-item__icon {
+  color: var(--b24-success, #28a745);
+}
+
+.breakdown-item--other-week .breakdown-item__icon {
+  color: var(--b24-warning, #ffc107);
+}
+
+.breakdown-item__value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--b24-text-primary, #111827);
+}
+
+.breakdown-item--this-week .breakdown-item__value {
+  color: var(--b24-success, #28a745);
+}
+
+.breakdown-item--other-week .breakdown-item__value {
+  color: var(--b24-warning, #ffc107);
+}
+
+.breakdown-item__label {
+  font-size: 11px;
+  color: var(--b24-text-secondary, #6b7280);
+}
+
+/* Адаптивность для мобильных устройств */
+@media (max-width: 768px) {
+  .summary-card__breakdown {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  
+  .summary-card__value-main {
+    font-size: 20px;
+  }
 }
 </style>
 
