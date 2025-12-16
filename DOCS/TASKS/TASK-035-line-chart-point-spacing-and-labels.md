@@ -716,3 +716,4 @@ ChartJS.register(pointJitterPlugin, pointLabelsPlugin);
 **Исполнитель:** Bitrix24 Программист (Vue.js)
 
 
+
