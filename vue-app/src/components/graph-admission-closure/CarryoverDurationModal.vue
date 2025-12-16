@@ -8,10 +8,10 @@
     <div class="modal">
       <!-- Transition для плавной анимации между уровнями -->
       <Transition name="level" mode="out-in">
-        <!-- Уровень 1: Список сотрудников -->
+        <!-- Уровень 1: Градация по срокам -->
         <div v-if="popupLevel === 1" key="level-1" class="level-1">
           <header class="modal__header">
-            <h3 class="modal__title">Ответственные за неделю</h3>
+            <h3 class="modal__title">Переходящие тикеты по срокам</h3>
             <button class="modal__close" @click="$emit('close')" aria-label="Закрыть">
               ✕
             </button>
@@ -20,27 +20,31 @@
           <section class="modal__body">
             <!-- Transition для состояний загрузки -->
             <Transition name="loading" mode="out-in">
-              <div v-if="isLoadingNames" key="loading" class="loading-names">
+              <div v-if="isLoadingCategories" key="loading" class="loading-names">
                 <div class="loading-spinner"></div>
-                <p>Загрузка имён сотрудников...</p>
+                <p>Загрузка категорий...</p>
               </div>
               
-              <p v-else-if="!hasData" key="empty" class="modal__empty">Нет данных по ответственным</p>
+              <p v-else-if="!hasData" key="empty" class="modal__empty">
+                Нет переходящих тикетов за выбранную неделю
+              </p>
 
-              <ul v-else key="list" class="responsible-list">
+              <ul v-else key="list" class="duration-list">
                 <li
-                  v-for="person in enrichedResponsible"
-                  :key="person.id || person.name"
-                  class="responsible-list__item"
-                  :class="{ 'responsible-list__item--clickable': person.id && person.count > 0 }"
-                  @click="(e) => handleEmployeeClick(person, e)"
-                  title="Кликните для просмотра тикетов сотрудника"
+                  v-for="category in durationCategories"
+                  :key="category.durationCategory"
+                  class="duration-list__item"
+                  :class="{ 'duration-list__item--clickable': category.count > 0 }"
+                  :style="{ '--duration-color': category.color }"
+                  @click="(e) => handleCategoryClick(category, e)"
+                  title="Кликните для просмотра тикетов категории"
                 >
-                  <span class="responsible-list__name">{{ person.name || 'Не назначен' }}</span>
-                  <span class="responsible-list__count">
-                    {{ person.count ?? 0 }} тикетов
+                  <span class="duration-list__color" :style="{ backgroundColor: category.color }"></span>
+                  <span class="duration-list__name">{{ category.durationLabel }}</span>
+                  <span class="duration-list__count">
+                    {{ category.count }} тикетов
                   </span>
-                  <span v-if="person.id && person.count > 0" class="responsible-list__arrow">→</span>
+                  <span v-if="category.count > 0" class="duration-list__arrow">→</span>
                 </li>
               </ul>
             </Transition>
@@ -51,11 +55,13 @@
           </footer>
         </div>
         
-        <!-- Уровень 2: Список тикетов -->
+        <!-- Уровень 2: Список тикетов категории -->
         <div v-else-if="popupLevel === 2" key="level-2" class="level-2">
           <header class="modal__header">
             <button class="btn-back" @click="goBack" aria-label="Назад">← Назад</button>
-            <h3 class="modal__title">Тикеты сотрудника: {{ selectedEmployee?.name || 'Неизвестно' }}</h3>
+            <h3 class="modal__title">
+              Тикеты: {{ selectedCategory?.durationLabel || 'Неизвестно' }}
+            </h3>
             <button class="modal__close" @click="$emit('close')" aria-label="Закрыть">
               ✕
             </button>
@@ -81,7 +87,9 @@
               <!-- Пустое состояние -->
               <div v-else-if="tickets.length === 0" key="empty" class="empty-state">
                 <div class="empty-state-icon">📋</div>
-                <p class="empty-state-message">У сотрудника нет закрытых тикетов за выбранную неделю</p>
+                <p class="empty-state-message">
+                  В категории «{{ selectedCategory?.durationLabel }}» нет переходящих тикетов
+                </p>
               </div>
               
               <!-- Список тикетов с TransitionGroup для stagger-анимации -->
@@ -107,7 +115,6 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue';
-import { DashboardSector1CService } from '@/services/dashboard-sector-1c-service.js';
 import { fetchAdmissionClosureStats } from '@/services/graph-admission-closure/admissionClosureService.js';
 import { getTicketIframeUrl } from '@/services/dashboard-sector-1c/utils/constants.js';
 import TicketCard from '@/components/dashboard/TicketCard.vue';
@@ -116,10 +123,6 @@ const props = defineProps({
   isVisible: {
     type: Boolean,
     default: false
-  },
-  responsible: {
-    type: Array,
-    default: () => []
   },
   weekStartUtc: {
     type: String,
@@ -131,94 +134,64 @@ const props = defineProps({
   }
 });
 
+const emit = defineEmits(['close']);
+
 const popupLevel = ref(1);
-const selectedEmployee = ref(null);
+const selectedCategory = ref(null);
 const tickets = ref([]);
 const isLoadingTickets = ref(false);
+const isLoadingCategories = ref(false);
 const error = ref(null);
-const enrichedResponsible = ref([]);
-const isLoadingNames = ref(false);
+const durationCategories = ref([]);
 
 /**
- * Обогащение данных сотрудников полными именами через Bitrix24 API
- * 
- * Метод Bitrix24: user.get
- * Документация: https://context7.com/bitrix24/rest/user.get
- * 
- * @param {Array} responsible - Массив сотрудников с ID и count
- * @returns {Promise<Array>} Обогащённый массив с полными именами
+ * Проверка наличия данных
  */
-async function enrichResponsibleWithNames(responsible) {
-  // Извлечь ID сотрудников (исключить null)
-  const employeeIds = responsible
-    .filter(r => r.id !== null && r.id !== undefined)
-    .map(r => r.id);
-  
-  if (employeeIds.length === 0) {
-    return responsible; // Нет сотрудников для загрузки
+const hasData = computed(() => {
+  return durationCategories.value.length > 0 && durationCategories.value.some(c => c.count > 0);
+});
+
+/**
+ * Загрузка категорий сроков из API
+ */
+async function loadCategories() {
+  if (!props.weekStartUtc || !props.weekEndUtc) {
+    durationCategories.value = [];
+    return;
   }
-  
+
+  isLoadingCategories.value = true;
+  error.value = null;
+
   try {
-    // Загрузить имена через Bitrix24 API
-    const employees = await DashboardSector1CService.getEmployeesByIds(employeeIds);
-    
-    // Создать маппинг ID -> имя
-    const nameMap = new Map();
-    employees.forEach(emp => {
-      nameMap.set(emp.id, emp.name); // Формат: "Имя Фамилия"
+    const response = await fetchAdmissionClosureStats({
+      product: '1C',
+      weekStartUtc: props.weekStartUtc,
+      weekEndUtc: props.weekEndUtc,
+      includeCarryoverTickets: true,
+      includeCarryoverTicketsByDuration: true
     });
-    
-    // Обогатить данные именами
-    return responsible.map(r => {
-      if (r.id && nameMap.has(r.id)) {
-        return {
-          ...r,
-          name: nameMap.get(r.id) // Заменить "ID 1006" на "Иванов Иван"
-        };
-      }
-      return r; // Оставить как есть (например, "Не назначен")
-    });
-  } catch (error) {
-    console.error('[ResponsibleModal] Error enriching names:', error);
-    // При ошибке возвращаем исходные данные
-    return responsible;
+
+    durationCategories.value = response.data.carryoverTicketsByDuration || [];
+  } catch (err) {
+    error.value = err.message || 'Ошибка загрузки категорий';
+    console.error('[CarryoverDurationModal] Error loading categories:', err);
+    durationCategories.value = [];
+  } finally {
+    isLoadingCategories.value = false;
   }
 }
 
-// Загрузить имена при изменении responsible
-watch(() => props.responsible, async (newResponsible) => {
-  if (!newResponsible || newResponsible.length === 0) {
-    enrichedResponsible.value = [];
-    return;
-  }
-  
-  isLoadingNames.value = true;
-  try {
-    enrichedResponsible.value = await enrichResponsibleWithNames(newResponsible);
-  } catch (error) {
-    console.error('[ResponsibleModal] Error loading employee names:', error);
-    // Fallback: использовать исходные данные
-    enrichedResponsible.value = newResponsible;
-  } finally {
-    isLoadingNames.value = false;
-  }
-}, { immediate: true });
-
-const hasData = computed(() => (enrichedResponsible.value || []).length > 0);
-
 /**
- * Обработка клика на сотрудника
+ * Обработка клика на категорию срока
  * Переход на уровень 2 и загрузка тикетов
- * 
- * @param {Object} employee - Объект сотрудника
- * @param {Event} event - Событие клика (для визуальной обратной связи)
  */
-async function handleEmployeeClick(employee, event = null) {
-  if (!employee || !employee.id || employee.count === 0) {
+async function handleCategoryClick(category, event = null) {
+  if (!category || category.count === 0) {
     return;
   }
   
-  // Визуальная обратная связь при клике
+  // Визуальная обратная связь
   if (event && event.currentTarget) {
     event.currentTarget.style.transform = 'scale(0.98)';
     setTimeout(() => {
@@ -228,19 +201,15 @@ async function handleEmployeeClick(employee, event = null) {
     }, 150);
   }
   
-  selectedEmployee.value = employee;
-  // Переход на уровень 2 происходит сразу для плавной анимации
+  selectedCategory.value = category;
   popupLevel.value = 2;
-  // Загрузка тикетов происходит после перехода (ленивая загрузка)
-  await loadEmployeeTickets(employee.id);
+  await loadCategoryTickets(category.durationCategory);
 }
 
 /**
- * Загрузка тикетов сотрудника из API
- * 
- * @param {number} employeeId - ID сотрудника
+ * Загрузка тикетов категории срока из API
  */
-async function loadEmployeeTickets(employeeId) {
+async function loadCategoryTickets(durationCategory) {
   isLoadingTickets.value = true;
   error.value = null;
   
@@ -253,32 +222,29 @@ async function loadEmployeeTickets(employeeId) {
       product: '1C',
       weekStartUtc: props.weekStartUtc,
       weekEndUtc: props.weekEndUtc,
+      includeCarryoverTickets: true,
+      includeCarryoverTicketsByDuration: true,
       includeTickets: true
     });
     
-    const employee = response.data.responsible.find(r => r.id === employeeId);
-    const employeeTickets = employee?.tickets || [];
+    const category = response.data.carryoverTicketsByDuration?.find(
+      c => c.durationCategory === durationCategory
+    );
+    const categoryTickets = category?.tickets || [];
     
     // Использовать prepareTicketsForDisplay() для полного обогащения данных
-    // Функция автоматически загружает недостающие данные через API:
-    // - departmentHead (отдел заказчика)
-    // - ufSubject (полное название)
-    // - actionStr (действие)
-    // - description (описание)
-    // - правильные приоритеты и сервисы с цветами
-    // Документация: см. vue-app/src/utils/graph-state/ticketListUtils.js
+    // Функция автоматически загружает недостающие данные через API
     try {
       const { prepareTicketsForDisplay } = await import('@/utils/graph-state/ticketListUtils.js');
       tickets.value = await prepareTicketsForDisplay(
-        employeeTickets,
+        categoryTickets,
         null, // snapshot (недоступен в модуле «График приёма и закрытий»)
         null  // ticketDetails (будет загружен автоматически через API)
       );
     } catch (prepareError) {
-      console.error('[ResponsibleModal] Error preparing tickets:', prepareError);
+      console.error('[CarryoverDurationModal] Error preparing tickets:', prepareError);
       // Fallback: использовать исходные тикеты без дополнительной подготовки
-      // Это гарантирует, что попап не сломается при ошибке обогащения данных
-      tickets.value = employeeTickets;
+      tickets.value = categoryTickets;
     }
     
     if (tickets.value.length === 0) {
@@ -286,7 +252,7 @@ async function loadEmployeeTickets(employeeId) {
     }
   } catch (err) {
     error.value = err.message || 'Ошибка загрузки тикетов';
-    console.error('[ResponsibleModal] Error loading tickets:', err);
+    console.error('[CarryoverDurationModal] Error loading tickets:', err);
     tickets.value = [];
   } finally {
     isLoadingTickets.value = false;
@@ -298,7 +264,7 @@ async function loadEmployeeTickets(employeeId) {
  */
 function goBack() {
   popupLevel.value = 1;
-  selectedEmployee.value = null;
+  selectedCategory.value = null;
   tickets.value = [];
   error.value = null;
 }
@@ -316,31 +282,31 @@ function handleTicketClick(ticket) {
  * Повторная загрузка тикетов при ошибке
  */
 function retryLoadTickets() {
-  if (selectedEmployee.value) {
-    loadEmployeeTickets(selectedEmployee.value.id);
+  if (selectedCategory.value) {
+    loadCategoryTickets(selectedCategory.value.durationCategory);
   }
 }
 
-// Сброс состояния при закрытии попапа
+// Загрузка категорий при открытии попапа
 watch(() => props.isVisible, (newValue) => {
-  if (!newValue) {
+  if (newValue) {
+    loadCategories();
+  } else {
+    // Сброс состояния при закрытии попапа
     popupLevel.value = 1;
-    selectedEmployee.value = null;
+    selectedCategory.value = null;
     tickets.value = [];
     error.value = null;
+    durationCategories.value = [];
   }
 });
 
-// Функция getInitials больше не используется, так как убрали аватар
-// Оставлена для возможного использования в будущем
-function getInitials(name) {
-  if (!name) return '—';
-  const parts = String(name).trim().split(/\s+/);
-  if (parts.length === 1) {
-    return parts[0].charAt(0).toUpperCase();
+// Загрузка категорий при изменении недели
+watch([() => props.weekStartUtc, () => props.weekEndUtc], () => {
+  if (props.isVisible) {
+    loadCategories();
   }
-  return `${parts[0].charAt(0)}${parts[1].charAt(0)}`.toUpperCase();
-}
+});
 </script>
 
 <style scoped>
@@ -369,6 +335,7 @@ function getInitials(name) {
   justify-content: space-between;
   padding: 16px 20px;
   border-bottom: 1px solid var(--b24-border-light, #e5e7eb);
+  gap: 12px;
 }
 
 .modal__title {
@@ -376,6 +343,7 @@ function getInitials(name) {
   font-size: 16px;
   font-weight: 700;
   color: var(--b24-text-primary, #1f2937);
+  flex: 1;
 }
 
 .modal__close {
@@ -384,6 +352,12 @@ function getInitials(name) {
   cursor: pointer;
   font-size: 18px;
   color: var(--b24-text-secondary, #6b7280);
+  padding: 4px;
+  line-height: 1;
+}
+
+.modal__close:hover {
+  color: var(--b24-text-primary, #1f2937);
 }
 
 .modal__body {
@@ -405,9 +379,14 @@ function getInitials(name) {
   border: none;
   cursor: pointer;
   font-weight: 600;
+  transition: background 0.2s ease;
 }
 
-.responsible-list {
+.btn:hover {
+  background: var(--b24-primary-hover, #0056b3);
+}
+
+.duration-list {
   list-style: none;
   padding: 0;
   margin: 0;
@@ -416,35 +395,42 @@ function getInitials(name) {
   gap: 12px;
 }
 
-.responsible-list__item {
+.duration-list__item {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 12px;
   background-color: var(--b24-bg-light, #f3f4f6);
   border-radius: var(--radius-md, 6px);
-  border-left: 3px solid var(--b24-primary, #007bff);
+  border-left: 3px solid var(--duration-color, #007bff);
   transition: all 0.2s ease;
   position: relative;
 }
 
-.responsible-list__name {
+.duration-list__color {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.duration-list__name {
   min-width: 150px;
   font-size: 14px;
   font-weight: 500;
   color: var(--b24-text-primary, #1f2937);
+  flex: 1;
 }
 
-.responsible-list__count {
+.duration-list__count {
   min-width: 120px;
   font-size: 14px;
   font-weight: 600;
   color: var(--b24-text-secondary, #6b7280);
   text-align: right;
-  margin-left: auto;
 }
 
-.responsible-list__arrow {
+.duration-list__arrow {
   font-size: 18px;
   color: var(--b24-text-secondary, #6b7280);
   opacity: 0.6;
@@ -458,6 +444,7 @@ function getInitials(name) {
   border-radius: var(--radius-md, 8px);
   background: var(--b24-bg-light, #f5f7fb);
   color: var(--b24-text-secondary, #6b7280);
+  text-align: center;
 }
 
 .loading-names {
@@ -487,17 +474,17 @@ function getInitials(name) {
   font-weight: 500;
 }
 
-.responsible-list__item--clickable {
+.duration-list__item--clickable {
   cursor: pointer;
 }
 
-.responsible-list__item--clickable:hover {
+.duration-list__item--clickable:hover {
   background-color: var(--b24-bg, #f9fafb);
   transform: translateX(2px);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.responsible-list__item--clickable:hover .responsible-list__arrow {
+.duration-list__item--clickable:hover .duration-list__arrow {
   opacity: 1;
   color: var(--b24-primary, #007bff);
   transform: translateX(4px);
@@ -512,16 +499,11 @@ function getInitials(name) {
   padding: 4px 8px;
   margin-right: 12px;
   font-weight: 600;
+  transition: color 0.2s ease;
 }
 
 .btn-back:hover {
   color: var(--b24-primary-hover, #0056b3);
-}
-
-.modal__header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
 }
 
 .loading-state {
@@ -616,10 +598,10 @@ function getInitials(name) {
 
 /* Стили для уровня 2 (список тикетов) */
 .level-2 .modal__body {
-  padding: 0; /* Убираем padding, так как он будет в .tickets-list */
+  padding: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden; /* Предотвращаем прокрутку всего modal-body */
+  overflow: hidden;
 }
 
 .tickets-list-container {
@@ -627,7 +609,7 @@ function getInitials(name) {
   max-height: 60vh;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 0; /* Убираем padding, так как он будет в .tickets-list */
+  padding: 0;
   scroll-behavior: smooth;
   scrollbar-width: thin;
   scrollbar-color: var(--b24-border-medium, #d1d5db) var(--b24-bg-light, #f3f4f6);
@@ -771,32 +753,31 @@ function getInitials(name) {
 
 /* Адаптивность для мобильных устройств */
 @media (max-width: 768px) {
-  .responsible-list__item {
+  .duration-list__item {
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;
   }
 
-  .responsible-list__name {
+  .duration-list__name {
     min-width: auto;
     width: 100%;
   }
 
-  .responsible-list__count {
+  .duration-list__count {
     min-width: auto;
     text-align: left;
     width: 100%;
-    margin-left: 0;
   }
 
-  .responsible-list__arrow {
+  .duration-list__arrow {
     position: absolute;
     right: 12px;
     top: 50%;
     transform: translateY(-50%);
   }
 
-  .responsible-list__item--clickable:hover .responsible-list__arrow {
+  .duration-list__item--clickable:hover .duration-list__arrow {
     transform: translateY(-50%) translateX(4px);
   }
 }

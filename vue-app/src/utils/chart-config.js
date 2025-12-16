@@ -40,7 +40,8 @@ export const chartColors = {
   warning: '#ffc107',
   info: '#17a2b8',
   light: '#f8f9fa',
-  dark: '#343a40'
+  dark: '#343a40',
+  carryover: '#ff9800' // Оранжевый для переходящих тикетов (TASK-044-03)
 };
 
 // Градиенты для графиков

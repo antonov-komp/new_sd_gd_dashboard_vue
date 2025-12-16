@@ -1,7 +1,7 @@
 # TASK-044-02: Расширение API для возврата переходящих тикетов
 
 **Дата создания:** 2025-12-16 11:01 (UTC+3, Брест)  
-**Статус:** Новая  
+**Статус:** Завершена  
 **Приоритет:** Высокий  
 **Исполнитель:** Bitrix24 Программист (Vue.js Developer)  
 **Связь с задачей:** Этап 2 из TASK-044
@@ -170,13 +170,13 @@ if ($includeCarryoverTickets) {
 
 ## Критерии приёмки этапа
 
-- [ ] API принимает параметр `includeCarryoverTickets` (опциональный, по умолчанию `false`)
-- [ ] При `includeCarryoverTickets: false` API работает как раньше (обратная совместимость)
-- [ ] При `includeCarryoverTickets: true` API возвращает `carryoverTickets` (количество)
-- [ ] При `includeCarryoverTickets: true` API возвращает `series.carryover[]` с одним значением
-- [ ] Значение `carryoverTickets` соответствует количеству переходящих тикетов из TASK-044-01
-- [ ] Структура ответа соответствует ожидаемому формату
-- [ ] Не ломается существующий функционал для `newTickets` и `closedTickets`
+- [x] API принимает параметр `includeCarryoverTickets` (опциональный, по умолчанию `false`)
+- [x] При `includeCarryoverTickets: false` API работает как раньше (обратная совместимость)
+- [x] При `includeCarryoverTickets: true` API возвращает `carryoverTickets` (количество)
+- [x] При `includeCarryoverTickets: true` API возвращает `series.carryover[]` с одним значением
+- [x] Значение `carryoverTickets` соответствует количеству переходящих тикетов из TASK-044-01
+- [x] Структура ответа соответствует ожидаемому формату
+- [x] Не ломается существующий функционал для `newTickets` и `closedTickets`
 
 ## Дополнительные уточнения
 
@@ -202,4 +202,9 @@ if ($includeCarryoverTickets) {
 ## История правок
 
 - 2025-12-16 11:01 (UTC+3, Брест): Создан этап 2 задачи TASK-044
+- 2025-12-16 17:45 (UTC+3, Брест): Реализовано расширение API для возврата переходящих тикетов
+  - Добавлено поле `carryoverTickets` в ответ API (только при `includeCarryoverTickets: true`)
+  - Добавлен массив `series.carryover[]` для графиков
+  - Сохранена обратная совместимость (по умолчанию `includeCarryoverTickets: false`)
+  - Рефакторинг формирования ответа для условного добавления полей
 

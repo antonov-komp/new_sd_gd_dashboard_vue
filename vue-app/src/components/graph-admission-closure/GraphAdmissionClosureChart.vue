@@ -24,13 +24,17 @@
     </header>
 
     <section class="ac-chart__summary">
-      <div class="summary-card summary-card--new">
+      <div class="summary-card summary-card--new" @click="handleSummaryClick('new')">
         <div class="summary-card__label">Новые за неделю</div>
         <div class="summary-card__value">{{ data.newTickets ?? 0 }}</div>
       </div>
-      <div class="summary-card summary-card--closed">
+      <div class="summary-card summary-card--closed" @click="handleSummaryClick('closed')">
         <div class="summary-card__label">Закрытые за неделю</div>
         <div class="summary-card__value">{{ data.closedTickets ?? 0 }}</div>
+      </div>
+      <div class="summary-card summary-card--carryover" @click="handleSummaryClick('carryover')">
+        <div class="summary-card__label">Переходящие</div>
+        <div class="summary-card__value">{{ data.carryoverTickets ?? 0 }}</div>
       </div>
       <div class="summary-card summary-card--stages">
         <div class="summary-card__label">Закрытия по стадиям</div>
@@ -81,7 +85,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['open-responsible', 'open-stages']);
+const emit = defineEmits(['open-responsible', 'open-stages', 'open-carryover']);
 
 const chartTypes = [
   { value: 'line', label: 'Линейный', icon: '📈' },
@@ -97,6 +101,7 @@ const lineBarData = computed(() => {
   const labels = ['Текущая неделя'];
   const newSeries = Array.isArray(props.data.series?.new) ? props.data.series.new : [props.data.newTickets || 0];
   const closedSeries = Array.isArray(props.data.series?.closed) ? props.data.series.closed : [props.data.closedTickets || 0];
+  const carryoverSeries = Array.isArray(props.data.series?.carryover) ? props.data.series.carryover : [props.data.carryoverTickets || 0];
 
   return {
     labels,
@@ -116,20 +121,29 @@ const lineBarData = computed(() => {
         borderColor: chartColors.success,
         tension: 0.3,
         fill: false
+      },
+      {
+        label: 'Переходящие',
+        data: carryoverSeries,
+        backgroundColor: chartColors.carryover,
+        borderColor: chartColors.carryover,
+        tension: 0.3,
+        fill: false
       }
     ]
   };
 });
 
 const doughnutData = computed(() => ({
-  labels: ['Новые', 'Закрытые'],
+  labels: ['Новые', 'Закрытые', 'Переходящие'],
   datasets: [
     {
       data: [
         props.data.newTickets || 0,
-        props.data.closedTickets || 0
+        props.data.closedTickets || 0,
+        props.data.carryoverTickets || 0
       ],
-      backgroundColor: [chartColors.primary, chartColors.success],
+      backgroundColor: [chartColors.primary, chartColors.success, chartColors.carryover],
       borderWidth: 1
     }
   ]
@@ -181,6 +195,11 @@ const chartOptions = computed(() => ({
       if ((props.data?.newTickets || 0) > 0) {
         emit('open-stages');
       }
+    } else if (dataset.label === 'Переходящие') {
+      // Проверяем, есть ли переходящие тикеты
+      if ((props.data?.carryoverTickets || 0) > 0) {
+        emit('open-carryover');
+      }
     }
   },
   scales: chartType.value === 'doughnut'
@@ -189,9 +208,22 @@ const chartOptions = computed(() => ({
         y: {
           beginAtZero: true,
           ticks: { precision: 0 }
-        }
       }
+    }
 }));
+
+// Обработчик клика на summary-карточки
+const handleSummaryClick = (type) => {
+  if (type === 'new' && (props.data?.newTickets || 0) > 0) {
+    emit('open-stages');
+  } else if (type === 'closed' && (props.data?.closedTickets || 0) > 0) {
+    if ((props.data?.responsible || []).length > 0) {
+      emit('open-responsible');
+    }
+  } else if (type === 'carryover' && (props.data?.carryoverTickets || 0) > 0) {
+    emit('open-carryover');
+  }
+};
 </script>
 
 <style scoped>
@@ -268,6 +300,25 @@ const chartOptions = computed(() => ({
   border-radius: var(--radius-md, 10px);
   padding: 12px;
   background: var(--b24-bg, #f9fafb);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.summary-card:hover {
+  border-color: var(--b24-primary, #007bff);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.summary-card--new:hover {
+  border-color: var(--b24-primary, #007bff);
+}
+
+.summary-card--closed:hover {
+  border-color: var(--b24-success, #28a745);
+}
+
+.summary-card--carryover:hover {
+  border-color: #ff9800;
 }
 
 .summary-card__label {

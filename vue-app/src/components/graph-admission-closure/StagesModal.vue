@@ -228,24 +228,27 @@ async function loadStageTickets(stageId) {
     const stage = response.data.newTicketsByStages?.find(s => s.stageId === stageId);
     const stageTickets = stage?.tickets || [];
     
-    // Подготовка тикетов для отображения
-    tickets.value = stageTickets.map(ticket => ({
-      id: ticket.id,
-      title: ticket.title || 'Без названия',
-      ufSubject: ticket.title || 'Без названия',
-      createdTime: ticket.createdTime,
-      createdAt: ticket.createdTime,
-      stageId: ticket.stageId,
-      assignedById: ticket.assignedById,
-      priorityId: 'medium',
-      priorityLabel: 'Средний',
-      priorityColors: {
-        color: '#ffc107',
-        backgroundColor: '#fff3cd',
-        textColor: '#856404'
-      },
-      priority: 'medium'
-    }));
+    // Использовать prepareTicketsForDisplay() для полного обогащения данных
+    // Функция автоматически загружает недостающие данные через API:
+    // - departmentHead (отдел заказчика)
+    // - ufSubject (полное название)
+    // - actionStr (действие)
+    // - description (описание)
+    // - правильные приоритеты и сервисы с цветами
+    // Документация: см. vue-app/src/utils/graph-state/ticketListUtils.js
+    try {
+      const { prepareTicketsForDisplay } = await import('@/utils/graph-state/ticketListUtils.js');
+      tickets.value = await prepareTicketsForDisplay(
+        stageTickets,
+        null, // snapshot (недоступен в модуле «График приёма и закрытий»)
+        null  // ticketDetails (будет загружен автоматически через API)
+      );
+    } catch (prepareError) {
+      console.error('[StagesModal] Error preparing tickets:', prepareError);
+      // Fallback: использовать исходные тикеты без дополнительной подготовки
+      // Это гарантирует, что попап не сломается при ошибке обогащения данных
+      tickets.value = stageTickets;
+    }
     
     if (tickets.value.length === 0) {
       error.value = null; // Не ошибка, просто нет тикетов

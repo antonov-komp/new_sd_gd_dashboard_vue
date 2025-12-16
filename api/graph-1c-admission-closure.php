@@ -76,6 +76,90 @@ function isInRange(?string $dateStr, DateTimeImmutable $start, DateTimeImmutable
     return $dt >= $start && $dt <= $end;
 }
 
+/**
+ * Определение категории срока для переходящего тикета
+ * 
+ * Срок считается от weekStartUtc (начала текущего периода) до createdTime (даты создания тикета).
+ * 
+ * @param string $createdTime Дата создания тикета (ISO-8601)
+ * @param DateTimeImmutable $weekStart Начало недели (UTC)
+ * @return string Категория срока: up_to_month, less_than_month, more_than_month, more_than_2_months, more_than_half_year, more_than_year
+ */
+function calculateDurationCategory(string $createdTime, DateTimeImmutable $weekStart): string
+{
+    $ts = strtotime($createdTime);
+    if ($ts === false) {
+        return 'up_to_month'; // По умолчанию, если дата некорректна
+    }
+    
+    $createdDt = (new DateTimeImmutable('@' . $ts))->setTimezone(new DateTimeZone('UTC'));
+    $diff = $weekStart->diff($createdDt);
+    $days = (int)$diff->format('%a'); // Количество дней
+    
+    if ($days < 14) {
+        return 'up_to_month'; // До 1 месяца (0-13 дней)
+    } elseif ($days < 30) {
+        return 'less_than_month'; // Менее 1 месяца (14-29 дней)
+    } elseif ($days < 60) {
+        return 'more_than_month'; // Более 1 месяца (30-59 дней)
+    } elseif ($days < 180) {
+        return 'more_than_2_months'; // Более 2 месяцев (60-179 дней)
+    } elseif ($days < 365) {
+        return 'more_than_half_year'; // Более полугода (180-364 дня)
+    } else {
+        return 'more_than_year'; // Более года (≥365 дней)
+    }
+}
+
+/**
+ * Проверка, является ли тикет переходящим
+ * 
+ * Переходящий тикет — это тикет, который:
+ * 1. Создан до начала текущей недели (createdTime < weekStart)
+ * 2. Находится в рабочих стадиях (targetStages)
+ * 3. Не в закрывающих стадиях (closingStages)
+ * 
+ * @param array $ticket Данные тикета
+ * @param DateTimeImmutable $weekStart Начало недели (UTC)
+ * @param array $targetStages Рабочие стадии
+ * @param array $closingStages Закрывающие стадии
+ * @return bool
+ */
+function isCarryoverTicket(array $ticket, DateTimeImmutable $weekStart, array $targetStages, array $closingStages): bool
+{
+    $createdTime = $ticket['createdTime'] ?? null;
+    $stageId = $ticket['stageId'] ?? null;
+    
+    if (!$createdTime || !$stageId) {
+        return false;
+    }
+    
+    // Нормализация stageId
+    $stageId = strtoupper($stageId);
+    
+    // Условие 1: Создан до начала недели
+    $ts = strtotime($createdTime);
+    if ($ts === false) {
+        return false;
+    }
+    $createdDt = (new DateTimeImmutable('@' . $ts))->setTimezone(new DateTimeZone('UTC'));
+    if ($createdDt >= $weekStart) {
+        return false; // Создан в текущую неделю, не переходящий
+    }
+    
+    // Условие 2: Находится в рабочих стадиях
+    if (!in_array($stageId, $targetStages, true)) {
+        return false; // Не в рабочей стадии
+    }
+    
+    // Условие 3: Не в закрывающих стадиях (дополнительная проверка)
+    if (in_array($stageId, $closingStages, true)) {
+        return false; // В закрывающей стадии
+    }
+    
+    return true;
+}
+
 try {
     $body = parseJsonBody();
 
@@ -84,6 +168,8 @@ try {
     $weekEndParam = isset($body['weekEndUtc']) ? (string)$body['weekEndUtc'] : null;
     $includeTickets = isset($body['includeTickets']) ? (bool)$body['includeTickets'] : false;
     $includeNewTicketsByStages = isset($body['includeNewTicketsByStages']) ? (bool)$body['includeNewTicketsByStages'] : false;
+    $includeCarryoverTickets = isset($body['includeCarryoverTickets']) ? (bool)$body['includeCarryoverTickets'] : false;
+    $includeCarryoverTicketsByDuration = isset($body['includeCarryoverTicketsByDuration']) ? (bool)$body['includeCarryoverTicketsByDuration'] : false;
     $debug = isset($body['debug']) ? (bool)$body['debug'] : false;
 
     // Границы недели
@@ -192,6 +278,47 @@ try {
         $start += $pageSize;
     } while (isset($result['result']['next']));
     
+    // Запрос 3: переходящие тикеты (созданные до начала недели, в рабочих стадиях)
+    // Запрашиваем только если includeCarryoverTickets === true
+    if ($includeCarryoverTickets) {
+        $start = 0;
+        do {
+            $result = CRest::call('crm.item.list', [
+                'entityTypeId' => $entityTypeId,
+                'filter' => [
+                    '<createdTime' => $weekStartStr,
+                    'stageId' => $targetStages
+                ],
+                'select' => [
+                    'id',
+                    'title',
+                    'stageId',
+                    'assignedById',
+                    'createdTime',
+                    'updatedTime',
+                    'movedTime',
+                    'UF_CRM_7_TYPE_PRODUCT',
+                    'ufCrm7TypeProduct'
+                ],
+                'start' => $start
+            ]);
+
+            if (isset($result['error'])) {
+                throw new Exception($result['error_description'] ?? $result['error']);
+            }
+
+            $items = $result['result']['items'] ?? [];
+            foreach ($items as $item) {
+                // Добавляем только если тикет ещё не был добавлен
+                if (!isset($allTicketsMap[$item['id']])) {
+                    $allTicketsMap[$item['id']] = $item;
+                }
+            }
+
+            $start += $pageSize;
+        } while (isset($result['result']['next']));
+    }
+    
     // Преобразуем map в массив
     $allTickets = array_values($allTicketsMap);
 
@@ -229,6 +356,35 @@ try {
         'DT140_12:FAIL' => ['name' => 'Отклонено', 'color' => '#dc3545'],
         'DT140_12:UC_0GBU8Z' => ['name' => 'Закрыли без задачи', 'color' => '#6c757d']
     ];
+    
+    // Определение всех категорий сроков с названиями и цветами (TASK-044-04)
+    // Порядок важен: от меньшего к большему сроку
+    $durationCategories = [
+        'up_to_month' => [
+            'label' => 'До 1 месяца',
+            'color' => '#28a745' // Зелёный (свежие тикеты, 0-13 дней)
+        ],
+        'less_than_month' => [
+            'label' => 'Менее 1 месяца',
+            'color' => '#6cbd45' // Светло-зелёный (14-29 дней)
+        ],
+        'more_than_month' => [
+            'label' => 'Более 1 месяца',
+            'color' => '#ffc107' // Жёлтый (30-59 дней)
+        ],
+        'more_than_2_months' => [
+            'label' => 'Более 2 месяцев',
+            'color' => '#ff9800' // Оранжевый (60-179 дней)
+        ],
+        'more_than_half_year' => [
+            'label' => 'Более полугода',
+            'color' => '#dc3545' // Красный (180-364 дня)
+        ],
+        'more_than_year' => [
+            'label' => 'Более года',
+            'color' => '#c82333' // Тёмно-красный (≥365 дней)
+        ]
+    ];
 
     // Инициализация агрегации новых тикетов по стадиям
     $newTicketsByStagesAgg = [];
@@ -247,8 +403,24 @@ try {
     // Агрегации
     $newCount = 0;
     $closedCount = 0;
+    $carryoverCount = 0;
+    $carryoverTickets = []; // Для будущего использования
     $stageAgg = [];
     $responsibleAgg = [];
+    
+    // Инициализация агрегации переходящих тикетов по срокам (TASK-044-04)
+    $carryoverTicketsByDurationAgg = [];
+    if ($includeCarryoverTicketsByDuration) {
+        foreach ($durationCategories as $category => $info) {
+            $carryoverTicketsByDurationAgg[$category] = [
+                'durationCategory' => $category,
+                'durationLabel' => $info['label'],
+                'color' => $info['color'],
+                'count' => 0,
+                'tickets' => []
+            ];
+        }
+    }
 
     foreach ($tickets as $ticket) {
         $createdTime = $ticket['createdTime'] ?? null;
@@ -326,35 +498,87 @@ try {
                 ];
             }
         }
+        
+        // Переходящие тикеты (созданные до начала недели, в рабочих стадиях, не закрытые)
+        if ($includeCarryoverTickets && isCarryoverTicket($ticket, $weekStart, $targetStages, $closingStages)) {
+            $carryoverCount++;
+            
+            // Нормализация assignedById (как для закрытых тикетов)
+            $responsibleId = $assignedRaw;
+            if (is_array($responsibleId)) {
+                $responsibleId = $responsibleId['id'] ?? $responsibleId['ID'] ?? $responsibleId['value'] ?? null;
+            }
+            $responsibleId = $responsibleId ? (int)$responsibleId : null;
+            
+            // Сохранить данные тикета для будущего использования
+            if ($includeTickets) {
+                $carryoverTickets[] = [
+                    'id' => (int)$ticket['id'],
+                    'title' => $ticket['title'] ?? 'Без названия',
+                    'createdTime' => $createdTime,
+                    'stageId' => $stageId,
+                    'assignedById' => $responsibleId
+                ];
+            }
+            
+            // Группировка переходящих тикетов по срокам (TASK-044-04)
+            if ($includeCarryoverTicketsByDuration && $createdTime) {
+                $category = calculateDurationCategory($createdTime, $weekStart);
+                
+                if (isset($carryoverTicketsByDurationAgg[$category])) {
+                    $carryoverTicketsByDurationAgg[$category]['count']++;
+                    
+                    // Если нужно включить тикеты, сохранить данные тикета
+                    if ($includeTickets) {
+                        $carryoverTicketsByDurationAgg[$category]['tickets'][] = [
+                            'id' => (int)$ticket['id'],
+                            'title' => $ticket['title'] ?? 'Без названия',
+                            'createdTime' => $createdTime,
+                            'stageId' => $stageId,
+                            'assignedById' => $responsibleId
+                        ];
+                    }
+                }
+            }
+        }
     }
 
     // Формирование ответа
-    $response = [
-        'success' => true,
-        'meta' => [
-            'weekNumber' => (int)$weekStart->format('W'),
-            'weekStartUtc' => $weekStart->format('Y-m-d\TH:i:s\Z'),
-            'weekEndUtc' => $weekEnd->format('Y-m-d\TH:i:s\Z')
+    $responseData = [
+        'newTickets' => $newCount,
+        'closedTickets' => $closedCount,
+        'series' => [
+            'new' => [$newCount],
+            'closed' => [$closedCount]
         ],
-        'data' => [
-            'newTickets' => $newCount,
-            'closedTickets' => $closedCount,
-            'series' => [
-                'new' => [$newCount],
-                'closed' => [$closedCount]
-            ],
-            'stages' => array_map(function ($stageId) use ($stageAgg, $allStages) {
-                $stageName = isset($allStages[$stageId]) ? $allStages[$stageId]['name'] : $stageId;
-                return [
-                    'stageId' => $stageId,
-                    'stageName' => $stageName,
-                    'count' => $stageAgg[$stageId]
-                ];
-            }, array_keys($stageAgg)),
-            'responsible' => array_map(function ($item) use ($includeTickets) {
+        'stages' => array_map(function ($stageId) use ($stageAgg, $allStages) {
+            $stageName = isset($allStages[$stageId]) ? $allStages[$stageId]['name'] : $stageId;
+            return [
+                'stageId' => $stageId,
+                'stageName' => $stageName,
+                'count' => $stageAgg[$stageId]
+            ];
+        }, array_keys($stageAgg)),
+        'responsible' => array_map(function ($item) use ($includeTickets) {
+            $result = [
+                'id' => $item['id'],
+                'name' => $item['name'],
+                'count' => $item['count']
+            ];
+            
+            // Включить тикеты только если запрошено
+            if ($includeTickets && isset($item['tickets'])) {
+                $result['tickets'] = $item['tickets'];
+            }
+            
+            return $result;
+        }, array_values($responsibleAgg)),
+        'newTicketsByStages' => $includeNewTicketsByStages 
+            ? array_map(function ($item) use ($includeTickets) {
                 $result = [
-                    'id' => $item['id'],
-                    'name' => $item['name'],
+                    'stageId' => $item['stageId'],
+                    'stageName' => $item['stageName'],
+                    'color' => $item['color'],
                     'count' => $item['count']
                 ];
                 
@@ -364,33 +588,53 @@ try {
                 }
                 
                 return $result;
-            }, array_values($responsibleAgg)),
-            'newTicketsByStages' => $includeNewTicketsByStages 
-                ? array_map(function ($item) use ($includeTickets) {
-                    $result = [
-                        'stageId' => $item['stageId'],
-                        'stageName' => $item['stageName'],
-                        'color' => $item['color'],
-                        'count' => $item['count']
-                    ];
-                    
-                    // Включить тикеты только если запрошено
-                    if ($includeTickets && isset($item['tickets'])) {
-                        $result['tickets'] = $item['tickets'];
-                    }
-                    
-                    return $result;
-                }, array_values($newTicketsByStagesAgg))
-                : null
+            }, array_values($newTicketsByStagesAgg))
+            : null
+    ];
+    
+    // Добавить переходящие тикеты, если запрошено
+    if ($includeCarryoverTickets) {
+        $responseData['carryoverTickets'] = $carryoverCount;
+        $responseData['series']['carryover'] = [$carryoverCount];
+    }
+    
+    // Добавить переходящие тикеты по срокам, если запрошено (TASK-044-04)
+    if ($includeCarryoverTicketsByDuration) {
+        $responseData['carryoverTicketsByDuration'] = array_map(function ($item) use ($includeTickets) {
+            $result = [
+                'durationCategory' => $item['durationCategory'],
+                'durationLabel' => $item['durationLabel'],
+                'color' => $item['color'],
+                'count' => $item['count']
+            ];
+            
+            // Включить тикеты только если запрошено
+            if ($includeTickets && isset($item['tickets']) && count($item['tickets']) > 0) {
+                $result['tickets'] = $item['tickets'];
+            }
+            
+            return $result;
+        }, array_values($carryoverTicketsByDurationAgg));
+    }
+    
+    $response = [
+        'success' => true,
+        'meta' => [
+            'weekNumber' => (int)$weekStart->format('W'),
+            'weekStartUtc' => $weekStart->format('Y-m-d\TH:i:s\Z'),
+            'weekEndUtc' => $weekEnd->format('Y-m-d\TH:i:s\Z')
         ],
+        'data' => $responseData,
         'debug' => $debug ? [
             'fetchedTotal' => count($tickets),
             'sample' => array_slice($debugRaw, 0, 5),
             'stageCounts' => $stageAgg,
+            'carryoverCount' => $includeCarryoverTickets ? $carryoverCount : null,
             'params' => [
                 'product' => $product,
                 'weekStartUtc' => $weekStart->format('Y-m-d\TH:i:s\Z'),
-                'weekEndUtc' => $weekEnd->format('Y-m-d\TH:i:s\Z')
+                'weekEndUtc' => $weekEnd->format('Y-m-d\TH:i:s\Z'),
+                'includeCarryoverTickets' => $includeCarryoverTickets
             ]
         ] : null
     ];

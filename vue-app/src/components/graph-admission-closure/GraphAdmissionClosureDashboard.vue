@@ -48,6 +48,7 @@
             :data="chartData"
             @open-responsible="showResponsibleModal = true"
             @open-stages="showStagesModal = true"
+            @open-carryover="showCarryoverModal = true"
           />
         </div>
       </div>
@@ -67,6 +68,13 @@
       :week-end-utc="chartMeta?.weekEndUtc || null"
       @close="showStagesModal = false"
     />
+
+    <CarryoverDurationModal
+      :is-visible="showCarryoverModal"
+      :week-start-utc="chartMeta?.weekStartUtc || null"
+      :week-end-utc="chartMeta?.weekEndUtc || null"
+      @close="showCarryoverModal = false"
+    />
   </div>
 </template>
 
@@ -78,6 +86,7 @@ import FiltersPanel from '@/components/filters/FiltersPanel.vue';
 import GraphAdmissionClosureChart from './GraphAdmissionClosureChart.vue';
 import ResponsibleModal from './ResponsibleModal.vue';
 import StagesModal from './StagesModal.vue';
+import CarryoverDurationModal from './CarryoverDurationModal.vue';
 import { fetchAdmissionClosureStats } from '@/services/graph-admission-closure/admissionClosureService.js';
 
 const isLoading = ref(true);
@@ -92,6 +101,7 @@ const chartData = ref({
 });
 const showResponsibleModal = ref(false);
 const showStagesModal = ref(false);
+const showCarryoverModal = ref(false);
 
 const filters = ref({
   stages: {

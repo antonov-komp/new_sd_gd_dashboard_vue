@@ -4,9 +4,9 @@
  * Использует REST-эндпоинт бэкенда:
  * - POST /api/graph-1c-admission-closure.php
  *
- * Документация (контракт зафиксирован в TASK-041-02):
+ * Документация (контракт зафиксирован в TASK-041-02, расширен в TASK-044-02, TASK-044-04):
  * - meta { weekNumber, weekStartUtc, weekEndUtc }
- * - data { newTickets, closedTickets, series { new[], closed[] }, stages[], responsible[] }
+ * - data { newTickets, closedTickets, carryoverTickets, series { new[], closed[], carryover[] }, stages[], responsible[], carryoverTicketsByDuration[] }
  */
 
 const DEFAULT_ENDPOINT = '/api/graph-1c-admission-closure.php';
@@ -36,13 +36,16 @@ function normalizeResponse(raw) {
     data: {
       newTickets: payload.data?.newTickets ?? payload.newTickets ?? 0,
       closedTickets: payload.data?.closedTickets ?? payload.closedTickets ?? 0,
+      carryoverTickets: payload.data?.carryoverTickets ?? payload.carryoverTickets ?? 0,
       series: {
         new: payload.data?.series?.new ?? payload.series?.new ?? [0],
-        closed: payload.data?.series?.closed ?? payload.series?.closed ?? [0]
+        closed: payload.data?.series?.closed ?? payload.series?.closed ?? [0],
+        carryover: payload.data?.series?.carryover ?? payload.series?.carryover ?? [0]
       },
       stages: payload.data?.stages ?? payload.stages ?? [],
       responsible: payload.data?.responsible ?? payload.responsible ?? [],
-      newTicketsByStages: payload.data?.newTicketsByStages ?? payload.newTicketsByStages ?? null
+      newTicketsByStages: payload.data?.newTicketsByStages ?? payload.newTicketsByStages ?? null,
+      carryoverTicketsByDuration: payload.data?.carryoverTicketsByDuration ?? payload.carryoverTicketsByDuration ?? null
     }
   };
 }
@@ -58,6 +61,8 @@ function normalizeResponse(raw) {
  * @param {boolean} [params.forceRefresh=false] - Принудительная перезагрузка данных.
  * @param {boolean} [params.includeTickets=false] - Включить тикеты для каждого сотрудника в responsible[].
  * @param {boolean} [params.includeNewTicketsByStages=false] - Включить новые тикеты по стадиям в newTicketsByStages[].
+ * @param {boolean} [params.includeCarryoverTickets=true] - Включить переходящие тикеты в ответ (TASK-044-02).
+ * @param {boolean} [params.includeCarryoverTicketsByDuration=false] - Включить переходящие тикеты по срокам в carryoverTicketsByDuration[] (TASK-044-04).
  * @returns {Promise<{meta: object|null, data: object}>}
  */
 export async function fetchAdmissionClosureStats(params = {}) {
@@ -69,7 +74,9 @@ export async function fetchAdmissionClosureStats(params = {}) {
     useCache = true,
     forceRefresh = false,
     includeTickets = false,
-    includeNewTicketsByStages = false
+    includeNewTicketsByStages = false,
+    includeCarryoverTickets = true,
+    includeCarryoverTicketsByDuration = false
   } = params;
 
   const body = {
@@ -79,7 +86,9 @@ export async function fetchAdmissionClosureStats(params = {}) {
     useCache,
     forceRefresh,
     includeTickets,
-    includeNewTicketsByStages
+    includeNewTicketsByStages,
+    includeCarryoverTickets,
+    includeCarryoverTicketsByDuration
   };
 
   const response = await fetch(endpoint, {
