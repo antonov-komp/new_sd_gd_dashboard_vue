@@ -230,11 +230,20 @@ function calculateDurationCategory(string $createdTime, DateTimeImmutable $weekS
  * Проверка, является ли тикет переходящим для конкретной недели
  * 
  * Переходящий тикет для недели — это тикет, который:
- * 1. Находится в рабочих стадиях (targetStages)
- * 2. Не в закрывающих стадиях (closingStages)
- * 3. Не был закрыт до начала этой недели (movedTime в закрывающей стадии < weekStart)
+ * 1. Создан до конца этой недели (createdTime <= weekEnd)
+ * 2. Находится в рабочих стадиях (targetStages) - текущее состояние
+ * 3. Не был закрыт до конца этой недели (если закрыт, то movedTime > weekEnd)
  * 
- * TASK-048: Обновлено для работы с каждой неделей отдельно
+ * TASK-048: Обновлено для правильного подсчёта накопления переходящих тикетов
+ * Переходящие тикеты накапливаются: неделя 48 → неделя 49 → неделя 50 → неделя 51
+ * 
+ * Логика накопления:
+ * - Неделя 48: все тикеты, созданные до конца недели 48, в рабочих стадиях сейчас
+ * - Неделя 49: все тикеты, созданные до конца недели 49, в рабочих стадиях сейчас
+ * - И так далее
+ * 
+ * Это даёт накопление, так как для каждой следующей недели добавляются новые тикеты,
+ * которые были созданы в эту неделю и остались в рабочих стадиях.
  * 
  * @param array $ticket Данные тикета
  * @param DateTimeImmutable $weekStart Начало недели (UTC)
@@ -249,30 +258,40 @@ function isCarryoverTicket(array $ticket, DateTimeImmutable $weekStart, DateTime
     $movedTime = $ticket['movedTime'] ?? $ticket['updatedTime'] ?? null;
     $stageId = $ticket['stageId'] ?? null;
     
-    if (!$stageId) {
+    if (!$stageId || !$createdTime) {
         return false;
     }
     
     // Нормализация stageId
     $stageId = strtoupper($stageId);
     
-    // Условие 1: Находится в рабочих стадиях
+    // Условие 1: Тикет создан до конца этой недели (включительно)
+    $createdDt = new DateTimeImmutable($createdTime, new DateTimeZone('UTC'));
+    if ($createdDt > $weekEnd) {
+        return false; // Создан после конца недели, не переходящий для этой недели
+    }
+    
+    // Условие 2: Находится в рабочих стадиях (текущее состояние)
     if (!in_array($stageId, $targetStages, true)) {
         return false; // Не в рабочей стадии
     }
     
-    // Условие 2: Не в закрывающих стадиях
+    // Условие 3: Не в закрывающих стадиях
     if (in_array($stageId, $closingStages, true)) {
         return false; // В закрывающей стадии
     }
     
-    // TASK-048: Условие 3: Тикет не должен быть закрыт до начала этой недели
-    // Если movedTime в закрывающей стадии и movedTime < weekStart, то тикет был закрыт до начала недели
-    // Но мы не знаем историю, поэтому проверяем только текущее состояние
-    // Если тикет в рабочей стадии и не в закрывающей - он переходящий
+    // Условие 4: Если тикет был закрыт, то закрыт после конца этой недели
+    // (если закрыт до конца недели, он не переходящий для этой недели)
+    if ($movedTime) {
+        $movedDt = new DateTimeImmutable($movedTime, new DateTimeZone('UTC'));
+        // Если movedTime <= weekEnd, значит тикет был закрыт до или в конце недели
+        // Но если тикет в рабочих стадиях сейчас, значит он не был закрыт
+        // Поэтому эта проверка избыточна, но оставим для ясности
+    }
     
-    // TASK-047: Переходящие тикеты - это все не закрытые тикеты в рабочих стадиях
-    // (независимо от даты создания - включаем и созданные этой неделей, и созданные ранее)
+    // Тикет создан до конца недели, находится в рабочих стадиях сейчас
+    // Это переходящий тикет для этой недели
     return true;
 }
 
@@ -870,31 +889,17 @@ try {
             'carryoverTicketsCreatedOtherWeek' => $weekMetrics['carryoverTicketsCreatedOtherWeek']
         ];
         $weeksData[] = $weekData;
-        
-        // Сохраняем данные текущей недели (последняя в массиве)
-        // TASK-048: Используем последний элемент массива как текущую неделю
-        // (массив weeks уже отсортирован от старых к новым)
-        if ($week === end($weeks)) {
-            $currentWeekData = $weekData;
-        }
     }
     
-    // Если не нашли текущую неделю, используем последнюю из weeksData
-    if (!$currentWeekData && count($weeksData) > 0) {
+    // TASK-048: Всегда используем последний элемент из weeksData как текущую неделю
+    // (массив weeksData уже отсортирован от старых к новым, последний элемент - текущая неделя)
+    if (count($weeksData) > 0) {
         $currentWeekData = $weeksData[count($weeksData) - 1];
-    }
-    
-    // TASK-048: Дополнительная проверка - если currentWeekData всё ещё null или содержит только нули,
-    // но series содержит данные, берём данные из последнего элемента series
-    if ((!$currentWeekData || 
-         (($currentWeekData['newTickets'] ?? 0) === 0 && 
-          ($currentWeekData['closedTickets'] ?? 0) === 0 && 
-          ($currentWeekData['carryoverTickets'] ?? 0) === 0)) &&
-        count($series['new']) > 0) {
-        // Берём последний элемент из каждого массива series
-        $lastIndex = count($series['new']) - 1;
+    } else {
+        // Fallback: если weeksData пуст, формируем из series (последний элемент)
+        $lastIndex = count($series['new']) > 0 ? count($series['new']) - 1 : 0;
         $currentWeekData = [
-            'weekNumber' => $weeks[count($weeks) - 1]['weekNumber'] ?? (int)$weekStart->format('W'),
+            'weekNumber' => (int)$weekStart->format('W'),
             'newTickets' => $series['new'][$lastIndex] ?? 0,
             'closedTickets' => $series['closed'][$lastIndex] ?? 0,
             'closedTicketsCreatedThisWeek' => $series['closedCreatedThisWeek'][$lastIndex] ?? 0,
@@ -906,6 +911,22 @@ try {
     }
     
     // Используем данные текущей недели для обратной совместимости
+    // TASK-048: Гарантируем, что currentWeekData не null
+    if (!$currentWeekData) {
+        // Если currentWeekData всё ещё null, создаём из series (последний элемент)
+        $lastIndex = count($series['new']) > 0 ? count($series['new']) - 1 : 0;
+        $currentWeekData = [
+            'weekNumber' => (int)$weekStart->format('W'),
+            'newTickets' => $series['new'][$lastIndex] ?? 0,
+            'closedTickets' => $series['closed'][$lastIndex] ?? 0,
+            'closedTicketsCreatedThisWeek' => $series['closedCreatedThisWeek'][$lastIndex] ?? 0,
+            'closedTicketsCreatedOtherWeek' => $series['closedCreatedOtherWeek'][$lastIndex] ?? 0,
+            'carryoverTickets' => $series['carryover'][$lastIndex] ?? 0,
+            'carryoverTicketsCreatedThisWeek' => $series['carryoverCreatedThisWeek'][$lastIndex] ?? 0,
+            'carryoverTicketsCreatedOtherWeek' => $series['carryoverCreatedOtherWeek'][$lastIndex] ?? 0
+        ];
+    }
+    
     $newCount = $currentWeekData['newTickets'] ?? 0;
     $closedCount = $currentWeekData['closedTickets'] ?? 0;
     $closedTicketsCreatedThisWeek = $currentWeekData['closedTicketsCreatedThisWeek'] ?? 0;

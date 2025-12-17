@@ -336,45 +336,78 @@ const chartOptions = computed(() => ({
 }));
 
 // TASK-048: Получаем данные текущей недели (последняя неделя из weeksData или currentWeek)
+// Приоритет: series[последний] (если есть данные) > currentWeek > weeksData[последний] > data
 const currentWeekData = computed(() => {
-  // Сначала пробуем currentWeek
-  if (props.data?.currentWeek) {
+  // Сначала проверяем series - если там есть данные, используем их (это гарантирует соответствие графику)
+  if (props.data?.series) {
+    const series = props.data.series;
+    // Находим максимальный индекс (длина самого длинного массива - 1)
+    const lastIndex = Math.max(
+      (Array.isArray(series.new) ? series.new.length : 0) - 1,
+      (Array.isArray(series.closed) ? series.closed.length : 0) - 1,
+      (Array.isArray(series.carryover) ? series.carryover.length : 0) - 1,
+      -1
+    );
+    
+    if (lastIndex >= 0) {
+      const fromSeries = {
+        newTickets: (Array.isArray(series.new) && series.new[lastIndex] !== undefined) ? series.new[lastIndex] : 0,
+        closedTickets: (Array.isArray(series.closed) && series.closed[lastIndex] !== undefined) ? series.closed[lastIndex] : 0,
+        closedTicketsCreatedThisWeek: (Array.isArray(series.closedCreatedThisWeek) && series.closedCreatedThisWeek[lastIndex] !== undefined) ? series.closedCreatedThisWeek[lastIndex] : 0,
+        closedTicketsCreatedOtherWeek: (Array.isArray(series.closedCreatedOtherWeek) && series.closedCreatedOtherWeek[lastIndex] !== undefined) ? series.closedCreatedOtherWeek[lastIndex] : 0,
+        carryoverTickets: (Array.isArray(series.carryover) && series.carryover[lastIndex] !== undefined) ? series.carryover[lastIndex] : 0,
+        carryoverTicketsCreatedThisWeek: (Array.isArray(series.carryoverCreatedThisWeek) && series.carryoverCreatedThisWeek[lastIndex] !== undefined) ? series.carryoverCreatedThisWeek[lastIndex] : 0,
+        carryoverTicketsCreatedOtherWeek: (Array.isArray(series.carryoverCreatedOtherWeek) && series.carryoverCreatedOtherWeek[lastIndex] !== undefined) ? series.carryoverCreatedOtherWeek[lastIndex] : 0
+      };
+      
+      // Если в series есть хотя бы одно ненулевое значение, используем эти данные
+      if (fromSeries.newTickets > 0 || fromSeries.closedTickets > 0 || fromSeries.carryoverTickets > 0) {
+        return fromSeries;
+      }
+    }
+  }
+  
+  // 2. Пробуем currentWeek (если есть и содержит ненулевые данные)
+  if (props.data?.currentWeek && typeof props.data.currentWeek === 'object') {
     const cw = props.data.currentWeek;
-    // Проверяем, что данные не все нули
-    if ((cw.newTickets ?? 0) !== 0 || (cw.closedTickets ?? 0) !== 0 || (cw.carryoverTickets ?? 0) !== 0) {
+    if ((cw.newTickets ?? 0) > 0 || (cw.closedTickets ?? 0) > 0 || (cw.carryoverTickets ?? 0) > 0) {
       return cw;
     }
   }
-  // Если нет, берём последний элемент из weeksData
-  if (props.data?.weeksData && props.data.weeksData.length > 0) {
+  
+  // 3. Берём последний элемент из weeksData
+  if (props.data?.weeksData && Array.isArray(props.data.weeksData) && props.data.weeksData.length > 0) {
     const lastWeek = props.data.weeksData[props.data.weeksData.length - 1];
-    // Проверяем, что данные не все нули
-    if ((lastWeek.newTickets ?? 0) !== 0 || (lastWeek.closedTickets ?? 0) !== 0 || (lastWeek.carryoverTickets ?? 0) !== 0) {
+    if ((lastWeek.newTickets ?? 0) > 0 || (lastWeek.closedTickets ?? 0) > 0 || (lastWeek.carryoverTickets ?? 0) > 0) {
       return lastWeek;
     }
   }
-  // Fallback: берём данные из последнего элемента series (последняя неделя на графике)
+  
+  // 4. Fallback: возвращаем данные из series даже если они нули (для консистентности с графиком)
   if (props.data?.series) {
     const series = props.data.series;
     const lastIndex = Math.max(
-      (series.new?.length ?? 0) - 1,
-      (series.closed?.length ?? 0) - 1,
-      (series.carryover?.length ?? 0) - 1
+      (Array.isArray(series.new) ? series.new.length : 0) - 1,
+      (Array.isArray(series.closed) ? series.closed.length : 0) - 1,
+      (Array.isArray(series.carryover) ? series.carryover.length : 0) - 1,
+      -1
     );
+    
     if (lastIndex >= 0) {
       return {
-        newTickets: series.new?.[lastIndex] ?? 0,
-        closedTickets: series.closed?.[lastIndex] ?? 0,
-        closedTicketsCreatedThisWeek: series.closedCreatedThisWeek?.[lastIndex] ?? 0,
-        closedTicketsCreatedOtherWeek: series.closedCreatedOtherWeek?.[lastIndex] ?? 0,
-        carryoverTickets: series.carryover?.[lastIndex] ?? 0,
-        carryoverTicketsCreatedThisWeek: series.carryoverCreatedThisWeek?.[lastIndex] ?? 0,
-        carryoverTicketsCreatedOtherWeek: series.carryoverCreatedOtherWeek?.[lastIndex] ?? 0
+        newTickets: (Array.isArray(series.new) && series.new[lastIndex] !== undefined) ? series.new[lastIndex] : 0,
+        closedTickets: (Array.isArray(series.closed) && series.closed[lastIndex] !== undefined) ? series.closed[lastIndex] : 0,
+        closedTicketsCreatedThisWeek: (Array.isArray(series.closedCreatedThisWeek) && series.closedCreatedThisWeek[lastIndex] !== undefined) ? series.closedCreatedThisWeek[lastIndex] : 0,
+        closedTicketsCreatedOtherWeek: (Array.isArray(series.closedCreatedOtherWeek) && series.closedCreatedOtherWeek[lastIndex] !== undefined) ? series.closedCreatedOtherWeek[lastIndex] : 0,
+        carryoverTickets: (Array.isArray(series.carryover) && series.carryover[lastIndex] !== undefined) ? series.carryover[lastIndex] : 0,
+        carryoverTicketsCreatedThisWeek: (Array.isArray(series.carryoverCreatedThisWeek) && series.carryoverCreatedThisWeek[lastIndex] !== undefined) ? series.carryoverCreatedThisWeek[lastIndex] : 0,
+        carryoverTicketsCreatedOtherWeek: (Array.isArray(series.carryoverCreatedOtherWeek) && series.carryoverCreatedOtherWeek[lastIndex] !== undefined) ? series.carryoverCreatedOtherWeek[lastIndex] : 0
       };
     }
   }
-  // Последний fallback на прямые данные
-  return props.data;
+  
+  // 5. Последний fallback на прямые данные
+  return props.data || {};
 });
 
 // Обработчик клика на summary-карточки
