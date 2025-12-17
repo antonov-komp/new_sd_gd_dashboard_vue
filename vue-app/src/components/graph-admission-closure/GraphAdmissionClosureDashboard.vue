@@ -149,7 +149,6 @@
       :current-mode="periodMode"
       @close="handleCloseModal"
       @select-mode="handleModeSelectFromModal"
-      @start-loading="handleStartLoading"
     />
   </div>
 </template>
@@ -243,14 +242,20 @@ const hasActiveFilters = computed(() => {
 });
 
 async function loadData() {
+  console.log('[DEBUG] loadData called');
+  console.log('[DEBUG] periodMode:', periodMode.value);
+  console.log('[DEBUG] isLoading before:', isLoading.value);
+  
   // Загружаем данные только для недельного режима
   // Месячный режим обрабатывается в GraphAdmissionClosureMonthsDashboard
   if (periodMode.value !== 'weeks') {
+    console.log('[DEBUG] loadData: periodMode is not weeks, returning and resetting isLoading');
     // Если режим не 'weeks', сбрасываем isLoading
     isLoading.value = false;
     return;
   }
   
+  console.log('[DEBUG] Setting isLoading to true');
   // Устанавливаем isLoading в true сразу для показа прелоадера
   isLoading.value = true;
   error.value = null;
@@ -259,10 +264,13 @@ async function loadData() {
   const minLoadingTime = new Promise(resolve => setTimeout(resolve, 300));
   
   try {
+    console.log('[DEBUG] Starting API call');
     // Режим "4 последние недели" - используем текущую логику
     const currentWeek = getCurrentWeekBounds();
     const weekStartUtc = currentWeek.weekStartUtc;
     const weekEndUtc = currentWeek.weekEndUtc;
+    
+    console.log('[DEBUG] Week bounds:', { weekStartUtc, weekEndUtc });
     
     // Ждём минимум 300ms и загрузку данных параллельно
     const [_, result] = await Promise.all([
@@ -276,14 +284,19 @@ async function loadData() {
       })
     ]);
     
+    console.log('[DEBUG] API call successful, result:', result);
     const { meta, data } = result;
     chartMeta.value = meta;
     chartData.value = data;
+    console.log('[DEBUG] Data set, meta:', meta, 'data keys:', Object.keys(data));
   } catch (err) {
+    console.error('[DEBUG] API call failed:', err);
     error.value = err instanceof Error ? err : new Error('Неизвестная ошибка загрузки');
     console.error('[GraphAdmissionClosureDashboard] loadData error:', err);
   } finally {
+    console.log('[DEBUG] Finally block: setting isLoading to false');
     isLoading.value = false;
+    console.log('[DEBUG] isLoading after:', isLoading.value);
   }
 }
 
@@ -371,18 +384,38 @@ function handleModeSelectFromModal(mode) {
  * Обработка закрытия попапа
  */
 function handleCloseModal() {
+  console.log('[DEBUG] handleCloseModal called');
+  console.log('[DEBUG] showPeriodModeInfo before:', showPeriodModeInfo.value);
+  console.log('[DEBUG] isLoading before:', isLoading.value);
+  console.log('[DEBUG] periodMode:', periodMode.value);
+  
   // Закрываем попап
   showPeriodModeInfo.value = false;
   
   // Сразу устанавливаем isLoading в true для показа прелоадера
   // Это предотвратит показ контента без данных
   isLoading.value = true;
+  
+  console.log('[DEBUG] showPeriodModeInfo after:', showPeriodModeInfo.value);
+  console.log('[DEBUG] isLoading after:', isLoading.value);
+  
+  // Запускаем загрузку данных сразу после закрытия попапа
+  // Используем nextTick для гарантии, что попап закрыт и DOM обновлен
+  nextTick(() => {
+    console.log('[DEBUG] handleCloseModal: calling handleStartLoading in nextTick');
+    handleStartLoading();
+  });
 }
 
 /**
  * Обработка начала загрузки после закрытия попапа
  */
 function handleStartLoading() {
+  console.log('[DEBUG] handleStartLoading called');
+  console.log('[DEBUG] periodMode before check:', periodMode.value);
+  console.log('[DEBUG] showPeriodModeInfo:', showPeriodModeInfo.value);
+  console.log('[DEBUG] isLoading:', isLoading.value);
+  
   // Убеждаемся, что режим установлен перед загрузкой
   if (!periodMode.value || !['weeks', 'months'].includes(periodMode.value)) {
     console.warn('[GraphAdmissionClosureDashboard] Period mode not set, using default "weeks"');
@@ -394,12 +427,21 @@ function handleStartLoading() {
   // isLoading уже установлен в true в handleCloseModal
   // Используем nextTick для гарантии, что режим установлен и попап закрыт перед загрузкой
   nextTick(() => {
+    console.log('[DEBUG] nextTick callback, periodMode:', periodMode.value);
+    console.log('[DEBUG] isLoading in nextTick:', isLoading.value);
+    
     // Для недельного режима загружаем данные здесь
     if (periodMode.value === 'weeks') {
       console.log('[GraphAdmissionClosureDashboard] Loading data for weeks mode');
       loadData();
+    } else if (periodMode.value === 'months') {
+      console.log('[GraphAdmissionClosureDashboard] Months mode - data will be loaded by GraphAdmissionClosureMonthsDashboard');
+      // Для месячного режима загрузка происходит в GraphAdmissionClosureMonthsDashboard
+      // Но нужно сбросить isLoading родителя, чтобы показать дочерний компонент
+      // Дочерний компонент имеет свой isLoading
+      isLoading.value = false;
+      console.log('[DEBUG] Reset parent isLoading to false for months mode');
     }
-    // Для месячного режима загрузка происходит в GraphAdmissionClosureMonthsDashboard
   });
 }
 

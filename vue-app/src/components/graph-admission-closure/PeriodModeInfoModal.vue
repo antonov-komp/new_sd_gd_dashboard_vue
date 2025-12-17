@@ -96,14 +96,20 @@ function handleModeSelect(mode) {
   
   selectedMode.value = mode;
   
+  console.log('[DEBUG Modal] handleModeSelect: mode =', mode);
+  
   // Эмитим событие выбора режима
+  console.log('[DEBUG Modal] Emitting select-mode event');
   emit('select-mode', mode);
   
   // Сначала закрываем попап
+  console.log('[DEBUG Modal] Emitting close event');
   emit('close');
   
   // Затем запускаем загрузку (с небольшой задержкой для плавного перехода)
+  console.log('[DEBUG Modal] Scheduling start-loading event in 100ms');
   setTimeout(() => {
+    console.log('[DEBUG Modal] Emitting start-loading event');
     emit('start-loading');
   }, 100);
 }
@@ -112,16 +118,17 @@ function handleModeSelect(mode) {
  * Обработка закрытия попапа (через крестик или Escape)
  */
 function handleClose() {
+  console.log('[DEBUG Modal] handleClose called, selectedMode =', selectedMode.value);
+  
   // Если режим не был выбран, используем текущий
+  console.log('[DEBUG Modal] Emitting select-mode event with', selectedMode.value);
   emit('select-mode', selectedMode.value);
   
-  // Сначала закрываем попап
+  // Закрываем попап (handleCloseModal вызовет handleStartLoading)
+  console.log('[DEBUG Modal] Emitting close event');
   emit('close');
   
-  // Затем запускаем загрузку (с небольшой задержкой для плавного перехода)
-  setTimeout(() => {
-    emit('start-loading');
-  }, 100);
+  // НЕ эмитим start-loading здесь, так как handleCloseModal вызовет handleStartLoading
 }
 
 /**

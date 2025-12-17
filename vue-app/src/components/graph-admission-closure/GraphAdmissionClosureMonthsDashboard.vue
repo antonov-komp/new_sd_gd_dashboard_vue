@@ -202,13 +202,19 @@ async function updateProgress(targetProgress, stage, duration = 500) {
 }
 
 async function loadData() {
+  console.log('[DEBUG MonthsDashboard] loadData called');
+  console.log('[DEBUG MonthsDashboard] isLoading before:', isLoading.value);
+  
   // Устанавливаем isLoading в true сразу для показа прелоадера
   isLoading.value = true;
   error.value = null;
   loadingProgress.value = 0;
   currentLoadingStage.value = 'Подготовка данных...';
   
+  console.log('[DEBUG MonthsDashboard] isLoading set to true');
+  
   try {
+    console.log('[DEBUG MonthsDashboard] Starting API call');
     // Этап 1: Подготовка данных (0-10%)
     await updateProgress(10, 'Подготовка данных...', 300);
     
@@ -234,19 +240,24 @@ async function loadData() {
     // Этап 6: Формирование графиков (95-100%)
     await updateProgress(100, 'Формирование графиков...', 300);
     
+    console.log('[DEBUG MonthsDashboard] API call successful, result:', result);
     const { meta, data } = result;
     chartMeta.value = meta;
     chartData.value = data;
+    console.log('[DEBUG MonthsDashboard] Data set, meta:', meta, 'data keys:', Object.keys(data));
     
     // Небольшая задержка перед скрытием прелоадера
     await new Promise(resolve => setTimeout(resolve, 200));
   } catch (err) {
+    console.error('[DEBUG MonthsDashboard] API call failed:', err);
     error.value = err instanceof Error ? err : new Error('Неизвестная ошибка загрузки');
     console.error('[GraphAdmissionClosureMonthsDashboard] loadData error:', err);
     // При ошибке показываем прогресс 100%, чтобы прелоадер скрылся
     loadingProgress.value = 100;
   } finally {
+    console.log('[DEBUG MonthsDashboard] Finally block: setting isLoading to false');
     isLoading.value = false;
+    console.log('[DEBUG MonthsDashboard] isLoading after:', isLoading.value);
   }
 }
 
@@ -307,6 +318,8 @@ function handlePeriodModeChange(mode) {
 }
 
 onMounted(() => {
+  console.log('[DEBUG MonthsDashboard] onMounted called');
+  console.log('[DEBUG MonthsDashboard] isLoading before loadData:', isLoading.value);
   loadData();
 });
 </script>
