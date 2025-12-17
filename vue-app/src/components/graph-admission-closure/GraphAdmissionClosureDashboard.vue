@@ -398,38 +398,10 @@ onMounted(() => {
   // Подписка на глобальное событие изменения режима
   window.addEventListener('period-mode-change', handleGlobalPeriodModeChange);
   
-  // Проверка флага показа информационного попапа
-  // ВАЖНО: Для тестирования попапа можно временно очистить localStorage:
-  // localStorage.removeItem('graph-admission-closure-period-mode-info-shown');
-  try {
-    const STORAGE_KEY = 'graph-admission-closure-period-mode-info-shown';
-    const infoShown = localStorage.getItem(STORAGE_KEY);
-    console.log('[GraphAdmissionClosureDashboard] Info modal flag from localStorage:', infoShown);
-    console.log('[GraphAdmissionClosureDashboard] showPeriodModeInfo before check:', showPeriodModeInfo.value);
-    
-    // Показываем попап, если флаг не установлен или не равен 'true'
-    if (!infoShown || infoShown !== 'true') {
-      console.log('[GraphAdmissionClosureDashboard] Showing period mode info modal (first visit)');
-      showPeriodModeInfo.value = true;
-      console.log('[GraphAdmissionClosureDashboard] showPeriodModeInfo after setting to true:', showPeriodModeInfo.value);
-      // Не запускаем загрузку, если показывается попап
-      // Загрузка запустится после закрытия попапа
-      return;
-    } else {
-      console.log('[GraphAdmissionClosureDashboard] Info modal already shown, skipping');
-    }
-  } catch (error) {
-    console.warn('[GraphAdmissionClosureDashboard] Failed to read info modal flag from localStorage:', error);
-    // Показываем попап по умолчанию, если localStorage недоступен
-    console.log('[GraphAdmissionClosureDashboard] Showing period mode info modal (localStorage error)');
-    showPeriodModeInfo.value = true;
-    console.log('[GraphAdmissionClosureDashboard] showPeriodModeInfo after error handling:', showPeriodModeInfo.value);
-    // Не запускаем загрузку, если показывается попап
-    return;
-  }
-  
-  // Запускаем загрузку только если попап не показывается
-  loadData();
+  // Всегда показываем попап выбора режима при входе в модуль
+  showPeriodModeInfo.value = true;
+  // Не запускаем загрузку, если показывается попап
+  // Загрузка запустится после закрытия попапа
 });
 
 // Очистка при размонтировании
