@@ -129,6 +129,8 @@ function getSector1CEmployees(): array
     $start = 0;
     $pageSize = 50;
     
+    error_log(sprintf("[TimeTracking] Getting employees from department %d", SECTOR_1C_DEPARTMENT_ID));
+    
     do {
         $result = CRest::call('user.get', [
             'filter' => [
@@ -145,6 +147,8 @@ function getSector1CEmployees(): array
         }
         
         $users = $result['result'] ?? [];
+        error_log(sprintf("[TimeTracking] Received %d users (start=%d)", count($users), $start));
+        
         foreach ($users as $user) {
             if (isset($user['ID'])) {
                 $employeeIds[] = (int)$user['ID'];
@@ -155,7 +159,10 @@ function getSector1CEmployees(): array
         
     } while (count($users) === $pageSize);
     
-    return array_unique($employeeIds);
+    $uniqueIds = array_unique($employeeIds);
+    error_log(sprintf("[TimeTracking] Total unique employees: %d", count($uniqueIds)));
+    
+    return $uniqueIds;
 }
 
 /**
@@ -169,6 +176,7 @@ function getSector1CEmployees(): array
 function getElapsedTimeRecords(array $employeeIds, DateTimeImmutable $periodStart, DateTimeImmutable $periodEnd): array
 {
     if (empty($employeeIds)) {
+        error_log("[TimeTracking] Empty employee IDs list");
         return [];
     }
     
@@ -176,33 +184,152 @@ function getElapsedTimeRecords(array $employeeIds, DateTimeImmutable $periodStar
     $start = 0;
     $pageSize = 50;
     
+    // Логирование параметров запроса
+    error_log(sprintf(
+        "[TimeTracking] Requesting elapsed time records: employees=%s, period=%s to %s",
+        implode(',', $employeeIds),
+        $periodStart->format('Y-m-d H:i:s'),
+        $periodEnd->format('Y-m-d H:i:s')
+    ));
+    
     do {
         // Метод API для получения записей трудозатрат
-        // Требуется уточнить точное название метода и параметры через тестовый запрос
-        $result = CRest::call('tasks.elapseditem.getlist', [
-            'filter' => [
-                'USER_ID' => $employeeIds,
-                '>=CREATED_DATE' => $periodStart->format('Y-m-d H:i:s'),
-                '<=CREATED_DATE' => $periodEnd->format('Y-m-d H:i:s')
+        // Пробуем разные варианты методов API и форматов фильтров
+        $paramsVariants = [
+            // Вариант 1: Стандартный формат
+            [
+                'filter' => [
+                    'USER_ID' => $employeeIds,
+                    '>=CREATED_DATE' => $periodStart->format('Y-m-d H:i:s'),
+                    '<=CREATED_DATE' => $periodEnd->format('Y-m-d H:i:s')
+                ],
+                'select' => [
+                    'ID',
+                    'TASK_ID',
+                    'USER_ID',
+                    'CREATED_DATE',
+                    'MINUTES',
+                    'SECONDS',
+                    'HOURS',
+                    'COMMENT_TEXT'
+                ],
+                'start' => $start
             ],
-            'select' => [
-                'ID',
-                'TASK_ID',
-                'USER_ID',
-                'CREATED_DATE',
-                'MINUTES', // или SECONDS, HOURS (требуется уточнить формат)
-                'COMMENT_TEXT'
+            // Вариант 2: USER_ID как массив
+            [
+                'filter' => [
+                    'USER_ID' => $employeeIds,
+                    '>=CREATED_DATE' => $periodStart->format('Y-m-d'),
+                    '<=CREATED_DATE' => $periodEnd->format('Y-m-d')
+                ],
+                'select' => ['*'],
+                'start' => $start
             ],
-            'start' => $start,
-            'order' => ['CREATED_DATE' => 'ASC']
-        ]);
+            // Вариант 3: Без select (получить все поля)
+            [
+                'filter' => [
+                    'USER_ID' => $employeeIds,
+                    '>=CREATED_DATE' => $periodStart->format('Y-m-d H:i:s'),
+                    '<=CREATED_DATE' => $periodEnd->format('Y-m-d H:i:s')
+                ],
+                'start' => $start
+            ]
+        ];
         
+        $params = $paramsVariants[0]; // Используем первый вариант по умолчанию
+        
+        // Пробуем разные варианты методов API
+        $methodsToTry = [
+            'tasks.elapseditem.getlist',
+            'tasks.elapseditem.list',
+            'tasks.task.elapseditem.getlist',
+            'tasks.task.elapseditem.list'
+        ];
+        
+        $result = null;
+        $lastError = null;
+        
+        foreach ($methodsToTry as $method) {
+            error_log(sprintf("[TimeTracking] Trying method: %s", $method));
+            
+            $result = CRest::call($method, $params);
+            
+            if (!isset($result['error'])) {
+                error_log(sprintf("[TimeTracking] Success with method: %s", $method));
+                break;
+            }
+            
+            $lastError = [
+                'method' => $method,
+                'error' => $result['error'] ?? '',
+                'description' => $result['error_description'] ?? ''
+            ];
+            
+            error_log(sprintf(
+                "[TimeTracking] Method %s failed: %s - %s",
+                $method,
+                $lastError['error'],
+                $lastError['description']
+            ));
+        }
+        
+        // Если все методы не сработали
         if (isset($result['error'])) {
-            error_log("Bitrix24 API error (elapseditem.getlist): " . ($result['error_description'] ?? $result['error']));
+            error_log(sprintf(
+                "[TimeTracking] All methods failed. Last error: %s - %s",
+                $lastError['error'] ?? '',
+                $lastError['description'] ?? ''
+            ));
+            
+            // Если это не ошибка "метод не найден", а другая (например, нет данных) - продолжаем
+            $errorCode = $result['error'] ?? '';
+            if (strpos($errorCode, 'METHOD_NOT_FOUND') !== false || 
+                strpos($errorCode, 'NOT_FOUND') !== false) {
+                error_log("[TimeTracking] Method not found, stopping");
+                break;
+            }
+            
+            // Для других ошибок (например, пустой результат) - продолжаем с пустым массивом
+            $result = ['result' => []];
+        }
+        
+        // Логирование результата
+        $items = $result['result'] ?? [];
+        
+        // Детальное логирование структуры ответа (только для первого запроса)
+        if ($start === 0) {
+            error_log(sprintf(
+                "[TimeTracking] API response structure: %s",
+                json_encode([
+                    'has_result' => isset($result['result']),
+                    'result_type' => gettype($result['result'] ?? null),
+                    'result_count' => is_array($result['result'] ?? null) ? count($result['result']) : 'N/A',
+                    'result_keys' => is_array($result['result'] ?? null) ? array_keys($result['result']) : 'N/A',
+                    'full_response_keys' => array_keys($result)
+                ], JSON_UNESCAPED_UNICODE)
+            ));
+        }
+        
+        error_log(sprintf(
+            "[TimeTracking] Received %d items (start=%d, total so far=%d)",
+            count($items),
+            $start,
+            count($records)
+        ));
+        
+        // Если результат пустой, но нет ошибки - это нормально
+        if (empty($items)) {
+            if ($start === 0) {
+                error_log("[TimeTracking] No elapsed time records found for the period");
+                // Логируем полный ответ для отладки
+                error_log(sprintf(
+                    "[TimeTracking] Full API response: %s",
+                    json_encode($result, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)
+                ));
+            }
             break;
         }
         
-        $items = $result['result'] ?? [];
         foreach ($items as $item) {
             $records[] = $item;
         }
@@ -210,6 +337,8 @@ function getElapsedTimeRecords(array $employeeIds, DateTimeImmutable $periodStar
         $start += $pageSize;
         
     } while (count($items) === $pageSize);
+    
+    error_log(sprintf("[TimeTracking] Total records collected: %d", count($records)));
     
     return $records;
 }
@@ -593,8 +722,12 @@ try {
     $periodEnd = end($weeks)['weekEnd'];
     
     // Получение сотрудников сектора 1С
+    error_log("[TimeTracking] Getting sector 1C employees");
     $employeeIds = getSector1CEmployees();
+    error_log(sprintf("[TimeTracking] Found %d employees in sector 1C", count($employeeIds)));
+    
     if (empty($employeeIds)) {
+        error_log("[TimeTracking] No employees found in sector 1C");
         jsonResponse([
             'meta' => [
                 'weekNumber' => (int)$currentWeekStart->format('W'),
@@ -614,9 +747,19 @@ try {
     }
     
     // Получение записей трудозатрат
+    error_log(sprintf(
+        "[TimeTracking] Starting data collection: employees=%d, period=%s to %s",
+        count($employeeIds),
+        $periodStart->format('Y-m-d H:i:s'),
+        $periodEnd->format('Y-m-d H:i:s')
+    ));
+    
     $records = getElapsedTimeRecords($employeeIds, $periodStart, $periodEnd);
     
+    error_log(sprintf("[TimeTracking] Records collected: %d", count($records)));
+    
     if (empty($records)) {
+        error_log("[TimeTracking] No records found, returning empty response");
         jsonResponse([
             'meta' => [
                 'weekNumber' => (int)$currentWeekStart->format('W'),
