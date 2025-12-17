@@ -317,13 +317,7 @@ function handlePeriodModeChange(mode) {
   
   periodMode.value = mode;
   
-  // Сохранение в localStorage
-  try {
-    localStorage.setItem('graph-admission-closure-period-mode', mode);
-  } catch (error) {
-    console.warn('[GraphAdmissionClosureDashboard] Failed to save mode to localStorage:', error);
-  }
-  
+  // НЕ сохраняем в localStorage - режим определяется только выбором из попапа и переключением через фильтры
   // Перезагрузка данных при изменении режима (покажет прелоадер)
   loadData();
 }
@@ -365,12 +359,9 @@ function applyFilters() {
 function handleModeSelectFromModal(mode) {
   if (['weeks', 'months'].includes(mode)) {
     periodMode.value = mode;
-    // Сохраняем в localStorage
-    try {
-      localStorage.setItem('graph-admission-closure-period-mode', mode);
-    } catch (error) {
-      console.warn('[GraphAdmissionClosureDashboard] Failed to save mode to localStorage:', error);
-    }
+    // НЕ сохраняем в localStorage при выборе из попапа
+    // Попап показывается каждый раз, сохранение не нужно
+    // Сохранение происходит только при переключении через фильтры
   }
 }
 
@@ -386,19 +377,26 @@ function handleStartLoading() {
  * Загрузка режима из localStorage при монтировании
  */
 onMounted(() => {
+  // Удаляем старые флаги из localStorage, если они есть (больше не используются)
   try {
-    const savedMode = localStorage.getItem('graph-admission-closure-period-mode');
-    if (savedMode === 'weeks' || savedMode === 'months') {
-      periodMode.value = savedMode;
+    const oldFlag = 'graph-admission-closure-period-mode-info-shown';
+    if (localStorage.getItem(oldFlag)) {
+      localStorage.removeItem(oldFlag);
+    }
+    // Удаляем старый режим из localStorage (больше не используется)
+    const oldMode = 'graph-admission-closure-period-mode';
+    if (localStorage.getItem(oldMode)) {
+      localStorage.removeItem(oldMode);
     }
   } catch (error) {
-    console.warn('[GraphAdmissionClosureDashboard] Failed to read from localStorage:', error);
+    console.warn('[GraphAdmissionClosureDashboard] Failed to clean localStorage:', error);
   }
   
   // Подписка на глобальное событие изменения режима
   window.addEventListener('period-mode-change', handleGlobalPeriodModeChange);
   
   // Всегда показываем попап выбора режима при входе в модуль
+  // Режим определяется только выбором из попапа, без сохранения в localStorage
   showPeriodModeInfo.value = true;
   // Не запускаем загрузку, если показывается попап
   // Загрузка запустится после закрытия попапа

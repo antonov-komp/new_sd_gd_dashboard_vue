@@ -299,13 +299,7 @@ function handlePeriodModeChange(mode) {
   
   // Если выбран 'weeks', нужно переключиться на недельный режим
   if (mode === 'weeks') {
-    // Сохраняем режим в localStorage
-    try {
-      localStorage.setItem('graph-admission-closure-period-mode', mode);
-    } catch (error) {
-      console.warn('[GraphAdmissionClosureMonthsDashboard] Failed to save mode to localStorage:', error);
-    }
-    
+    // НЕ сохраняем в localStorage - режим определяется только выбором из попапа и переключением через фильтры
     // Эмитим глобальное событие для родительского компонента
     window.dispatchEvent(new CustomEvent('period-mode-change', { detail: { mode } }));
   }

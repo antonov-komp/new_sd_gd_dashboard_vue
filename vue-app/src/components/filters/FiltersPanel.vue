@@ -361,13 +361,7 @@ function handlePeriodModeChange(value) {
     return;
   }
   
-  // Сохранение в localStorage
-  try {
-    localStorage.setItem('graph-admission-closure-period-mode', value);
-  } catch (error) {
-    console.warn('[FiltersPanel] Failed to save periodMode to localStorage:', error);
-  }
-  
+  // НЕ сохраняем в localStorage - режим определяется только выбором из попапа и переключением через фильтры
   emit('update:periodMode', value);
   emit('apply');
 }
