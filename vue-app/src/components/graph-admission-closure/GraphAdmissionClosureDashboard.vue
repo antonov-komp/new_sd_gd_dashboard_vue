@@ -92,6 +92,7 @@
       :closed-tickets-created-other-week="chartData.closedTicketsCreatedOtherWeek ?? 0"
       :responsible-created-this-week="chartData.responsibleCreatedThisWeek || []"
       :responsible-created-other-week="chartData.responsibleCreatedOtherWeek || []"
+      :week-number="chartMeta?.weekNumber || null"
       :week-start-utc="chartMeta?.weekStartUtc || null"
       :week-end-utc="chartMeta?.weekEndUtc || null"
       @close="showResponsibleModal = false"
@@ -99,6 +100,7 @@
 
     <StagesModal
       :is-visible="showStagesModal"
+      :week-number="chartMeta?.weekNumber || null"
       :week-start-utc="chartMeta?.weekStartUtc || null"
       :week-end-utc="chartMeta?.weekEndUtc || null"
       @close="showStagesModal = false"
@@ -106,6 +108,7 @@
 
     <CarryoverDurationModal
       :is-visible="showCarryoverModal"
+      :week-number="chartMeta?.weekNumber || null"
       :week-start-utc="chartMeta?.weekStartUtc || null"
       :week-end-utc="chartMeta?.weekEndUtc || null"
       @close="showCarryoverModal = false"

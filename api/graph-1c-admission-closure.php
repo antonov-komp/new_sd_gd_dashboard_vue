@@ -290,6 +290,11 @@ try {
 
     // Границы недели
     [$weekStart, $weekEnd] = getWeekBounds($weekStartParam, $weekEndParam);
+    
+    // TASK-048: Получаем границы 4 недель (текущая + 3 предыдущие)
+    $weeks = getFourWeeksBounds($weekStart, $weekEnd);
+    $firstWeekStart = $weeks[0]['weekStart']; // Самая старая неделя
+    $lastWeekEnd = $weeks[count($weeks) - 1]['weekEnd']; // Текущая неделя
 
     // Опорные значения (совпадают с модулями 1/2), но выборку делаем по всем стадиям,
     // чтобы не потерять новые тикеты, которые появляются вне targetStages.
@@ -313,7 +318,11 @@ try {
     $tickets = [];
     $debugRaw = [];
     
-    // Форматируем даты для фильтра Bitrix24 (нужен формат YYYY-MM-DD HH:MI:SS)
+    // TASK-048: Форматируем даты для фильтра Bitrix24 за весь период 4 недель
+    $periodStartStr = $firstWeekStart->format('Y-m-d H:i:s');
+    $periodEndStr = $lastWeekEnd->format('Y-m-d H:i:s');
+    
+    // Для обратной совместимости (используется в некоторых местах)
     $weekStartStr = $weekStart->format('Y-m-d H:i:s');
     $weekEndStr = $weekEnd->format('Y-m-d H:i:s');
 
@@ -323,14 +332,14 @@ try {
     
     $allTicketsMap = []; // Используем map по ID, чтобы избежать дублей
     
-    // Запрос тикетов, созданных в неделю
+    // TASK-048: Запрос тикетов, созданных за период 4 недель
     $start = 0;
     do {
         $result = CRest::call('crm.item.list', [
             'entityTypeId' => $entityTypeId,
             'filter' => [
-                '>=createdTime' => $weekStartStr,
-                '<=createdTime' => $weekEndStr
+                '>=createdTime' => $periodStartStr,
+                '<=createdTime' => $periodEndStr
             ],
             'select' => [
                 'id',
@@ -358,14 +367,14 @@ try {
         $start += $pageSize;
     } while (isset($result['result']['next']));
     
-    // Запрос тикетов, закрытых в неделю (movedTime в неделе + закрывающие стадии)
+    // TASK-048: Запрос тикетов, закрытых за период 4 недель (movedTime в периоде + закрывающие стадии)
     $start = 0;
     do {
         $result = CRest::call('crm.item.list', [
             'entityTypeId' => $entityTypeId,
             'filter' => [
-                '>=movedTime' => $weekStartStr,
-                '<=movedTime' => $weekEndStr,
+                '>=movedTime' => $periodStartStr,
+                '<=movedTime' => $periodEndStr,
                 'stageId' => $closingStages
             ],
             'select' => [
@@ -394,18 +403,20 @@ try {
         $start += $pageSize;
     } while (isset($result['result']['next']));
     
-    // Запрос 3: переходящие тикеты (созданные до начала недели, в рабочих стадиях)
+    // TASK-048: Запрос 3: переходящие тикеты (в рабочих стадиях на момент любой из 4 недель)
     // Запрашиваем только если includeCarryoverTickets === true
     // ВАЖНО: Запрашиваем ВСЕ тикеты в рабочих стадиях (без фильтра по createdTime),
-    // затем фильтруем на PHP, чтобы не пропустить тикеты, которые могли перемещаться между стадиями
+    // затем фильтруем на PHP для каждой недели отдельно
     if ($includeCarryoverTickets) {
         $carryoverQueryCount = 0; // Счётчик для отладки
         $carryoverByStageBeforeFilter = [];
         $carryoverByStageAfterFilter = [];
         
-        error_log("[CARRYOVER] Начало загрузки переходящих тикетов. weekStart: {$weekStartStr}");
+        error_log("[CARRYOVER] Начало загрузки переходящих тикетов. periodStart: {$periodStartStr}, periodEnd: {$periodEndStr}");
         
         // Запрашиваем ВСЕ тикеты для каждой рабочей стадии отдельно (без фильтра по createdTime)
+        // Это нужно для того, чтобы получить все переходящие тикеты, которые могут быть в рабочих стадиях
+        // на момент любой из 4 недель
         foreach ($targetStages as $stageId) {
             $start = 0;
             $pageNum = 0;
@@ -457,16 +468,12 @@ try {
                 }
                 
                 foreach ($items as $item) {
-                    // Добавляем только если тикет ещё не был добавлен
-                    // И только если он создан до начала недели (фильтруем на PHP)
-                    $createdTime = $item['createdTime'] ?? null;
-                    if ($createdTime) {
-                        $createdDt = new DateTimeImmutable($createdTime, new DateTimeZone('UTC'));
-                        // Добавляем только тикеты, созданные до начала недели
-                        if ($createdDt < $weekStart && !isset($allTicketsMap[$item['id']])) {
-                            $allTicketsMap[$item['id']] = $item;
-                            $stageTotalAfterFilter++;
-                        }
+                    // TASK-048: Добавляем все тикеты в рабочих стадиях (без фильтра по createdTime)
+                    // Фильтрация по неделям будет происходить в calculateWeekMetrics() для каждой недели отдельно
+                    // Это позволяет учитывать переходящие тикеты, которые могут быть созданы в любой момент
+                    if (!isset($allTicketsMap[$item['id']])) {
+                        $allTicketsMap[$item['id']] = $item;
+                        $stageTotalAfterFilter++;
                     }
                 }
 
@@ -817,17 +824,95 @@ try {
         }
     }
 
-    // TASK-049: Возврат к логике одной недели (откат TASK-048)
-    // Формируем series с одним элементом для выбранной недели
+    // TASK-048: Подсчёт метрик для каждой из 4 недель
     $series = [
-        'new' => [$newCount],
-        'closed' => [$closedCount],
-        'closedCreatedThisWeek' => [$closedTicketsCreatedThisWeek],
-        'closedCreatedOtherWeek' => [$closedTicketsCreatedOtherWeek],
-        'carryover' => [$carryoverCount],
-        'carryoverCreatedThisWeek' => [$carryoverTicketsCreatedThisWeek],
-        'carryoverCreatedOtherWeek' => [$carryoverTicketsCreatedOtherWeek]
+        'new' => [],
+        'closed' => [],
+        'closedCreatedThisWeek' => [],
+        'closedCreatedOtherWeek' => [],
+        'carryover' => [],
+        'carryoverCreatedThisWeek' => [],
+        'carryoverCreatedOtherWeek' => []
     ];
+    
+    $weeksData = [];
+    $currentWeekData = null;
+    
+    // Для каждой недели подсчитываем метрики
+    foreach ($weeks as $week) {
+        $weekMetrics = calculateWeekMetrics(
+            $week['weekStart'],
+            $week['weekEnd'],
+            $tickets,
+            $targetStages,
+            $closingStages,
+            $keeperId
+        );
+        
+        // Добавляем в series (от старых к новым)
+        $series['new'][] = $weekMetrics['newTickets'];
+        $series['closed'][] = $weekMetrics['closedTickets'];
+        $series['closedCreatedThisWeek'][] = $weekMetrics['closedTicketsCreatedThisWeek'];
+        $series['closedCreatedOtherWeek'][] = $weekMetrics['closedTicketsCreatedOtherWeek'];
+        $series['carryover'][] = $weekMetrics['carryoverTickets'];
+        $series['carryoverCreatedThisWeek'][] = $weekMetrics['carryoverTicketsCreatedThisWeek'];
+        $series['carryoverCreatedOtherWeek'][] = $weekMetrics['carryoverTicketsCreatedOtherWeek'];
+        
+        // Сохраняем данные недели
+        $weekData = [
+            'weekNumber' => $week['weekNumber'],
+            'newTickets' => $weekMetrics['newTickets'],
+            'closedTickets' => $weekMetrics['closedTickets'],
+            'closedTicketsCreatedThisWeek' => $weekMetrics['closedTicketsCreatedThisWeek'],
+            'closedTicketsCreatedOtherWeek' => $weekMetrics['closedTicketsCreatedOtherWeek'],
+            'carryoverTickets' => $weekMetrics['carryoverTickets'],
+            'carryoverTicketsCreatedThisWeek' => $weekMetrics['carryoverTicketsCreatedThisWeek'],
+            'carryoverTicketsCreatedOtherWeek' => $weekMetrics['carryoverTicketsCreatedOtherWeek']
+        ];
+        $weeksData[] = $weekData;
+        
+        // Сохраняем данные текущей недели (последняя в массиве)
+        // TASK-048: Используем последний элемент массива как текущую неделю
+        // (массив weeks уже отсортирован от старых к новым)
+        if ($week === end($weeks)) {
+            $currentWeekData = $weekData;
+        }
+    }
+    
+    // Если не нашли текущую неделю, используем последнюю из weeksData
+    if (!$currentWeekData && count($weeksData) > 0) {
+        $currentWeekData = $weeksData[count($weeksData) - 1];
+    }
+    
+    // TASK-048: Дополнительная проверка - если currentWeekData всё ещё null или содержит только нули,
+    // но series содержит данные, берём данные из последнего элемента series
+    if ((!$currentWeekData || 
+         (($currentWeekData['newTickets'] ?? 0) === 0 && 
+          ($currentWeekData['closedTickets'] ?? 0) === 0 && 
+          ($currentWeekData['carryoverTickets'] ?? 0) === 0)) &&
+        count($series['new']) > 0) {
+        // Берём последний элемент из каждого массива series
+        $lastIndex = count($series['new']) - 1;
+        $currentWeekData = [
+            'weekNumber' => $weeks[count($weeks) - 1]['weekNumber'] ?? (int)$weekStart->format('W'),
+            'newTickets' => $series['new'][$lastIndex] ?? 0,
+            'closedTickets' => $series['closed'][$lastIndex] ?? 0,
+            'closedTicketsCreatedThisWeek' => $series['closedCreatedThisWeek'][$lastIndex] ?? 0,
+            'closedTicketsCreatedOtherWeek' => $series['closedCreatedOtherWeek'][$lastIndex] ?? 0,
+            'carryoverTickets' => $series['carryover'][$lastIndex] ?? 0,
+            'carryoverTicketsCreatedThisWeek' => $series['carryoverCreatedThisWeek'][$lastIndex] ?? 0,
+            'carryoverTicketsCreatedOtherWeek' => $series['carryoverCreatedOtherWeek'][$lastIndex] ?? 0
+        ];
+    }
+    
+    // Используем данные текущей недели для обратной совместимости
+    $newCount = $currentWeekData['newTickets'] ?? 0;
+    $closedCount = $currentWeekData['closedTickets'] ?? 0;
+    $closedTicketsCreatedThisWeek = $currentWeekData['closedTicketsCreatedThisWeek'] ?? 0;
+    $closedTicketsCreatedOtherWeek = $currentWeekData['closedTicketsCreatedOtherWeek'] ?? 0;
+    $carryoverCount = $currentWeekData['carryoverTickets'] ?? 0;
+    $carryoverTicketsCreatedThisWeek = $currentWeekData['carryoverTicketsCreatedThisWeek'] ?? 0;
+    $carryoverTicketsCreatedOtherWeek = $currentWeekData['carryoverTicketsCreatedOtherWeek'] ?? 0;
 
     // Формирование ответа
     $responseData = [
@@ -835,7 +920,9 @@ try {
         'closedTickets' => $closedCount,
         'closedTicketsCreatedThisWeek' => $closedTicketsCreatedThisWeek, // TASK-047
         'closedTicketsCreatedOtherWeek' => $closedTicketsCreatedOtherWeek, // TASK-047
-        'series' => $series, // TASK-049: массивы с одним элементом для выбранной недели
+        'series' => $series, // TASK-048: массивы с 4 элементами (по одному для каждой недели)
+        'weeksData' => $weeksData, // TASK-048: данные для каждой недели
+        'currentWeek' => $currentWeekData, // TASK-048: данные текущей недели (для summary-карточек)
         'stages' => array_map(function ($stageId) use ($stageAgg, $allStages) {
             $stageName = isset($allStages[$stageId]) ? $allStages[$stageId]['name'] : $stageId;
             return [
@@ -942,13 +1029,25 @@ try {
         }, array_values($carryoverTicketsByDurationAgg));
     }
     
-    // TASK-049: Формирование метаданных для одной недели (откат TASK-048)
+    // TASK-048: Формирование метаданных для 4 недель
     $response = [
         'success' => true,
         'meta' => [
             'weekNumber' => (int)$weekStart->format('W'),
             'weekStartUtc' => $weekStart->format('Y-m-d\TH:i:s\Z'),
-            'weekEndUtc' => $weekEnd->format('Y-m-d\TH:i:s\Z')
+            'weekEndUtc' => $weekEnd->format('Y-m-d\TH:i:s\Z'),
+            'currentWeek' => [
+                'weekNumber' => (int)$weekStart->format('W'),
+                'weekStartUtc' => $weekStart->format('Y-m-d\TH:i:s\Z'),
+                'weekEndUtc' => $weekEnd->format('Y-m-d\TH:i:s\Z')
+            ],
+            'weeks' => array_map(function($week) {
+                return [
+                    'weekNumber' => $week['weekNumber'],
+                    'weekStartUtc' => $week['weekStartUtc'],
+                    'weekEndUtc' => $week['weekEndUtc']
+                ];
+            }, $weeks)
         ],
         'data' => $responseData,
         'debug' => $debug ? [

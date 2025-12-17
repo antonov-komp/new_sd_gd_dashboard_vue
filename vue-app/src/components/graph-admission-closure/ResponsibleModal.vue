@@ -27,7 +27,9 @@
         <!-- Вкладка "По категориям": Уровень 0 -->
         <div v-if="activeTab === 'categories' && popupLevel === 0" key="level-0-categories" class="level-0">
           <header class="modal__header">
-            <h3 class="modal__title">Закрытые за неделю</h3>
+            <h3 class="modal__title">
+              Закрытые за неделю<span v-if="weekNumber"> · Неделя {{ weekNumber }}</span>
+            </h3>
             <button class="modal__close" @click="$emit('close')" aria-label="Закрыть">
               ✕
             </button>
@@ -159,7 +161,9 @@
         <!-- Вкладка "По сотрудникам": Уровень 0 -->
         <div v-else-if="activeTab === 'employees' && popupLevel === 0" key="level-0-employees" class="level-0">
           <header class="modal__header">
-            <h3 class="modal__title">Закрытые за неделю</h3>
+            <h3 class="modal__title">
+              Закрытые за неделю<span v-if="weekNumber"> · Неделя {{ weekNumber }}</span>
+            </h3>
             <button class="modal__close" @click="$emit('close')" aria-label="Закрыть">
               ✕
             </button>
@@ -329,6 +333,10 @@ const props = defineProps({
   responsibleCreatedOtherWeek: {
     type: Array,
     default: () => []
+  },
+  weekNumber: {
+    type: Number,
+    default: null
   },
   weekStartUtc: {
     type: String,

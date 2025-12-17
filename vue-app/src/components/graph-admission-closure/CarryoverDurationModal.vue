@@ -11,7 +11,9 @@
         <!-- Уровень 1: Градация по срокам -->
         <div v-if="popupLevel === 1" key="level-1" class="level-1">
           <header class="modal__header">
-            <h3 class="modal__title">Переходящие тикеты по срокам</h3>
+            <h3 class="modal__title">
+              Переходящие тикеты по срокам<span v-if="weekNumber"> · Неделя {{ weekNumber }}</span>
+            </h3>
             <button class="modal__close" @click="$emit('close')" aria-label="Закрыть">
               ✕
             </button>
@@ -123,6 +125,10 @@ const props = defineProps({
   isVisible: {
     type: Boolean,
     default: false
+  },
+  weekNumber: {
+    type: Number,
+    default: null
   },
   weekStartUtc: {
     type: String,
