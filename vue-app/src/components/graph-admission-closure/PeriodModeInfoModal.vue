@@ -84,7 +84,6 @@ const props = defineProps({
 const emit = defineEmits(['close', 'start-loading', 'select-mode']);
 
 const selectedMode = ref(props.currentMode);
-const STORAGE_KEY = 'graph-admission-closure-period-mode-info-shown';
 
 /**
  * Обработка выбора режима
@@ -96,13 +95,6 @@ function handleModeSelect(mode) {
   }
   
   selectedMode.value = mode;
-  
-  // Сохраняем флаг, что попап был показан
-  try {
-    localStorage.setItem(STORAGE_KEY, 'true');
-  } catch (error) {
-    console.warn('[PeriodModeInfoModal] Failed to save to localStorage:', error);
-  }
   
   // Эмитим событие выбора режима
   emit('select-mode', mode);
@@ -120,13 +112,6 @@ function handleModeSelect(mode) {
  * Обработка закрытия попапа (через крестик или Escape)
  */
 function handleClose() {
-  // Сохраняем флаг, что попап был показан
-  try {
-    localStorage.setItem(STORAGE_KEY, 'true');
-  } catch (error) {
-    console.warn('[PeriodModeInfoModal] Failed to save to localStorage:', error);
-  }
-  
   // Если режим не был выбран, используем текущий
   emit('select-mode', selectedMode.value);
   
