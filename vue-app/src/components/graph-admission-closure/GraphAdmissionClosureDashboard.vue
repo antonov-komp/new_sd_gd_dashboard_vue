@@ -11,7 +11,7 @@
           </div>
           <h3 class="preloader-title">Загрузка графика</h3>
           <p class="preloader-message">
-            Получение данных за 4 недели...
+            Получение данных за {{ periodMode === 'weeks' ? '4 недели' : '3 месяца' }}...
           </p>
           <div class="preloader-dots">
             <span class="dot"></span>
@@ -21,7 +21,7 @@
         </div>
       </div>
       
-      <div v-else key="content">
+      <div v-else-if="!showPeriodModeInfo" key="content">
         <!-- Переключатель режимов периода -->
         <div class="period-selector-container">
           <PeriodModeSelector
@@ -150,7 +150,10 @@
 
     <PeriodModeInfoModal
       :is-visible="showPeriodModeInfo"
+      :current-mode="periodMode"
       @close="showPeriodModeInfo = false"
+      @start-loading="handleStartLoading"
+      @select-mode="handleModeSelectFromModal"
     />
   </div>
 </template>
@@ -171,7 +174,7 @@ import { fetchAdmissionClosureStats } from '@/services/graph-admission-closure/a
 
 const router = useRouter();
 
-const isLoading = ref(true);
+const isLoading = ref(false); // Начинаем с false, чтобы не показывать прелоадер при показе попапа
 const error = ref(null);
 const chartMeta = ref(null);
 const chartData = ref({
@@ -334,6 +337,29 @@ function applyFilters() {
 }
 
 /**
+ * Обработка выбора режима из попапа
+ */
+function handleModeSelectFromModal(mode) {
+  if (['weeks', 'months'].includes(mode)) {
+    periodMode.value = mode;
+    // Сохраняем в localStorage
+    try {
+      localStorage.setItem('graph-admission-closure-period-mode', mode);
+    } catch (error) {
+      console.warn('[GraphAdmissionClosureDashboard] Failed to save mode to localStorage:', error);
+    }
+  }
+}
+
+/**
+ * Обработка начала загрузки после закрытия попапа
+ */
+function handleStartLoading() {
+  // Запускаем загрузку данных после закрытия попапа
+  loadData();
+}
+
+/**
  * Загрузка режима из localStorage при монтировании
  */
 onMounted(() => {
@@ -352,13 +378,19 @@ onMounted(() => {
     const infoShown = localStorage.getItem(STORAGE_KEY);
     if (!infoShown || infoShown !== 'true') {
       showPeriodModeInfo.value = true;
+      // Не запускаем загрузку, если показывается попап
+      // Загрузка запустится после закрытия попапа
+      return;
     }
   } catch (error) {
     console.warn('[GraphAdmissionClosureDashboard] Failed to read info modal flag from localStorage:', error);
     // Показываем попап по умолчанию, если localStorage недоступен
     showPeriodModeInfo.value = true;
+    // Не запускаем загрузку, если показывается попап
+    return;
   }
   
+  // Запускаем загрузку только если попап не показывается
   loadData();
 });
 
