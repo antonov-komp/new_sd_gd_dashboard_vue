@@ -21,7 +21,7 @@
         </div>
       </div>
       
-      <div v-else-if="!showPeriodModeInfo" key="content">
+      <div v-else-if="!showPeriodModeInfo && !isLoading" key="content">
         <!-- Условный рендеринг: месячный или недельный режим -->
         <GraphAdmissionClosureMonthsDashboard
           v-if="periodMode === 'months'"
@@ -147,15 +147,15 @@
       v-if="showPeriodModeInfo"
       :is-visible="showPeriodModeInfo"
       :current-mode="periodMode"
-      @close="showPeriodModeInfo = false"
-      @start-loading="handleStartLoading"
+      @close="handleCloseModal"
       @select-mode="handleModeSelectFromModal"
+      @start-loading="handleStartLoading"
     />
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import StatusMessage from '@/components/common/StatusMessage.vue';
 import FiltersPanel from '@/components/filters/FiltersPanel.vue';
@@ -182,7 +182,7 @@ const chartData = ref({
 const showResponsibleModal = ref(false);
 const showStagesModal = ref(false);
 const showCarryoverModal = ref(false);
-const showPeriodModeInfo = ref(false);
+const showPeriodModeInfo = ref(true); // Показываем попап сразу при инициализации
 
 // Навигация "Назад"
 const isNavigatingBack = ref(false);
@@ -246,6 +246,8 @@ async function loadData() {
   // Загружаем данные только для недельного режима
   // Месячный режим обрабатывается в GraphAdmissionClosureMonthsDashboard
   if (periodMode.value !== 'weeks') {
+    // Если режим не 'weeks', сбрасываем isLoading
+    isLoading.value = false;
     return;
   }
   
@@ -366,11 +368,39 @@ function handleModeSelectFromModal(mode) {
 }
 
 /**
+ * Обработка закрытия попапа
+ */
+function handleCloseModal() {
+  // Закрываем попап
+  showPeriodModeInfo.value = false;
+  
+  // Сразу устанавливаем isLoading в true для показа прелоадера
+  // Это предотвратит показ контента без данных
+  isLoading.value = true;
+}
+
+/**
  * Обработка начала загрузки после закрытия попапа
  */
 function handleStartLoading() {
-  // Запускаем загрузку данных после закрытия попапа
-  loadData();
+  // Убеждаемся, что режим установлен перед загрузкой
+  if (!periodMode.value || !['weeks', 'months'].includes(periodMode.value)) {
+    console.warn('[GraphAdmissionClosureDashboard] Period mode not set, using default "weeks"');
+    periodMode.value = 'weeks';
+  }
+  
+  console.log('[GraphAdmissionClosureDashboard] Starting loading, periodMode:', periodMode.value);
+  
+  // isLoading уже установлен в true в handleCloseModal
+  // Используем nextTick для гарантии, что режим установлен и попап закрыт перед загрузкой
+  nextTick(() => {
+    // Для недельного режима загружаем данные здесь
+    if (periodMode.value === 'weeks') {
+      console.log('[GraphAdmissionClosureDashboard] Loading data for weeks mode');
+      loadData();
+    }
+    // Для месячного режима загрузка происходит в GraphAdmissionClosureMonthsDashboard
+  });
 }
 
 /**
@@ -395,9 +425,7 @@ onMounted(() => {
   // Подписка на глобальное событие изменения режима
   window.addEventListener('period-mode-change', handleGlobalPeriodModeChange);
   
-  // Всегда показываем попап выбора режима при входе в модуль
-  // Режим определяется только выбором из попапа, без сохранения в localStorage
-  showPeriodModeInfo.value = true;
+  // showPeriodModeInfo уже установлен в true при инициализации
   // Не запускаем загрузку, если показывается попап
   // Загрузка запустится после закрытия попапа
 });
