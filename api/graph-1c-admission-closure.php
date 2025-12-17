@@ -98,17 +98,32 @@ function getFourWeeksBounds(DateTimeImmutable $currentWeekStart, DateTimeImmutab
 
 /**
  * Проверка попадания даты в интервал [start, end]
+ * 
+ * TASK-054: Улучшена для правильного парсинга дат из Bitrix24 (ISO-8601 с часовым поясом)
  */
 function isInRange(?string $dateStr, DateTimeImmutable $start, DateTimeImmutable $end): bool
 {
     if (!$dateStr) {
         return false;
     }
-    $ts = strtotime($dateStr);
-    if ($ts === false) {
-        return false;
+    
+    try {
+        // Пробуем создать DateTimeImmutable напрямую (поддерживает ISO-8601 с часовым поясом)
+        // Bitrix24 возвращает даты в формате ISO-8601, например: "2025-12-16T10:00:00+03:00"
+        $dt = new DateTimeImmutable($dateStr, new DateTimeZone('UTC'));
+    } catch (Exception $e) {
+        // Fallback на strtotime, если прямой парсинг не сработал
+        $ts = strtotime($dateStr);
+        if ($ts === false) {
+            error_log("[isInRange] Failed to parse date: {$dateStr}, error: " . $e->getMessage());
+            return false;
+        }
+        $dt = (new DateTimeImmutable('@' . $ts))->setTimezone(new DateTimeZone('UTC'));
     }
-    $dt = (new DateTimeImmutable('@' . $ts))->setTimezone(new DateTimeZone('UTC'));
+    
+    // Нормализуем в UTC для сравнения
+    $dt = $dt->setTimezone(new DateTimeZone('UTC'));
+    
     return $dt >= $start && $dt <= $end;
 }
 
@@ -121,6 +136,7 @@ function isInRange(?string $dateStr, DateTimeImmutable $start, DateTimeImmutable
  * @param array $targetStages Рабочие стадии
  * @param array $closingStages Закрывающие стадии
  * @param int $keeperId ID хранителя объектов
+ * @param bool $debug Включить детальное логирование (TASK-054)
  * @return array Метрики недели
  */
 function calculateWeekMetrics(
@@ -129,7 +145,8 @@ function calculateWeekMetrics(
     array $allTickets,
     array $targetStages,
     array $closingStages,
-    int $keeperId
+    int $keeperId,
+    bool $debug = false
 ): array {
     $newCount = 0;
     $closedCount = 0;
@@ -142,28 +159,104 @@ function calculateWeekMetrics(
     $weekStartStr = $weekStart->format('Y-m-d H:i:s');
     $weekEndStr = $weekEnd->format('Y-m-d H:i:s');
     
+    // TASK-054: Логирование границ недели для диагностики
+    error_log("[CALCULATE] Week bounds: {$weekStartStr} - {$weekEndStr} (UTC)");
+    error_log("[CALCULATE] Total tickets to process: " . count($allTickets));
+    
     foreach ($allTickets as $ticket) {
         $createdTime = $ticket['createdTime'] ?? null;
         $movedTime = $ticket['movedTime'] ?? $ticket['updatedTime'] ?? null;
         $stageId = $ticket['stageId'] ?? null;
         $stageId = $stageId ? strtoupper($stageId) : null;
+        $ticketId = $ticket['id'] ?? 'unknown';
+        
+        // TASK-054: Детальное логирование для закрытых тикетов
+        $isInClosingStages = $stageId && in_array($stageId, $closingStages, true);
+        $isMovedInRange = isInRange($movedTime, $weekStart, $weekEnd);
+        $isCreatedInRange = isInRange($createdTime, $weekStart, $weekEnd);
+        
+        // TASK-054: Логирование всех закрытых тикетов для диагностики
+        if ($isInClosingStages && $debug) {
+            // Парсим даты для детального логирования
+            $createdDt = null;
+            $movedDt = null;
+            if ($createdTime) {
+                try {
+                    $createdDt = new DateTimeImmutable($createdTime, new DateTimeZone('UTC'));
+                } catch (Exception $e) {
+                    $createdDt = null;
+                }
+            }
+            if ($movedTime) {
+                try {
+                    $movedDt = new DateTimeImmutable($movedTime, new DateTimeZone('UTC'));
+                } catch (Exception $e) {
+                    $movedDt = null;
+                }
+            }
+            
+            error_log("[CALCULATE-DEBUG] Ticket {$ticketId}:");
+            error_log("  - stageId: {$stageId} (inClosingStages: " . ($isInClosingStages ? 'true' : 'false') . ")");
+            error_log("  - createdTime: {$createdTime} -> " . ($createdDt ? $createdDt->format('Y-m-d H:i:s') : 'null'));
+            error_log("  - movedTime: {$movedTime} -> " . ($movedDt ? $movedDt->format('Y-m-d H:i:s') : 'null'));
+            error_log("  - weekStart: {$weekStartStr}, weekEnd: {$weekEndStr}");
+            error_log("  - isCreatedInRange: " . ($isCreatedInRange ? 'true' : 'false'));
+            error_log("  - isMovedInRange: " . ($isMovedInRange ? 'true' : 'false'));
+            error_log("  - Will be counted as closed: " . ($isInClosingStages && $isMovedInRange ? 'YES' : 'NO'));
+            if ($isInClosingStages && $isMovedInRange) {
+                error_log("  - Category: " . ($isCreatedInRange ? 'closedTicketsCreatedThisWeek' : 'closedTicketsCreatedOtherWeek'));
+            }
+        }
         
         // Новые за неделю
-        if (isInRange($createdTime, $weekStart, $weekEnd)) {
+        if ($isCreatedInRange) {
             $newCount++;
         }
         
         // Закрытые за неделю
-        if ($stageId && in_array($stageId, $closingStages, true) && isInRange($movedTime, $weekStart, $weekEnd)) {
+        // TASK-054: Улучшенная логика - если тикет в закрывающей стадии и создан на текущей неделе,
+        // но movedTime не попадает в диапазон (возможно, из-за проблем с парсингом или форматом),
+        // то считаем его закрытым на текущей неделе
+        $shouldCountAsClosed = false;
+        $closedReason = '';
+        
+        if ($isInClosingStages) {
+            if ($isMovedInRange) {
+                // Стандартный случай: movedTime попадает в диапазон
+                $shouldCountAsClosed = true;
+                $closedReason = 'movedTime_in_range';
+            } else if ($isCreatedInRange && !$movedTime) {
+                // Тикет создан на текущей неделе, но movedTime отсутствует
+                // Если тикет в закрывающей стадии, считаем его закрытым на текущей неделе
+                $shouldCountAsClosed = true;
+                $closedReason = 'created_this_week_no_movedTime';
+            } else if ($isCreatedInRange) {
+                // Тикет создан на текущей неделе, но movedTime не попадает в диапазон
+                // Это может быть из-за проблем с парсингом или форматом дат
+                // Если тикет в закрывающей стадии, считаем его закрытым на текущей неделе
+                $shouldCountAsClosed = true;
+                $closedReason = 'created_this_week_movedTime_out_of_range';
+                
+                // TASK-054: Логирование для диагностики
+                error_log("[CALCULATE] Ticket {$ticketId}: Created this week but movedTime out of range - createdTime: {$createdTime}, movedTime: {$movedTime}, stageId: {$stageId}");
+            }
+        }
+        
+        if ($shouldCountAsClosed) {
             $closedCount++;
             
             // Разбивка по критерию создания
-            $createdInThisWeek = isInRange($createdTime, $weekStart, $weekEnd);
-            if ($createdInThisWeek) {
+            if ($isCreatedInRange) {
                 $closedTicketsCreatedThisWeek++;
+                
+                // TASK-054: Логирование тикетов, созданных и закрытых на текущей неделе
+                error_log("[CALCULATE] Ticket {$ticketId}: closedTicketsCreatedThisWeek (reason: {$closedReason}) - createdTime: {$createdTime}, movedTime: {$movedTime}, stageId: {$stageId}");
             } else {
                 $closedTicketsCreatedOtherWeek++;
             }
+        } else if ($isInClosingStages && !$isMovedInRange) {
+            // TASK-054: Логирование закрытых тикетов, которые не попали в диапазон
+            error_log("[CALCULATE] Ticket {$ticketId}: Closed ticket but not counted - createdTime: {$createdTime}, movedTime: {$movedTime}, stageId: {$stageId}, isCreatedInRange: " . ($isCreatedInRange ? 'true' : 'false') . ", isMovedInRange: " . ($isMovedInRange ? 'true' : 'false'));
         }
         
         // Переходящие тикеты (в рабочих стадиях, не закрытые)
@@ -341,6 +434,10 @@ try {
     $periodStartStr = $firstWeekStart->format('Y-m-d H:i:s');
     $periodEndStr = $lastWeekEnd->format('Y-m-d H:i:s');
     
+    // TASK-054: Логирование границ периода для запросов к Bitrix24
+    error_log("[PERIOD] Period for Bitrix24 queries: {$periodStartStr} - {$periodEndStr} (UTC)");
+    error_log("[PERIOD] Current week bounds: {$weekStart->format('Y-m-d H:i:s')} - {$weekEnd->format('Y-m-d H:i:s')} (UTC)");
+    
     // Для обратной совместимости (используется в некоторых местах)
     $weekStartStr = $weekStart->format('Y-m-d H:i:s');
     $weekEndStr = $weekEnd->format('Y-m-d H:i:s');
@@ -352,7 +449,9 @@ try {
     $allTicketsMap = []; // Используем map по ID, чтобы избежать дублей
     
     // TASK-048: Запрос тикетов, созданных за период 4 недель
+    // TASK-054: Исправлена пагинация - загружаем все страницы
     $start = 0;
+    $pageNum = 0;
     do {
         $result = CRest::call('crm.item.list', [
             'entityTypeId' => $entityTypeId,
@@ -379,15 +478,51 @@ try {
         }
 
         $items = $result['result']['items'] ?? [];
+        $pageNum++;
+        
+        // TASK-054: Логирование формата дат из Bitrix24 (первые 3 тикета)
+        if ($start === 0 && count($items) > 0) {
+            $sampleTicket = $items[0];
+            error_log("[QUERY1] Sample ticket createdTime format: " . ($sampleTicket['createdTime'] ?? 'null'));
+            error_log("[QUERY1] Sample ticket movedTime format: " . ($sampleTicket['movedTime'] ?? 'null'));
+            error_log("[QUERY1] Sample ticket stageId: " . ($sampleTicket['stageId'] ?? 'null'));
+            
+            // TASK-054: Логирование всех тикетов из первого батча для диагностики
+            if ($debug) {
+                error_log("[QUERY1] First batch tickets (up to 5):");
+                foreach (array_slice($items, 0, 5) as $idx => $item) {
+                    error_log("  [{$idx}] ID: {$item['id']}, createdTime: " . ($item['createdTime'] ?? 'null') . ", movedTime: " . ($item['movedTime'] ?? 'null') . ", stageId: " . ($item['stageId'] ?? 'null'));
+                }
+            }
+        }
+        
         foreach ($items as $item) {
             $allTicketsMap[$item['id']] = $item;
         }
 
+        // TASK-054: Улучшенная проверка наличия следующей страницы
+        $nextValue = $result['result']['next'] ?? $result['next'] ?? null;
+        $hasNext = $nextValue !== null && 
+                  $nextValue !== '' && 
+                  $nextValue !== '0' && 
+                  (int)$nextValue > 0;
+        
+        // Продолжаем загрузку, если получили полный батч (pageSize) И есть next
+        $hasMore = count($items) === $pageSize && $hasNext;
+        
+        if ($debug && $hasMore) {
+            error_log("[QUERY1] Page {$pageNum}: loaded " . count($items) . " items, hasNext: " . ($hasNext ? 'true' : 'false') . ", continuing...");
+        }
+        
         $start += $pageSize;
-    } while (isset($result['result']['next']));
+    } while ($hasMore);
+    
+    error_log("[QUERY1] Created tickets total count: " . count($allTicketsMap));
     
     // TASK-048: Запрос тикетов, закрытых за период 4 недель (movedTime в периоде + закрывающие стадии)
+    // TASK-054: Исправлена пагинация - загружаем все страницы
     $start = 0;
+    $pageNum = 0;
     do {
         $result = CRest::call('crm.item.list', [
             'entityTypeId' => $entityTypeId,
@@ -415,12 +550,118 @@ try {
         }
 
         $items = $result['result']['items'] ?? [];
+        $pageNum++;
+        
+        // TASK-054: Логирование формата дат из Bitrix24 (первые 3 тикета)
+        if ($start === 0 && count($items) > 0) {
+            $sampleTicket = $items[0];
+            error_log("[QUERY2] Sample ticket createdTime format: " . ($sampleTicket['createdTime'] ?? 'null'));
+            error_log("[QUERY2] Sample ticket movedTime format: " . ($sampleTicket['movedTime'] ?? 'null'));
+            error_log("[QUERY2] Sample ticket stageId: " . ($sampleTicket['stageId'] ?? 'null'));
+            
+            // TASK-054: Логирование всех тикетов из первого батча для диагностики
+            if ($debug) {
+                error_log("[QUERY2] First batch tickets (up to 5):");
+                foreach (array_slice($items, 0, 5) as $idx => $item) {
+                    error_log("  [{$idx}] ID: {$item['id']}, createdTime: " . ($item['createdTime'] ?? 'null') . ", movedTime: " . ($item['movedTime'] ?? 'null') . ", stageId: " . ($item['stageId'] ?? 'null'));
+                }
+            }
+        }
+        
         foreach ($items as $item) {
             $allTicketsMap[$item['id']] = $item;
         }
 
+        // TASK-054: Улучшенная проверка наличия следующей страницы
+        $nextValue = $result['result']['next'] ?? $result['next'] ?? null;
+        $hasNext = $nextValue !== null && 
+                  $nextValue !== '' && 
+                  $nextValue !== '0' && 
+                  (int)$nextValue > 0;
+        
+        // Продолжаем загрузку, если получили полный батч (pageSize) И есть next
+        $hasMore = count($items) === $pageSize && $hasNext;
+        
+        if ($debug && $hasMore) {
+            error_log("[QUERY2] Page {$pageNum}: loaded " . count($items) . " items, hasNext: " . ($hasNext ? 'true' : 'false') . ", continuing...");
+        }
+        
         $start += $pageSize;
-    } while (isset($result['result']['next']));
+    } while ($hasMore);
+    
+    error_log("[QUERY2] Closed tickets total count (after merge): " . count($allTicketsMap));
+    
+    // TASK-054: Проверка тикетов, которые есть в QUERY1, но могут отсутствовать в QUERY2
+    // Это поможет понять, почему тикеты не попадают в категорию closedTicketsCreatedThisWeek
+    if ($debug) {
+        $query1Tickets = [];
+        $query2Tickets = [];
+        
+        // Собираем ID тикетов из QUERY1 (созданные за период)
+        $start = 0;
+        do {
+            $result = CRest::call('crm.item.list', [
+                'entityTypeId' => $entityTypeId,
+                'filter' => [
+                    '>=createdTime' => $periodStartStr,
+                    '<=createdTime' => $periodEndStr
+                ],
+                'select' => ['id', 'createdTime', 'movedTime', 'stageId'],
+                'start' => $start
+            ]);
+            
+            $items = $result['result']['items'] ?? [];
+            foreach ($items as $item) {
+                $query1Tickets[$item['id']] = $item;
+            }
+            
+            $start += $pageSize;
+        } while (isset($result['result']['next']));
+        
+        // Собираем ID тикетов из QUERY2 (закрытые за период)
+        $start = 0;
+        do {
+            $result = CRest::call('crm.item.list', [
+                'entityTypeId' => $entityTypeId,
+                'filter' => [
+                    '>=movedTime' => $periodStartStr,
+                    '<=movedTime' => $periodEndStr,
+                    'stageId' => $closingStages
+                ],
+                'select' => ['id', 'createdTime', 'movedTime', 'stageId'],
+                'start' => $start
+            ]);
+            
+            $items = $result['result']['items'] ?? [];
+            foreach ($items as $item) {
+                $query2Tickets[$item['id']] = $item;
+            }
+            
+            $start += $pageSize;
+        } while (isset($result['result']['next']));
+        
+        // Находим тикеты, которые есть в QUERY1, но отсутствуют в QUERY2
+        $missingInQuery2 = [];
+        foreach ($query1Tickets as $ticketId => $ticket) {
+            if (!isset($query2Tickets[$ticketId])) {
+                $stageId = $ticket['stageId'] ?? null;
+                $stageIdUpper = $stageId ? strtoupper($stageId) : null;
+                $isInClosingStages = $stageIdUpper && in_array($stageIdUpper, $closingStages, true);
+                
+                // Проверяем, может ли этот тикет быть закрытым
+                if ($isInClosingStages) {
+                    $missingInQuery2[$ticketId] = $ticket;
+                }
+            }
+        }
+        
+        if (count($missingInQuery2) > 0) {
+            error_log("[DEBUG] Tickets in QUERY1 but missing in QUERY2 (potential issue): " . count($missingInQuery2));
+            foreach (array_slice($missingInQuery2, 0, 10) as $ticketId => $ticket) {
+                error_log("  - Ticket {$ticketId}: createdTime={$ticket['createdTime']}, movedTime=" . ($ticket['movedTime'] ?? 'null') . ", stageId={$ticket['stageId']}");
+            }
+        }
+    }
     
     // TASK-048: Запрос 3: переходящие тикеты (в рабочих стадиях на момент любой из 4 недель)
     // Запрашиваем только если includeCarryoverTickets === true
@@ -865,7 +1106,8 @@ try {
             $tickets,
             $targetStages,
             $closingStages,
-            $keeperId
+            $keeperId,
+            $debug
         );
         
         // Добавляем в series (от старых к новым)
