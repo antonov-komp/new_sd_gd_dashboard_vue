@@ -50,24 +50,38 @@
       <!-- Фильтры будут добавлены в следующих этапах -->
     </div>
 
-    <!-- Состояние загрузки -->
-    <div v-if="loading" class="loading-state">
-      <p>Загрузка данных о трудозатратах...</p>
-    </div>
+    <!-- Приятный прелоадер для загрузки данных -->
+    <Transition name="fade" mode="out-in">
+      <div v-if="loading" key="preloader" class="time-tracking-preloader">
+        <div class="preloader-content">
+          <div class="preloader-spinner">
+            <div class="spinner-ring"></div>
+            <div class="spinner-ring"></div>
+            <div class="spinner-ring"></div>
+          </div>
+          <h3 class="preloader-title">Загрузка данных</h3>
+          <p class="preloader-message">Получение данных о трудозатратах...</p>
+          <div class="preloader-dots">
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Состояние ошибки -->
+      <div v-else-if="error" key="error" class="error-state">
+        <p>Ошибка загрузки данных: {{ error }}</p>
+        <button @click="loadData" class="retry-button">Повторить попытку</button>
+      </div>
 
-    <!-- Состояние ошибки -->
-    <div v-else-if="error" class="error-state">
-      <p>Ошибка загрузки данных: {{ error }}</p>
-      <button @click="loadData" class="retry-button">Повторить попытку</button>
-    </div>
+      <!-- Состояние пустых данных -->
+      <div v-else-if="!hasData" key="empty" class="empty-state">
+        <p>Нет данных о трудозатратах за выбранный период</p>
+      </div>
 
-    <!-- Состояние пустых данных -->
-    <div v-else-if="!hasData" class="empty-state">
-      <p>Нет данных о трудозатратах за выбранный период</p>
-    </div>
-
-    <!-- Основной контент -->
-    <div v-else class="dashboard-content">
+      <!-- Основной контент -->
+      <div v-else key="content" class="dashboard-content">
       <!-- Summary-карточки -->
       <TicketsTimeTrackingSummary 
         v-if="data"
@@ -87,7 +101,8 @@
 
       <!-- Графики (опционально) -->
       <!-- TicketsTimeTrackingChart будет добавлен в этапе TASK-050-06 -->
-    </div>
+      </div>
+    </Transition>
 
     <!-- Попап детализации -->
     <TimeTrackingDetailModal
@@ -110,7 +125,7 @@ import TimeTrackingDetailModal from './TimeTrackingDetailModal.vue';
 const router = useRouter();
 
 // Состояния
-const loading = ref(false);
+const loading = ref(true); // Начинаем с true для показа прелоадера при первой загрузке
 const error = ref(null);
 const data = ref(null);
 const selectedCell = ref(null);
@@ -123,14 +138,22 @@ const hasData = computed(() => {
 
 // Методы
 const loadData = async () => {
+  // Устанавливаем loading в true сразу для показа прелоадера
   loading.value = true;
   error.value = null;
   
+  // Небольшая задержка для гарантии отображения прелоадера (минимум 300ms)
+  const minLoadingTime = new Promise(resolve => setTimeout(resolve, 300));
+  
   try {
-    const result = await timeTrackingService.getTimeTrackingData({
-      product: '1C',
-      weeksCount: 4
-    });
+    // Ждём минимум 300ms и загрузку данных параллельно
+    const [_, result] = await Promise.all([
+      minLoadingTime,
+      timeTrackingService.getTimeTrackingData({
+        product: '1C',
+        weeksCount: 4
+      })
+    ]);
     
     data.value = result;
   } catch (err) {
@@ -271,7 +294,163 @@ onMounted(() => {
   margin-bottom: 20px;
 }
 
-.loading-state,
+/* Приятный прелоадер для загрузки данных о трудозатратах */
+.time-tracking-preloader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 70vh;
+  padding: 60px 20px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  position: relative;
+  z-index: 1;
+  margin-top: 20px;
+}
+
+.preloader-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  max-width: 400px;
+}
+
+.preloader-spinner {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  margin-bottom: 32px;
+}
+
+.spinner-ring {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border: 4px solid transparent;
+  border-top-color: var(--b24-primary, #007bff);
+  border-radius: 50%;
+  animation: spin 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+}
+
+.spinner-ring:nth-child(1) {
+  animation-delay: 0s;
+  border-top-color: var(--b24-primary, #007bff);
+  opacity: 1;
+}
+
+.spinner-ring:nth-child(2) {
+  animation-delay: -0.4s;
+  border-top-color: var(--b24-success, #28a745);
+  opacity: 0.7;
+  width: 70%;
+  height: 70%;
+  top: 15%;
+  left: 15%;
+}
+
+.spinner-ring:nth-child(3) {
+  animation-delay: -0.8s;
+  border-top-color: #ff9800;
+  opacity: 0.5;
+  width: 50%;
+  height: 50%;
+  top: 25%;
+  left: 25%;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.preloader-title {
+  margin: 0 0 12px 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--b24-text-primary, #111827);
+  letter-spacing: -0.02em;
+}
+
+.preloader-message {
+  margin: 0 0 24px 0;
+  font-size: 14px;
+  color: var(--b24-text-secondary, #6b7280);
+  line-height: 1.5;
+}
+
+.preloader-dots {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+}
+
+.preloader-dots .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--b24-primary, #007bff);
+  animation: dotPulse 1.4s ease-in-out infinite;
+  opacity: 0.6;
+}
+
+.preloader-dots .dot:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.preloader-dots .dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.preloader-dots .dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes dotPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1.3);
+    opacity: 1;
+  }
+}
+
+/* Transition для плавного появления/исчезновения */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.fade-enter-from {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.fade-enter-to {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.fade-leave-from {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.fade-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
 .error-state,
 .empty-state {
   padding: 40px;
@@ -299,6 +478,28 @@ onMounted(() => {
 
 .dashboard-content {
   margin-top: 20px;
+}
+
+/* Адаптивность для мобильных */
+@media (max-width: 768px) {
+  .time-tracking-preloader {
+    min-height: 400px;
+    padding: 40px 20px;
+  }
+  
+  .preloader-spinner {
+    width: 60px;
+    height: 60px;
+    margin-bottom: 24px;
+  }
+  
+  .preloader-title {
+    font-size: 18px;
+  }
+  
+  .preloader-message {
+    font-size: 13px;
+  }
 }
 </style>
 

@@ -166,12 +166,20 @@ function getSector1CEmployees(): array
 }
 
 /**
- * Получение записей трудозатрат из таблицы фактов Bitrix24
+ * Получение записей трудозатрат через задачи Bitrix24
+ * 
+ * ВАЖНО: Методы tasks.elapseditem.* не существуют в этой версии Bitrix24.
+ * Используем альтернативный подход через tasks.task.list с полем timeSpentInLogs.
+ * 
+ * Ограничения:
+ * - timeSpentInLogs - агрегированное значение (общее время в секундах)
+ * - Неделя определяется по дате задачи (createdDate/changedDate), а не по дате фиксации трудозатраты
+ * - Нет детальных записей трудозатрат
  * 
  * @param array $employeeIds Массив ID сотрудников сектора 1С
  * @param DateTimeImmutable $periodStart Начало периода
  * @param DateTimeImmutable $periodEnd Конец периода
- * @return array Массив записей трудозатрат
+ * @return array Массив записей трудозатрат (в формате совместимом с оригинальным)
  */
 function getElapsedTimeRecords(array $employeeIds, DateTimeImmutable $periodStart, DateTimeImmutable $periodEnd): array
 {
@@ -186,157 +194,169 @@ function getElapsedTimeRecords(array $employeeIds, DateTimeImmutable $periodStar
     
     // Логирование параметров запроса
     error_log(sprintf(
-        "[TimeTracking] Requesting elapsed time records: employees=%s, period=%s to %s",
+        "[TimeTracking] Requesting tasks with elapsed time: employees=%s, period=%s to %s",
         implode(',', $employeeIds),
         $periodStart->format('Y-m-d H:i:s'),
         $periodEnd->format('Y-m-d H:i:s')
     ));
     
+    // Сначала получаем задачи с трудозатратами
+    $tasksWithTime = [];
+    $startTasks = 0;
+    
     do {
-        // Метод API для получения записей трудозатрат
-        // Пробуем разные варианты методов API и форматов фильтров
-        $paramsVariants = [
-            // Вариант 1: Стандартный формат
-            [
-                'filter' => [
-                    'USER_ID' => $employeeIds,
-                    '>=CREATED_DATE' => $periodStart->format('Y-m-d H:i:s'),
-                    '<=CREATED_DATE' => $periodEnd->format('Y-m-d H:i:s')
-                ],
-                'select' => [
-                    'ID',
-                    'TASK_ID',
-                    'USER_ID',
-                    'CREATED_DATE',
-                    'MINUTES',
-                    'SECONDS',
-                    'HOURS',
-                    'COMMENT_TEXT'
-                ],
-                'start' => $start
+        $tasksResult = CRest::call('tasks.task.list', [
+            'filter' => [
+                'RESPONSIBLE_ID' => $employeeIds,
+                '>=CHANGED_DATE' => $periodStart->format('Y-m-d'),
+                '<=CHANGED_DATE' => $periodEnd->format('Y-m-d'),
+                '>timeSpentInLogs' => 0
             ],
-            // Вариант 2: USER_ID как массив
-            [
-                'filter' => [
-                    'USER_ID' => $employeeIds,
-                    '>=CREATED_DATE' => $periodStart->format('Y-m-d'),
-                    '<=CREATED_DATE' => $periodEnd->format('Y-m-d')
-                ],
-                'select' => ['*'],
-                'start' => $start
+            'select' => [
+                'ID',
+                'TITLE',
+                'CREATED_DATE',
+                'CHANGED_DATE',
+                'CREATED_BY',
+                'RESPONSIBLE_ID',
+                'timeSpentInLogs',
+                'ufCrmTask'
             ],
-            // Вариант 3: Без select (получить все поля)
-            [
-                'filter' => [
-                    'USER_ID' => $employeeIds,
-                    '>=CREATED_DATE' => $periodStart->format('Y-m-d H:i:s'),
-                    '<=CREATED_DATE' => $periodEnd->format('Y-m-d H:i:s')
-                ],
-                'start' => $start
-            ]
-        ];
+            'start' => $startTasks
+        ]);
         
-        $params = $paramsVariants[0]; // Используем первый вариант по умолчанию
-        
-        // Пробуем разные варианты методов API
-        $methodsToTry = [
-            'tasks.elapseditem.getlist',
-            'tasks.elapseditem.list',
-            'tasks.task.elapseditem.getlist',
-            'tasks.task.elapseditem.list'
-        ];
-        
-        $result = null;
-        $lastError = null;
-        
-        foreach ($methodsToTry as $method) {
-            error_log(sprintf("[TimeTracking] Trying method: %s", $method));
-            
-            $result = CRest::call($method, $params);
-            
-            if (!isset($result['error'])) {
-                error_log(sprintf("[TimeTracking] Success with method: %s", $method));
-                break;
-            }
-            
-            $lastError = [
-                'method' => $method,
-                'error' => $result['error'] ?? '',
-                'description' => $result['error_description'] ?? ''
-            ];
-            
+        if (isset($tasksResult['error'])) {
             error_log(sprintf(
-                "[TimeTracking] Method %s failed: %s - %s",
-                $method,
-                $lastError['error'],
-                $lastError['description']
+                "[TimeTracking] API error (tasks.task.list): %s - %s",
+                $tasksResult['error'] ?? '',
+                $tasksResult['error_description'] ?? ''
             ));
-        }
-        
-        // Если все методы не сработали
-        if (isset($result['error'])) {
-            error_log(sprintf(
-                "[TimeTracking] All methods failed. Last error: %s - %s",
-                $lastError['error'] ?? '',
-                $lastError['description'] ?? ''
-            ));
-            
-            // Если это не ошибка "метод не найден", а другая (например, нет данных) - продолжаем
-            $errorCode = $result['error'] ?? '';
-            if (strpos($errorCode, 'METHOD_NOT_FOUND') !== false || 
-                strpos($errorCode, 'NOT_FOUND') !== false) {
-                error_log("[TimeTracking] Method not found, stopping");
-                break;
-            }
-            
-            // Для других ошибок (например, пустой результат) - продолжаем с пустым массивом
-            $result = ['result' => []];
-        }
-        
-        // Логирование результата
-        $items = $result['result'] ?? [];
-        
-        // Детальное логирование структуры ответа (только для первого запроса)
-        if ($start === 0) {
-            error_log(sprintf(
-                "[TimeTracking] API response structure: %s",
-                json_encode([
-                    'has_result' => isset($result['result']),
-                    'result_type' => gettype($result['result'] ?? null),
-                    'result_count' => is_array($result['result'] ?? null) ? count($result['result']) : 'N/A',
-                    'result_keys' => is_array($result['result'] ?? null) ? array_keys($result['result']) : 'N/A',
-                    'full_response_keys' => array_keys($result)
-                ], JSON_UNESCAPED_UNICODE)
-            ));
-        }
-        
-        error_log(sprintf(
-            "[TimeTracking] Received %d items (start=%d, total so far=%d)",
-            count($items),
-            $start,
-            count($records)
-        ));
-        
-        // Если результат пустой, но нет ошибки - это нормально
-        if (empty($items)) {
-            if ($start === 0) {
-                error_log("[TimeTracking] No elapsed time records found for the period");
-                // Логируем полный ответ для отладки
-                error_log(sprintf(
-                    "[TimeTracking] Full API response: %s",
-                    json_encode($result, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)
-                ));
-            }
             break;
         }
         
-        foreach ($items as $item) {
-            $records[] = $item;
+        $tasks = $tasksResult['result']['tasks'] ?? [];
+        $tasksWithTime = array_merge($tasksWithTime, $tasks);
+        $startTasks += $pageSize;
+        
+    } while (count($tasks) === $pageSize);
+    
+    error_log(sprintf("[TimeTracking] Found %d tasks with time spent", count($tasksWithTime)));
+    
+    // Получаем детальные записи трудозатрат для каждой задачи
+    // Используем метод task.elapseditem.getlist (без "s" в начале)
+    error_log("[TimeTracking] Using method task.elapseditem.getlist to get detailed records");
+    
+    foreach ($tasksWithTime as $task) {
+        $taskId = (int)($task['id'] ?? 0);
+        if (!$taskId) {
+            continue;
         }
         
-        $start += $pageSize;
+        // Получаем записи трудозатрат для задачи
+        $elapsedResult = CRest::call('task.elapseditem.getlist', [
+            'taskId' => $taskId,
+            'start' => 0
+        ]);
         
-    } while (count($items) === $pageSize);
+        if (isset($elapsedResult['error'])) {
+            error_log(sprintf(
+                "[TimeTracking] Error getting elapsed items for task %d: %s - %s",
+                $taskId,
+                $elapsedResult['error'] ?? '',
+                $elapsedResult['error_description'] ?? ''
+            ));
+            continue;
+        }
+        
+        $elapsedItems = $elapsedResult['result'] ?? [];
+        
+        // Фильтруем записи по периоду и сотрудникам
+        foreach ($elapsedItems as $item) {
+            $createdDate = $item['CREATED_DATE'] ?? $item['createdDate'] ?? null;
+            if (!$createdDate) {
+                continue;
+            }
+            
+            // Проверяем, что запись в нужном периоде
+            $createdDateTime = new DateTimeImmutable($createdDate);
+            if ($createdDateTime < $periodStart || $createdDateTime > $periodEnd) {
+                continue;
+            }
+            
+            // Проверяем, что запись от нужного сотрудника
+            $itemUserId = (int)($item['USER_ID'] ?? $item['userId'] ?? 0);
+            if ($itemUserId && !in_array($itemUserId, $employeeIds, true)) {
+                continue;
+            }
+            
+            // Получаем время в секундах (поле SECONDS уже в секундах)
+            $seconds = (int)($item['SECONDS'] ?? 0);
+            if ($seconds <= 0) {
+                // Если SECONDS нет, пробуем MINUTES
+                $minutes = (int)($item['MINUTES'] ?? 0);
+                if ($minutes > 0) {
+                    $seconds = $minutes * 60;
+                } else {
+                    // Если и MINUTES нет, пробуем HOURS
+                    $hours = (float)($item['HOURS'] ?? 0);
+                    if ($hours > 0) {
+                        $seconds = (int)($hours * 3600);
+                    }
+                }
+            }
+            
+            if ($seconds <= 0) {
+                continue;
+            }
+            
+            // Определяем USER_ID (приоритет: из записи, иначе из задачи)
+            $userId = $itemUserId ?: (int)($task['responsibleId'] ?? $task['createdBy'] ?? 0);
+            
+            $records[] = [
+                'ID' => $item['ID'] ?? $item['id'] ?? null,
+                'TASK_ID' => $taskId,
+                'USER_ID' => $userId,
+                'CREATED_DATE' => $createdDate,
+                'SECONDS' => $seconds,
+                'MINUTES' => round($seconds / 60, 2),
+                'HOURS' => round($seconds / 3600, 2),
+                'COMMENT_TEXT' => $item['COMMENT_TEXT'] ?? $item['commentText'] ?? '',
+                '_task' => $task,
+                '_ufCrmTask' => $task['ufCrmTask'] ?? null
+            ];
+        }
+    }
+    
+    // Fallback: если нет детальных записей, используем агрегированные данные
+    if (empty($records)) {
+        // Fallback: используем агрегированные данные из задач
+        error_log("[TimeTracking] No working elapseditem method found, using aggregated timeSpentInLogs");
+        
+        foreach ($tasksWithTime as $task) {
+            $timeSpent = (int)($task['timeSpentInLogs'] ?? 0);
+            if ($timeSpent <= 0) {
+                continue;
+            }
+            
+            $dateForWeek = $task['changedDate'] ?? $task['createdDate'] ?? null;
+            if (!$dateForWeek) {
+                continue;
+            }
+            
+            $records[] = [
+                'ID' => $task['id'] ?? null,
+                'TASK_ID' => (int)($task['id'] ?? 0),
+                'USER_ID' => (int)($task['responsibleId'] ?? $task['createdBy'] ?? 0),
+                'CREATED_DATE' => $dateForWeek,
+                'SECONDS' => $timeSpent,
+                'MINUTES' => round($timeSpent / 60, 2),
+                'HOURS' => round($timeSpent / 3600, 2),
+                'COMMENT_TEXT' => '',
+                '_task' => $task,
+                '_ufCrmTask' => $task['ufCrmTask'] ?? null
+            ];
+        }
+    }
     
     error_log(sprintf("[TimeTracking] Total records collected: %d", count($records)));
     
@@ -398,6 +418,8 @@ function getTasksByIds(array $taskIds): array
 /**
  * Матчинг задач с тикетами 140 сервис деска
  * 
+ * Использует поле ufCrmTask из задачи (формат: ["T8c_3093"], где 8c = 140 в hex, 3093 = ID тикета)
+ * 
  * @param array $tasks Массив задач
  * @return array Ассоциативный массив [taskId => ticketData]
  */
@@ -410,13 +432,24 @@ function matchTasksWithTickets(array $tasks): array
     foreach ($tasks as $taskId => $task) {
         $ticketId = null;
         
-        // Вариант 1: Прямое поле связи (требуется уточнить точное название)
-        if (isset($task['ufCrmTicketId'])) {
-            $ticketId = $task['ufCrmTicketId'];
-        } elseif (isset($task['UF_CRM_TICKET_ID'])) {
-            $ticketId = $task['UF_CRM_TICKET_ID'];
-        } elseif (isset($task['UF_CRM_140_ID'])) {
-            $ticketId = $task['UF_CRM_140_ID'];
+        // Поле ufCrmTask содержит массив строк формата ["T8c_3093"]
+        // где 8c = 140 (тип сущности) в hex, 3093 = ID тикета
+        if (isset($task['ufCrmTask']) && is_array($task['ufCrmTask']) && !empty($task['ufCrmTask'])) {
+            $ufCrmTaskValue = $task['ufCrmTask'][0] ?? null;
+            if ($ufCrmTaskValue && preg_match('/T8c_(\d+)/', $ufCrmTaskValue, $matches)) {
+                $ticketId = (int)$matches[1];
+            }
+        }
+        
+        // Альтернативные варианты (на случай другого формата)
+        if (!$ticketId) {
+            if (isset($task['ufCrmTicketId'])) {
+                $ticketId = $task['ufCrmTicketId'];
+            } elseif (isset($task['UF_CRM_TICKET_ID'])) {
+                $ticketId = $task['UF_CRM_TICKET_ID'];
+            } elseif (isset($task['UF_CRM_140_ID'])) {
+                $ticketId = $task['UF_CRM_140_ID'];
+            }
         }
         
         if ($ticketId) {
@@ -426,8 +459,11 @@ function matchTasksWithTickets(array $tasks): array
     }
     
     if (empty($ticketIdsToLoad)) {
+        error_log("[TimeTracking] No ticket IDs found in tasks");
         return [];
     }
+    
+    error_log(sprintf("[TimeTracking] Found %d unique ticket IDs to load", count($ticketIdsToLoad)));
     
     // Загружаем тикеты батч-запросом
     $ticketIds = array_keys($ticketIdsToLoad);
@@ -455,6 +491,8 @@ function matchTasksWithTickets(array $tasks): array
         }
         
         $tickets = $result['result']['items'] ?? $result['result'] ?? [];
+        error_log(sprintf("[TimeTracking] Loaded %d tickets from batch", count($tickets)));
+        
         foreach ($tickets as $ticket) {
             $ticketId = (int)($ticket['id'] ?? $ticket['ID']);
             foreach ($taskTicketMap as $taskId => &$data) {
@@ -465,6 +503,11 @@ function matchTasksWithTickets(array $tasks): array
             }
         }
     }
+    
+    $matchedCount = count(array_filter($taskTicketMap, function($data) {
+        return isset($data['ticket']);
+    }));
+    error_log(sprintf("[TimeTracking] Matched %d tasks with tickets", $matchedCount));
     
     return $taskTicketMap;
 }
@@ -591,13 +634,19 @@ function aggregateByWeeksAndEmployees(
             continue;
         }
         
-        // Получить временной промежуток (требуется уточнить формат единиц)
-        $elapsedTime = (float)($record['MINUTES'] ?? $record['minutes'] ?? $record['SECONDS'] ?? $record['seconds'] ?? $record['HOURS'] ?? $record['hours'] ?? 0);
+        // Получить временной промежуток
+        // timeSpentInLogs возвращается в секундах, преобразуем в часы
+        $elapsedTimeSeconds = (float)($record['SECONDS'] ?? $record['seconds'] ?? 0);
+        if ($elapsedTimeSeconds <= 0) {
+            // Пробуем другие форматы (на случай, если данные в другом формате)
+            $elapsedTimeSeconds = (float)($record['MINUTES'] ?? $record['minutes'] ?? 0) * 60;
+            if ($elapsedTimeSeconds <= 0) {
+                $elapsedTimeSeconds = (float)($record['HOURS'] ?? $record['hours'] ?? 0) * 3600;
+            }
+        }
         
-        // Нормализация единиц (предполагаем, что API возвращает минуты)
-        // Если API возвращает секунды, делим на 60, если часы - умножаем на 60
-        // Требуется уточнить через тестовый запрос
-        $elapsedTimeHours = $elapsedTime / 60; // если в минутах
+        // Преобразуем секунды в часы
+        $elapsedTimeHours = $elapsedTimeSeconds / 3600;
         
         $taskId = (int)($record['TASK_ID'] ?? $record['taskId'] ?? 0);
         
@@ -778,12 +827,29 @@ try {
         ]);
     }
     
-    // Получение задач
-    $taskIds = array_unique(array_filter(array_map(function($record) {
-        return (int)($record['TASK_ID'] ?? $record['taskId'] ?? 0);
-    }, $records)));
+    // Извлекаем задачи из записей (они уже получены в getElapsedTimeRecords)
+    $tasks = [];
+    foreach ($records as $record) {
+        if (isset($record['_task'])) {
+            $taskId = (int)($record['TASK_ID'] ?? 0);
+            if ($taskId) {
+                $tasks[$taskId] = $record['_task'];
+            }
+        }
+    }
     
-    $tasks = getTasksByIds($taskIds);
+    // Если задач нет в записях, получаем их отдельно (fallback)
+    if (empty($tasks)) {
+        $taskIds = array_unique(array_filter(array_map(function($record) {
+            return (int)($record['TASK_ID'] ?? $record['taskId'] ?? 0);
+        }, $records)));
+        
+        if (!empty($taskIds)) {
+            $tasks = getTasksByIds($taskIds);
+        }
+    }
+    
+    error_log(sprintf("[TimeTracking] Tasks collected: %d", count($tasks)));
     
     // Матчинг задач с тикетами
     $taskTicketMap = matchTasksWithTickets($tasks);

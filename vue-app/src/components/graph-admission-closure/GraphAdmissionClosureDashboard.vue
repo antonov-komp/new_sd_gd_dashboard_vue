@@ -1,8 +1,25 @@
 <template>
   <div class="ac-dashboard">
-    <LoadingSpinner v-if="isLoading" message="Загрузка данных..." />
-
-    <div v-else>
+    <!-- Приятный прелоадер для загрузки графика -->
+    <Transition name="fade" mode="out-in">
+      <div v-if="isLoading" key="preloader" class="chart-preloader">
+        <div class="preloader-content">
+          <div class="preloader-spinner">
+            <div class="spinner-ring"></div>
+            <div class="spinner-ring"></div>
+            <div class="spinner-ring"></div>
+          </div>
+          <h3 class="preloader-title">Загрузка графика</h3>
+          <p class="preloader-message">Получение данных за 4 недели...</p>
+          <div class="preloader-dots">
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
+          </div>
+        </div>
+      </div>
+      
+      <div v-else key="content">
       <div class="dashboard-header">
         <div class="header-content">
           <div class="breadcrumbs-row">
@@ -83,7 +100,8 @@
           />
         </div>
       </div>
-    </div>
+      </div>
+    </Transition>
 
     <ResponsibleModal
       :is-visible="showResponsibleModal"
@@ -119,7 +137,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import LoadingSpinner from '@/components/common/LoadingSpinner.vue';
 import StatusMessage from '@/components/common/StatusMessage.vue';
 import FiltersPanel from '@/components/filters/FiltersPanel.vue';
 import GraphAdmissionClosureChart from './GraphAdmissionClosureChart.vue';
@@ -203,8 +220,13 @@ const hasActiveFilters = computed(() => {
 });
 
 async function loadData() {
+  // Устанавливаем isLoading в true сразу для показа прелоадера
   isLoading.value = true;
   error.value = null;
+  
+  // Небольшая задержка для гарантии отображения прелоадера (минимум 300ms)
+  const minLoadingTime = new Promise(resolve => setTimeout(resolve, 300));
+  
   try {
     // Используем выбранную неделю или вычисляем текущую неделю
     let weekStartUtc, weekEndUtc;
@@ -219,12 +241,18 @@ async function loadData() {
       weekEndUtc = currentWeek.weekEndUtc;
     }
     
-    const { meta, data } = await fetchAdmissionClosureStats({
-      product: '1C',
-      weekStartUtc,
-      weekEndUtc,
-      includeTickets: true // TASK-047: Включаем тикеты для вкладки "По сотрудникам"
-    });
+    // Ждём минимум 300ms и загрузку данных параллельно
+    const [_, result] = await Promise.all([
+      minLoadingTime,
+      fetchAdmissionClosureStats({
+        product: '1C',
+        weekStartUtc,
+        weekEndUtc,
+        includeTickets: true // TASK-047: Включаем тикеты для вкладки "По сотрудникам"
+      })
+    ]);
+    
+    const { meta, data } = result;
     chartMeta.value = meta;
     chartData.value = data;
     
@@ -468,6 +496,184 @@ function getPeriodBounds() {
 .chart-container {
   width: 100%;
   min-height: 360px;
+}
+
+/* Приятный прелоадер для загрузки графика */
+.chart-preloader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 70vh; /* Занимает минимум 70% высоты экрана */
+  padding: 60px 20px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  position: relative;
+  z-index: 1;
+}
+
+/* Transition для плавного появления/исчезновения */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.fade-enter-from {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.fade-enter-to {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.fade-leave-from {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.fade-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+.preloader-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  max-width: 400px;
+}
+
+.preloader-spinner {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  margin-bottom: 32px;
+}
+
+.spinner-ring {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border: 4px solid transparent;
+  border-top-color: var(--b24-primary, #007bff);
+  border-radius: 50%;
+  animation: spin 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+}
+
+.spinner-ring:nth-child(1) {
+  animation-delay: 0s;
+  border-top-color: var(--b24-primary, #007bff);
+  opacity: 1;
+}
+
+.spinner-ring:nth-child(2) {
+  animation-delay: -0.4s;
+  border-top-color: var(--b24-success, #28a745);
+  opacity: 0.7;
+  width: 70%;
+  height: 70%;
+  top: 15%;
+  left: 15%;
+}
+
+.spinner-ring:nth-child(3) {
+  animation-delay: -0.8s;
+  border-top-color: #ff9800;
+  opacity: 0.5;
+  width: 50%;
+  height: 50%;
+  top: 25%;
+  left: 25%;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.preloader-title {
+  margin: 0 0 12px 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--b24-text-primary, #111827);
+  letter-spacing: -0.02em;
+}
+
+.preloader-message {
+  margin: 0 0 24px 0;
+  font-size: 14px;
+  color: var(--b24-text-secondary, #6b7280);
+  line-height: 1.5;
+}
+
+.preloader-dots {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+}
+
+.preloader-dots .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--b24-primary, #007bff);
+  animation: dotPulse 1.4s ease-in-out infinite;
+  opacity: 0.6;
+}
+
+.preloader-dots .dot:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.preloader-dots .dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.preloader-dots .dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes dotPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1.3);
+    opacity: 1;
+  }
+}
+
+/* Адаптивность для мобильных */
+@media (max-width: 768px) {
+  .chart-preloader {
+    min-height: 400px;
+    padding: 40px 20px;
+  }
+  
+  .preloader-spinner {
+    width: 60px;
+    height: 60px;
+    margin-bottom: 24px;
+  }
+  
+  .preloader-title {
+    font-size: 18px;
+  }
+  
+  .preloader-message {
+    font-size: 13px;
+  }
 }
 </style>
 

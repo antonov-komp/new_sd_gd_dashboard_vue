@@ -82,7 +82,25 @@
     </section>
 
     <div class="ac-chart__body">
+      <!-- TASK-052: Для линейного графика - два графика рядом -->
+      <div v-if="chartType === 'line'" class="split-charts-container">
+        <div class="chart-wrapper chart-wrapper--left">
+          <h3 class="chart-subtitle">Новые и Закрытые тикеты</h3>
+          <div class="chart-canvas-wrapper">
+            <Line :data="newClosedChartData" :options="chartOptions" />
+          </div>
+        </div>
+        <div class="chart-wrapper chart-wrapper--right">
+          <h3 class="chart-subtitle">Переходящие тикеты</h3>
+          <div class="chart-canvas-wrapper">
+            <Line :data="carryoverChartData" :options="chartOptions" />
+          </div>
+        </div>
+      </div>
+      
+      <!-- Для других типов графиков: один график (как сейчас) -->
       <component
+        v-else
         :is="chartComponent"
         :data="chartData"
         :options="chartOptions"
@@ -142,6 +160,125 @@ const chartType = ref('line');
 
 const weekLabel = computed(() => props.meta?.weekNumber ?? '—');
 
+// TASK-052: Вспомогательная функция для получения labels из weeks
+const getWeekLabels = () => {
+  const weeks = props.meta?.weeks || [];
+  return weeks.length > 0 
+    ? weeks.map(week => `Неделя ${week.weekNumber}`)
+    : [props.meta?.weekNumber ? `Неделя ${props.meta.weekNumber}` : 'Неделя'];
+};
+
+// TASK-052: Данные для левого графика (Новые и Закрытые)
+const newClosedChartData = computed(() => {
+  const labels = getWeekLabels();
+  
+  const newSeries = Array.isArray(props.data.series?.new) && props.data.series.new.length > 0
+    ? props.data.series.new
+    : [props.data.newTickets ?? 0];
+  
+  const closedSeries = Array.isArray(props.data.series?.closed) && props.data.series.closed.length > 0
+    ? props.data.series.closed
+    : [props.data.closedTickets ?? 0];
+  
+  const closedCreatedThisWeekSeries = Array.isArray(props.data.series?.closedCreatedThisWeek) && props.data.series.closedCreatedThisWeek.length > 0
+    ? props.data.series.closedCreatedThisWeek
+    : [props.data.closedTicketsCreatedThisWeek ?? 0];
+  
+  const closedCreatedOtherWeekSeries = Array.isArray(props.data.series?.closedCreatedOtherWeek) && props.data.series.closedCreatedOtherWeek.length > 0
+    ? props.data.series.closedCreatedOtherWeek
+    : [props.data.closedTicketsCreatedOtherWeek ?? 0];
+
+  return {
+    labels,
+    datasets: [
+      {
+        label: 'Новые',
+        data: newSeries,
+        backgroundColor: chartColors.primary,
+        borderColor: chartColors.primary,
+        tension: 0.3,
+        fill: false
+      },
+      {
+        label: 'Закрытые (все)',
+        data: closedSeries,
+        backgroundColor: chartColors.success,
+        borderColor: chartColors.success,
+        tension: 0.3,
+        fill: false
+      },
+      {
+        label: 'Закрытые (созданы этой неделей)',
+        data: closedCreatedThisWeekSeries,
+        backgroundColor: chartColors.successLight,
+        borderColor: chartColors.successLight,
+        tension: 0.3,
+        fill: false,
+        borderDash: [5, 5] // Пунктирная линия
+      },
+      {
+        label: 'Закрытые (созданы другой неделей)',
+        data: closedCreatedOtherWeekSeries,
+        backgroundColor: chartColors.warning,
+        borderColor: chartColors.warning,
+        tension: 0.3,
+        fill: false,
+        borderDash: [5, 5] // Пунктирная линия
+      }
+    ]
+  };
+});
+
+// TASK-052: Данные для правого графика (Переходящие)
+const carryoverChartData = computed(() => {
+  const labels = getWeekLabels();
+  
+  const carryoverSeries = Array.isArray(props.data.series?.carryover) && props.data.series.carryover.length > 0
+    ? props.data.series.carryover
+    : [props.data.carryoverTickets ?? 0];
+  
+  const carryoverCreatedThisWeekSeries = Array.isArray(props.data.series?.carryoverCreatedThisWeek) && props.data.series.carryoverCreatedThisWeek.length > 0
+    ? props.data.series.carryoverCreatedThisWeek
+    : [props.data.carryoverTicketsCreatedThisWeek ?? 0];
+  
+  const carryoverCreatedOtherWeekSeries = Array.isArray(props.data.series?.carryoverCreatedOtherWeek) && props.data.series.carryoverCreatedOtherWeek.length > 0
+    ? props.data.series.carryoverCreatedOtherWeek
+    : [props.data.carryoverTicketsCreatedOtherWeek ?? 0];
+
+  return {
+    labels,
+    datasets: [
+      {
+        label: 'Переходящие (все)',
+        data: carryoverSeries,
+        backgroundColor: chartColors.carryover,
+        borderColor: chartColors.carryover,
+        tension: 0.3,
+        fill: false
+      },
+      {
+        label: 'Переходящие (созданы этой неделей)',
+        data: carryoverCreatedThisWeekSeries,
+        backgroundColor: chartColors.carryoverLight,
+        borderColor: chartColors.carryoverLight,
+        tension: 0.3,
+        fill: false,
+        borderDash: [5, 5] // Пунктирная линия
+      },
+      {
+        label: 'Переходящие (созданы другой неделей)',
+        data: carryoverCreatedOtherWeekSeries,
+        backgroundColor: chartColors.carryoverDark,
+        borderColor: chartColors.carryoverDark,
+        tension: 0.3,
+        fill: false,
+        borderDash: [5, 5] // Пунктирная линия
+      }
+    ]
+  };
+});
+
+// TASK-052: Сохраняем lineBarData для столбчатого графика (без изменений)
 const lineBarData = computed(() => {
   // TASK-048: Получаем метаданные о 4 неделях
   const weeks = props.meta?.weeks || [];
@@ -293,9 +430,18 @@ const formatDate = (dateStr) => {
 const chartOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
+  resizeDelay: 0, /* Минимальная задержка для предотвращения бесконечной прокрутки */
   plugins: {
     tooltip: {
       enabled: true,
+      titleFont: {
+        size: 14,
+        weight: 'bold'
+      },
+      bodyFont: {
+        size: 13
+      },
+      padding: 12,
       callbacks: {
         title: (items) => {
           // TASK-048: Показываем информацию о неделе в tooltip
@@ -316,7 +462,18 @@ const chartOptions = computed(() => ({
         }
       }
     },
-    legend: { position: 'top' }
+    legend: {
+      position: 'top',
+      labels: {
+        font: {
+          size: 15, /* Уменьшено на ~6% от 16px */
+          weight: '500'
+        },
+        padding: 16, /* Уменьшено на 20% от 20px */
+        boxWidth: 20, /* Уменьшено на ~17% от 24px */
+        boxHeight: 12
+      }
+    }
   },
   // TASK-048: Убран onClick обработчик - клики на точки графика не открывают попапы
   scales: chartType.value === 'doughnut'
@@ -324,12 +481,34 @@ const chartOptions = computed(() => ({
     : {
         y: {
           beginAtZero: true,
-          ticks: { precision: 0 }
+          ticks: {
+            precision: 0,
+            font: {
+              size: 14 /* Уменьшено на ~7% от 15px */
+            },
+            padding: 10
+          },
+          title: {
+            display: false
+          },
+          grid: {
+            lineWidth: 1.5 /* Более заметные линии сетки */
+          }
         },
         x: {
           ticks: {
             maxRotation: 45,
-            minRotation: 45
+            minRotation: 45,
+            font: {
+              size: 14 /* Уменьшено на ~7% от 15px */
+            },
+            padding: 10
+          },
+          title: {
+            display: false
+          },
+          grid: {
+            lineWidth: 1.5 /* Более заметные линии сетки */
           }
         }
       }
@@ -556,7 +735,77 @@ const handleSummaryClick = (type) => {
 }
 
 .ac-chart__body {
-  min-height: 320px;
+  min-height: 640px; /* Уменьшено на 20% от 800px */
+  width: 100%;
+}
+
+/* TASK-052: Стили для разделённых графиков */
+.split-charts-container {
+  display: flex;
+  gap: var(--spacing-xl, 32px); /* Уменьшено на 20% от 40px */
+  width: 100%;
+  padding: 0;
+  min-height: 720px; /* Уменьшено на 20% от 900px */
+}
+
+.chart-wrapper {
+  flex: 1;
+  min-width: 0; /* Для корректной работы flex */
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+
+.chart-wrapper--left {
+  /* Левый график */
+}
+
+.chart-wrapper--right {
+  /* Правый график */
+}
+
+.chart-subtitle {
+  margin: 0 0 var(--spacing-lg, 16px) 0;
+  font-size: 20px; /* Уменьшено на ~10% от 22px */
+  font-weight: 600;
+  color: var(--b24-text-primary, #111827);
+  text-align: center;
+  flex-shrink: 0; /* Заголовок не сжимается */
+}
+
+.chart-canvas-wrapper {
+  position: relative;
+  height: 720px; /* Уменьшено на 20% от 900px */
+  flex: 1;
+  min-height: 720px; /* Фиксированная минимальная высота */
+  width: 100%;
+}
+
+/* Адаптивность для мобильных */
+@media (max-width: 768px) {
+  .split-charts-container {
+    flex-direction: column;
+    min-height: auto;
+  }
+  
+  .chart-wrapper {
+    width: 100%;
+    height: auto;
+  }
+  
+  .chart-canvas-wrapper {
+    height: 480px; /* Уменьшено на 20% от 600px */
+    min-height: 480px;
+  }
+  
+  .chart-subtitle {
+    font-size: 18px; /* Уменьшено на 10% от 20px */
+  }
+  
+  .ac-chart__body {
+    min-height: 520px; /* Уменьшено на 20% от 650px */
+  }
 }
 
 /* TASK-047: Компактная карточка с разбивкой закрытых тикетов */
