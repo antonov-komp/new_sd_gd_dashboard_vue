@@ -4,9 +4,8 @@
       <div>
         <h2 class="ac-chart__title">График приёма и закрытий сектора 1С</h2>
         <p class="ac-chart__subtitle">
-          Неделя {{ meta?.currentWeek?.weekNumber ?? weekLabel }} · 
-          {{ meta?.currentWeek?.weekStartUtc || meta?.weekStartUtc || '—' }} — 
-          {{ meta?.currentWeek?.weekEndUtc || meta?.weekEndUtc || '—' }} (UTC)
+          Неделя {{ meta?.weekNumber ?? '—' }} · 
+          {{ meta?.weekStartUtc || '—' }} — {{ meta?.weekEndUtc || '—' }} (UTC)
         </p>
       </div>
 
@@ -26,24 +25,24 @@
     </header>
 
     <section class="ac-chart__summary">
-      <!-- TASK-048: Используем data.currentWeek для summary-карточек -->
+      <!-- TASK-049: Используем data напрямую для summary-карточек (одна неделя) -->
       <div class="summary-card summary-card--new" @click="handleSummaryClick('new')">
         <div class="summary-card__label">Новые за неделю</div>
-        <div class="summary-card__value">{{ data.currentWeek?.newTickets ?? data.newTickets ?? 0 }}</div>
+        <div class="summary-card__value">{{ data.newTickets ?? 0 }}</div>
       </div>
       <!-- TASK-047: Три цифры для закрытых тикетов (компактный вариант) -->
       <div class="summary-card summary-card--closed-breakdown" @click="handleSummaryClick('closed')">
         <div class="summary-card__label">Закрытые за неделю</div>
-        <div class="summary-card__value-main">{{ data.currentWeek?.closedTickets ?? data.closedTickets ?? 0 }}</div>
+        <div class="summary-card__value-main">{{ data.closedTickets ?? 0 }}</div>
         <div class="summary-card__breakdown">
           <div class="breakdown-item breakdown-item--this-week">
             <span class="breakdown-item__icon">✓</span>
-            <span class="breakdown-item__value">{{ data.currentWeek?.closedTicketsCreatedThisWeek ?? data.closedTicketsCreatedThisWeek ?? 0 }}</span>
+            <span class="breakdown-item__value">{{ data.closedTicketsCreatedThisWeek ?? 0 }}</span>
             <span class="breakdown-item__label">этой неделей</span>
           </div>
           <div class="breakdown-item breakdown-item--other-week">
             <span class="breakdown-item__icon">↻</span>
-            <span class="breakdown-item__value">{{ data.currentWeek?.closedTicketsCreatedOtherWeek ?? data.closedTicketsCreatedOtherWeek ?? 0 }}</span>
+            <span class="breakdown-item__value">{{ data.closedTicketsCreatedOtherWeek ?? 0 }}</span>
             <span class="breakdown-item__label">другой неделей</span>
           </div>
         </div>
@@ -51,17 +50,17 @@
       <!-- TASK-047: Три цифры для переходящих тикетов (компактный вариант) -->
       <div class="summary-card summary-card--carryover-breakdown" @click="handleSummaryClick('carryover')">
         <div class="summary-card__label">Переходящие</div>
-        <div class="summary-card__value-main">{{ data.currentWeek?.carryoverTickets ?? data.carryoverTickets ?? 0 }}</div>
+        <div class="summary-card__value-main">{{ data.carryoverTickets ?? 0 }}</div>
         <div class="summary-card__breakdown">
           <div class="breakdown-item breakdown-item--this-week">
             <span class="breakdown-item__icon">✓</span>
-            <span class="breakdown-item__value">{{ data.currentWeek?.carryoverTicketsCreatedThisWeek ?? data.carryoverTicketsCreatedThisWeek ?? 0 }}</span>
-            <span class="breakdown-item__label">этой неделей</span>
+            <span class="breakdown-item__value">{{ data.carryoverTicketsCreatedThisWeek ?? 0 }}</span>
+            <span class="breakdown-item__label">этой недели</span>
           </div>
           <div class="breakdown-item breakdown-item--other-week">
             <span class="breakdown-item__icon">↻</span>
-            <span class="breakdown-item__value">{{ data.currentWeek?.carryoverTicketsCreatedOtherWeek ?? data.carryoverTicketsCreatedOtherWeek ?? 0 }}</span>
-            <span class="breakdown-item__label">другой неделей</span>
+            <span class="breakdown-item__value">{{ data.carryoverTicketsCreatedOtherWeek ?? 0 }}</span>
+            <span class="breakdown-item__label">предыдущих</span>
           </div>
         </div>
       </div>
@@ -100,28 +99,23 @@ import { chartColors } from '@/utils/chart-config.js';
 const props = defineProps({
   meta: {
     type: Object,
-    default: null
+    default: () => ({
+      weekNumber: null,
+      weekStartUtc: null,
+      weekEndUtc: null
+    })
   },
   data: {
     type: Object,
     default: () => ({
-      currentWeek: { // TASK-048: данные текущей недели
-        newTickets: 0,
-        closedTickets: 0,
-        closedTicketsCreatedThisWeek: 0,
-        closedTicketsCreatedOtherWeek: 0,
-        carryoverTickets: 0,
-        carryoverTicketsCreatedThisWeek: 0,
-        carryoverTicketsCreatedOtherWeek: 0
-      },
-      newTickets: 0, // Для обратной совместимости
-      closedTickets: 0, // Для обратной совместимости
+      newTickets: 0,
+      closedTickets: 0,
       closedTicketsCreatedThisWeek: 0, // TASK-047
       closedTicketsCreatedOtherWeek: 0, // TASK-047
-      carryoverTickets: 0, // Для обратной совместимости
+      carryoverTickets: 0,
       carryoverTicketsCreatedThisWeek: 0, // TASK-047
       carryoverTicketsCreatedOtherWeek: 0, // TASK-047
-      series: { // TASK-048: массивы для 4 недель
+      series: { // TASK-049: массивы с одним элементом для выбранной недели
         new: [0],
         closed: [0],
         closedCreatedThisWeek: [0],
@@ -130,7 +124,6 @@ const props = defineProps({
         carryoverCreatedThisWeek: [0],
         carryoverCreatedOtherWeek: [0]
       },
-      weeksData: [], // TASK-048: данные по каждой неделе
       stages: [],
       responsible: []
     })
@@ -150,54 +143,19 @@ const chartType = ref('line');
 const weekLabel = computed(() => props.meta?.weekNumber ?? '—');
 
 const lineBarData = computed(() => {
-  // TASK-048: Получаем метаданные о неделях
-  const weeks = props.meta?.weeks || [];
-  const labels = weeks.length > 0 
-    ? weeks.map(week => `Неделя ${week.weekNumber}`)
-    : ['Текущая неделя'];
+  // TASK-049: Получаем метаданные о выбранной неделе
+  const weekNumber = props.meta?.weekNumber;
+  const weekLabel = weekNumber ? `Неделя ${weekNumber}` : 'Неделя';
+  const labels = [weekLabel];
   
-  // TASK-048: Получаем серии данных (уже в правильном порядке: от старых к новым)
-  const newSeries = Array.isArray(props.data.series?.new) && props.data.series.new.length === 4
-    ? props.data.series.new
-    : Array.isArray(props.data.series?.new) 
-      ? props.data.series.new 
-      : [props.data.currentWeek?.newTickets ?? props.data.newTickets ?? 0];
-  
-  const closedSeries = Array.isArray(props.data.series?.closed) && props.data.series.closed.length === 4
-    ? props.data.series.closed
-    : Array.isArray(props.data.series?.closed)
-      ? props.data.series.closed
-      : [props.data.currentWeek?.closedTickets ?? props.data.closedTickets ?? 0];
-  
-  const closedCreatedThisWeekSeries = Array.isArray(props.data.series?.closedCreatedThisWeek) && props.data.series.closedCreatedThisWeek.length === 4
-    ? props.data.series.closedCreatedThisWeek
-    : Array.isArray(props.data.series?.closedCreatedThisWeek)
-      ? props.data.series.closedCreatedThisWeek
-      : [props.data.currentWeek?.closedTicketsCreatedThisWeek ?? props.data.closedTicketsCreatedThisWeek ?? 0];
-  
-  const closedCreatedOtherWeekSeries = Array.isArray(props.data.series?.closedCreatedOtherWeek) && props.data.series.closedCreatedOtherWeek.length === 4
-    ? props.data.series.closedCreatedOtherWeek
-    : Array.isArray(props.data.series?.closedCreatedOtherWeek)
-      ? props.data.series.closedCreatedOtherWeek
-      : [props.data.currentWeek?.closedTicketsCreatedOtherWeek ?? props.data.closedTicketsCreatedOtherWeek ?? 0];
-  
-  const carryoverSeries = Array.isArray(props.data.series?.carryover) && props.data.series.carryover.length === 4
-    ? props.data.series.carryover
-    : Array.isArray(props.data.series?.carryover)
-      ? props.data.series.carryover
-      : [props.data.currentWeek?.carryoverTickets ?? props.data.carryoverTickets ?? 0];
-  
-  const carryoverCreatedThisWeekSeries = Array.isArray(props.data.series?.carryoverCreatedThisWeek) && props.data.series.carryoverCreatedThisWeek.length === 4
-    ? props.data.series.carryoverCreatedThisWeek
-    : Array.isArray(props.data.series?.carryoverCreatedThisWeek)
-      ? props.data.series.carryoverCreatedThisWeek
-      : [props.data.currentWeek?.carryoverTicketsCreatedThisWeek ?? props.data.carryoverTicketsCreatedThisWeek ?? 0];
-  
-  const carryoverCreatedOtherWeekSeries = Array.isArray(props.data.series?.carryoverCreatedOtherWeek) && props.data.series.carryoverCreatedOtherWeek.length === 4
-    ? props.data.series.carryoverCreatedOtherWeek
-    : Array.isArray(props.data.series?.carryoverCreatedOtherWeek)
-      ? props.data.series.carryoverCreatedOtherWeek
-      : [props.data.currentWeek?.carryoverTicketsCreatedOtherWeek ?? props.data.carryoverTicketsCreatedOtherWeek ?? 0];
+  // TASK-049: Получаем серии данных для одной недели (массивы с одним элементом)
+  const newSeries = [props.data.series?.new?.[0] ?? props.data.newTickets ?? 0];
+  const closedSeries = [props.data.series?.closed?.[0] ?? props.data.closedTickets ?? 0];
+  const closedCreatedThisWeekSeries = [props.data.series?.closedCreatedThisWeek?.[0] ?? props.data.closedTicketsCreatedThisWeek ?? 0];
+  const closedCreatedOtherWeekSeries = [props.data.series?.closedCreatedOtherWeek?.[0] ?? props.data.closedTicketsCreatedOtherWeek ?? 0];
+  const carryoverSeries = [props.data.series?.carryover?.[0] ?? props.data.carryoverTickets ?? 0];
+  const carryoverCreatedThisWeekSeries = [props.data.series?.carryoverCreatedThisWeek?.[0] ?? props.data.carryoverTicketsCreatedThisWeek ?? 0];
+  const carryoverCreatedOtherWeekSeries = [props.data.series?.carryoverCreatedOtherWeek?.[0] ?? props.data.carryoverTicketsCreatedOtherWeek ?? 0];
 
   return {
     labels,
@@ -267,16 +225,15 @@ const lineBarData = computed(() => {
 });
 
 const doughnutData = computed(() => {
-  // TASK-048: Используем currentWeek для круговой диаграммы
-  const currentWeek = props.data?.currentWeek;
+  // TASK-049: Используем data напрямую для круговой диаграммы (одна неделя)
   return {
     labels: ['Новые', 'Закрытые', 'Переходящие'],
     datasets: [
       {
         data: [
-          currentWeek?.newTickets ?? props.data.newTickets ?? 0,
-          currentWeek?.closedTickets ?? props.data.closedTickets ?? 0,
-          currentWeek?.carryoverTickets ?? props.data.carryoverTickets ?? 0
+          props.data.newTickets ?? 0,
+          props.data.closedTickets ?? 0,
+          props.data.carryoverTickets ?? 0
         ],
         backgroundColor: [chartColors.primary, chartColors.success, chartColors.carryover],
         borderWidth: 1
@@ -300,7 +257,7 @@ const chartComponent = computed(() => {
 
 const chartData = computed(() => (chartType.value === 'doughnut' ? doughnutData.value : lineBarData.value));
 
-// TASK-048: Форматирование даты для tooltip
+// TASK-049: Форматирование даты для tooltip
 const formatDate = (dateStr) => {
   if (!dateStr) return '—';
   try {
@@ -319,11 +276,12 @@ const chartOptions = computed(() => ({
       enabled: true,
       callbacks: {
         title: (items) => {
-          // TASK-048: Показываем информацию о неделе в tooltip
-          const index = items[0]?.dataIndex;
-          if (index !== undefined && props.meta?.weeks?.[index]) {
-            const week = props.meta.weeks[index];
-            return `Неделя ${week.weekNumber} (${formatDate(week.weekStartUtc)} — ${formatDate(week.weekEndUtc)})`;
+          // TASK-049: Показываем информацию о выбранной неделе в tooltip
+          const weekNumber = props.meta?.weekNumber;
+          const weekStartUtc = props.meta?.weekStartUtc;
+          const weekEndUtc = props.meta?.weekEndUtc;
+          if (weekNumber && weekStartUtc && weekEndUtc) {
+            return `Неделя ${weekNumber} (${formatDate(weekStartUtc)} — ${formatDate(weekEndUtc)})`;
           }
           return items[0]?.label || '';
         }
@@ -331,7 +289,7 @@ const chartOptions = computed(() => ({
     },
     legend: { position: 'top' }
   },
-  // TASK-048: Убран onClick обработчик - клики на точки графика не открывают попапы
+  // TASK-049: Убран onClick обработчик - клики на точки графика не открывают попапы (как в TASK-048)
   scales: chartType.value === 'doughnut'
     ? {}
     : {
@@ -349,12 +307,11 @@ const chartOptions = computed(() => ({
 }));
 
 // Обработчик клика на summary-карточки
-// TASK-048: Используем currentWeek для проверки наличия данных
+// TASK-049: Используем data напрямую для проверки наличия данных (одна неделя)
 const handleSummaryClick = (type) => {
-  const currentWeek = props.data?.currentWeek;
-  const newTickets = currentWeek?.newTickets ?? props.data?.newTickets ?? 0;
-  const closedTickets = currentWeek?.closedTickets ?? props.data?.closedTickets ?? 0;
-  const carryoverTickets = currentWeek?.carryoverTickets ?? props.data?.carryoverTickets ?? 0;
+  const newTickets = props.data?.newTickets ?? 0;
+  const closedTickets = props.data?.closedTickets ?? 0;
+  const carryoverTickets = props.data?.carryoverTickets ?? 0;
   
   if (type === 'new' && newTickets > 0) {
     emit('open-stages');
