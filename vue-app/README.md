@@ -55,28 +55,64 @@ npm run build
 ```
 vue-app/
 ├── src/
-│   ├── pages/              # Страницы приложения
+│   ├── main.js            # Точка входа Vue.js приложения
+│   ├── App.vue            # Корневой компонент
+│   ├── pages/             # Страницы приложения
 │   │   └── WebhookLogsPage.vue
-│   ├── components/         # Компоненты
-│   │   ├── webhooks/      # Компоненты для логов
-│   │   └── common/        # Общие компоненты
-│   ├── services/           # API сервисы
+│   ├── components/        # Компоненты
+│   │   ├── webhooks/      # Компоненты для логов вебхуков
+│   │   ├── dashboard/     # Компоненты дашборда сектора 1С
+│   │   │   ├── DashboardSector1C.vue
+│   │   │   ├── EmployeeColumn.vue
+│   │   │   ├── TicketCard.vue
+│   │   │   └── ...
+│   │   ├── graph-admission-closure/  # График приёма и закрытий
+│   │   │   ├── GraphAdmissionClosureDashboard.vue
+│   │   │   ├── LineChartMonths.vue
+│   │   │   └── ...
+│   │   ├── graph-state/   # График состояния сектора 1С
+│   │   │   ├── GraphStateDashboard.vue
+│   │   │   ├── GraphStateChart.vue
+│   │   │   └── ...
+│   │   ├── tickets-time-tracking/  # Учёт времени
+│   │   ├── filters/       # Компоненты фильтров
+│   │   ├── common/        # Общие компоненты
+│   │   ├── IndexPage.vue
+│   │   └── InstallPage.vue
+│   ├── services/          # API сервисы
+│   │   ├── bitrix24-api.js
+│   │   ├── bitrix24-bx-api.js
+│   │   ├── webhook-logs-api.js
+│   │   ├── dashboard-sector-1c/  # Сервисы дашборда
+│   │   ├── graph-admission-closure/  # Сервисы графика приёма
+│   │   ├── graph-state/   # Сервисы графика состояния
+│   │   ├── tickets-time-tracking/  # Сервисы учёта времени
+│   │   ├── access-control-service.js
+│   │   └── realtime-service.js
 │   ├── composables/       # Vue composables
-│   ├── utils/             # Утилиты
-│   ├── styles/            # Стили
-│   └── router/            # Маршрутизация
-├── public/                # Статические файлы
-└── package.json
+│   ├── config/           # Конфигурация
+│   ├── utils/            # Утилиты
+│   ├── types/            # TypeScript типы (если используется)
+│   ├── styles/           # Стили
+│   │   ├── bitrix24-ui-variables.css
+│   │   └── main.css
+│   ├── router/           # Маршрутизация
+│   └── api/              # API клиенты
+├── public/               # Статические файлы
+├── tests/               # Тесты
+├── package.json
+└── vite.config.js
 ```
 
 ---
 
 ## 🛠️ Технологии
 
-- **Vue.js 3.x** — фреймворк для UI (Composition API)
-- **Vue Router 4.x** — маршрутизация
-- **Chart.js 4.x** — графики и визуализация
-- **Vite** — сборщик и dev-сервер
+- **Vue.js 3.4+** — фреймворк для UI (Composition API)
+- **Vue Router 4.2+** — маршрутизация
+- **Chart.js 4.5+** — графики и визуализация
+- **vue-chartjs 5.3+** — интеграция Chart.js с Vue.js
+- **Vite 5.0+** — сборщик и dev-сервер
 
 ---
 
@@ -120,43 +156,68 @@ GET /api/webhook-realtime.php?last_timestamp=2025-12-07T10:00:00Z
 
 ---
 
-## 🎯 Основные компоненты
+## 🎯 Основные модули и компоненты
 
-### WebhookLogsPage
+### 📊 Дашборд сектора 1С (`components/dashboard/`)
 
-Главная страница, координирует работу всех компонентов.
+**DashboardSector1C.vue** — главный компонент дашборда сектора 1С
+- Отображение тикетов по этапам и сотрудникам
+- Drag & Drop для перемещения тикетов
+- Фильтрация и поиск
 
-### WebhookLogList
+**EmployeeColumn.vue** — колонка сотрудника
+- Отображение тикетов сотрудника
+- Перемещение тикетов между колонками
 
-Компонент для отображения списка логов в виде таблицы с сортировкой и выбором записей.
+**TicketCard.vue** — карточка тикета
+- Отображение информации о тикете
+- Детали тикета
 
-### WebhookLogDetails
+### 📈 График приёма и закрытий (`components/graph-admission-closure/`)
 
-Модальное окно для детального просмотра лога с возможностью копирования данных.
+**GraphAdmissionClosureDashboard.vue** — главный компонент графика
+- Отображение графика приёма и закрытий тикетов
+- Режимы отображения (неделя, месяц)
+- Фильтры и настройки
 
-### WebhookLogFilters
+**LineChartMonths.vue** — линейный график по месяцам
+- Визуализация данных по месяцам
+- Интерактивные элементы
 
-Компонент фильтров с быстрыми фильтрами и синхронизацией с URL.
+**PeriodModeSelector.vue** — выбор режима периода
+- Переключение между неделей и месяцем
 
-### WebhookLogSearch
+### 📊 График состояния сектора 1С (`components/graph-state/`)
 
-Компонент поиска с debounce и клиентским поиском по нескольким полям.
+**GraphStateDashboard.vue** — главный компонент графика состояния
+- Отображение состояния сектора 1С
+- Работа со слепками состояния
 
-### WebhookLogsDashboard
+**GraphStateChart.vue** — график состояния
+- Визуализация данных состояния
 
-Дашборд с ключевыми метриками и графиками.
+### 🔔 Логи вебхуков (`components/webhooks/`)
 
-### WebhookLogsExport
+**WebhookLogsPage** — главная страница логов вебхуков
+- Координирует работу всех компонентов
 
-Компонент для экспорта данных в CSV и JSON форматах.
+**WebhookLogList** — список логов в виде таблицы
+- Сортировка и выбор записей
 
-### RealtimeControls
+**WebhookLogDetails** — модальное окно детального просмотра
+- Копирование данных
 
-Компонент управления автообновлением в реальном времени.
+**WebhookLogFilters** — фильтры с синхронизацией с URL
 
-### NewLogsIndicator
+**WebhookLogSearch** — поиск с debounce
 
-Индикатор новых событий с кнопками применения и отклонения.
+**WebhookLogsDashboard** — дашборд с метриками и графиками
+
+**WebhookLogsExport** — экспорт данных в CSV и JSON
+
+**RealtimeControls** — управление автообновлением в реальном времени
+
+**NewLogsIndicator** — индикатор новых событий
 
 ---
 
@@ -209,6 +270,14 @@ const CACHE_CONFIG = {
 - ✅ Реальное время (SSE)
 - ✅ Тестирование и отладка
 - ✅ Документация
+
+### Версия 1.1 (2025-12-17)
+
+- ✅ Добавлен дашборд сектора 1С
+- ✅ Добавлен график приёма и закрытий
+- ✅ Добавлен график состояния сектора 1С
+- ✅ Обновлена структура проекта
+- ✅ Обновлена документация
 
 ---
 

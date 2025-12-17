@@ -110,7 +110,11 @@ function normalizeResponse(raw) {
       responsibleCreatedThisWeek: payload.data?.responsibleCreatedThisWeek ?? payload.responsibleCreatedThisWeek ?? [], // TASK-047
       responsibleCreatedOtherWeek: payload.data?.responsibleCreatedOtherWeek ?? payload.responsibleCreatedOtherWeek ?? [], // TASK-047
       newTicketsByStages: payload.data?.newTicketsByStages ?? payload.newTicketsByStages ?? null,
-      carryoverTicketsByDuration: payload.data?.carryoverTicketsByDuration ?? payload.carryoverTicketsByDuration ?? null
+      carryoverTicketsByDuration: payload.data?.carryoverTicketsByDuration ?? payload.carryoverTicketsByDuration ?? null,
+      // TASK-053-03: Данные для 3-месячного режима
+      newTicketsByMonth: payload.data?.newTicketsByMonth ?? payload.newTicketsByMonth ?? [],
+      closedTicketsByMonth: payload.data?.closedTicketsByMonth ?? payload.closedTicketsByMonth ?? [],
+      carryoverTicketsByMonth: payload.data?.carryoverTicketsByMonth ?? payload.carryoverTicketsByMonth ?? []
     }
   };
 }
@@ -122,6 +126,7 @@ function normalizeResponse(raw) {
  * @param {string} [params.product='1C'] - Обязательный фильтр на сектор (первый шаг).
  * @param {string|null} [params.weekStartUtc=null] - Начало недели ISO8601 (опционально, бэкенд может вычислить сам).
  * @param {string|null} [params.weekEndUtc=null] - Конец недели ISO8601 (опционально).
+ * @param {string} [params.periodMode='weeks'] - Режим периода: 'weeks' (4 недели) или 'months' (3 месяца) (TASK-053-03).
  * @param {boolean} [params.useCache=true] - Флаг кэша для бэкенда.
  * @param {boolean} [params.forceRefresh=false] - Принудительная перезагрузка данных.
  * @param {boolean} [params.includeTickets=false] - Включить тикеты для каждого сотрудника в responsible[].
@@ -136,6 +141,7 @@ export async function fetchAdmissionClosureStats(params = {}) {
     product = '1C',
     weekStartUtc = null,
     weekEndUtc = null,
+    periodMode = 'weeks', // TASK-053-03: Новый параметр
     useCache = true,
     forceRefresh = false,
     includeTickets = false,
@@ -148,6 +154,7 @@ export async function fetchAdmissionClosureStats(params = {}) {
     product,
     weekStartUtc,
     weekEndUtc,
+    periodMode, // TASK-053-03: Добавляем параметр periodMode
     useCache,
     forceRefresh,
     includeTickets,

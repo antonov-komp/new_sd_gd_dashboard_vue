@@ -10,7 +10,9 @@
             <div class="spinner-ring"></div>
           </div>
           <h3 class="preloader-title">Загрузка графика</h3>
-          <p class="preloader-message">Получение данных за 4 недели...</p>
+          <p class="preloader-message">
+            Получение данных за 4 недели...
+          </p>
           <div class="preloader-dots">
             <span class="dot"></span>
             <span class="dot"></span>
@@ -20,86 +22,100 @@
       </div>
       
       <div v-else key="content">
-      <div class="dashboard-header">
-        <div class="header-content">
-          <div class="breadcrumbs-row">
-            <button
-              class="btn-back-link"
-              type="button"
-              @click="handleBack"
-              :aria-label="backAriaLabel"
-              :aria-disabled="!hasHistory"
-              :data-fallback="!hasHistory"
-              :disabled="isNavigatingBack"
-              title="Назад"
-            >
-              ←
-            </button>
-            <nav class="breadcrumbs" aria-label="Навигация">
-              <router-link 
-                :to="{ name: 'dashboard-sector-1c' }"
-                class="breadcrumb-link"
-              >
-                Дашборд сектора 1С
-              </router-link>
-              <span class="breadcrumb-separator" aria-hidden="true">/</span>
-              <router-link 
-                :to="{ name: 'dashboard-graph-state' }"
-                class="breadcrumb-link"
-              >
-                График состояния
-              </router-link>
-              <span class="breadcrumb-separator" aria-hidden="true">/</span>
-              <span class="breadcrumb-current">График приёма и закрытий</span>
-            </nav>
+        <!-- Переключатель режимов периода -->
+        <div class="period-selector-container">
+          <PeriodModeSelector
+            v-model="periodMode"
+            @change="handlePeriodModeChange"
+          />
+        </div>
+        
+        <!-- Условный рендеринг: месячный или недельный режим -->
+        <GraphAdmissionClosureMonthsDashboard
+          v-if="periodMode === 'months'"
+        />
+        
+        <div v-else class="weeks-dashboard">
+          <div class="dashboard-header">
+            <div class="header-content">
+              <div class="breadcrumbs-row">
+                <button
+                  class="btn-back-link"
+                  type="button"
+                  @click="handleBack"
+                  :aria-label="backAriaLabel"
+                  :aria-disabled="!hasHistory"
+                  :data-fallback="!hasHistory"
+                  :disabled="isNavigatingBack"
+                  title="Назад"
+                >
+                  ←
+                </button>
+                <nav class="breadcrumbs" aria-label="Навигация">
+                  <router-link 
+                    :to="{ name: 'dashboard-sector-1c' }"
+                    class="breadcrumb-link"
+                  >
+                    Дашборд сектора 1С
+                  </router-link>
+                  <span class="breadcrumb-separator" aria-hidden="true">/</span>
+                  <router-link 
+                    :to="{ name: 'dashboard-graph-state' }"
+                    class="breadcrumb-link"
+                  >
+                    График состояния
+                  </router-link>
+                  <span class="breadcrumb-separator" aria-hidden="true">/</span>
+                  <span class="breadcrumb-current">График приёма и закрытий</span>
+                </nav>
+              </div>
+              <h1 class="dashboard-title">График приёма и закрытий сектора 1С</h1>
+              <p class="dashboard-subtitle">
+                Доступы и фильтры аналогичны «Графику состояния», селектор этапов скрыт.
+              </p>
+            </div>
           </div>
-          <h1 class="dashboard-title">График приёма и закрытий сектора 1С</h1>
-          <p class="dashboard-subtitle">
-            Доступы и фильтры аналогичны «Графику состояния», селектор этапов скрыт.
-          </p>
-        </div>
-      </div>
 
-      <div class="dashboard-layout">
-        <div class="filters-container">
-          <FiltersPanel
-            :stages="filters.stages"
-            :employees="filters.employees"
-            :dateRange="filters.dateRange"
-            :customDateRange="filters.customDateRange"
-            :hasActiveFilters="hasActiveFilters"
-            :hideStages="true"
-            :weekPickerMode="true"
-            :selectedWeek="selectedWeek"
-            :weeksCount="52"
-            @update:stages="updateStages"
-            @update:employees="updateEmployees"
-            @update:dateRange="updateDateRange"
-            @update:customDateRange="updateCustomDateRange"
-            @update:selectedWeek="updateSelectedWeek"
-            @reset="resetFilters"
-            @apply="applyFilters"
-          />
-        </div>
+          <div class="dashboard-layout">
+            <div class="filters-container">
+              <FiltersPanel
+                :stages="filters.stages"
+                :employees="filters.employees"
+                :dateRange="filters.dateRange"
+                :customDateRange="filters.customDateRange"
+                :hasActiveFilters="hasActiveFilters"
+                :hideStages="true"
+                :weekPickerMode="false"
+                @update:stages="updateStages"
+                @update:employees="updateEmployees"
+                @update:dateRange="updateDateRange"
+                @update:customDateRange="updateCustomDateRange"
+                @reset="resetFilters"
+                @apply="applyFilters"
+              />
+            </div>
 
-        <div class="chart-container">
-          <StatusMessage
-            v-if="error"
-            type="error"
-            title="Ошибка загрузки"
-            :message="error.message"
-          />
+            <div class="chart-container">
+              <StatusMessage
+                v-if="error"
+                type="error"
+                title="Ошибка загрузки"
+                :message="error.message"
+              />
 
-          <GraphAdmissionClosureChart
-            v-else
-            :meta="chartMeta"
-            :data="chartData"
-            @open-responsible="showResponsibleModal = true"
-            @open-stages="showStagesModal = true"
-            @open-carryover="showCarryoverModal = true"
-          />
+              <template v-else>
+                <!-- График для недельного режима -->
+                <GraphAdmissionClosureChart
+                  :meta="chartMeta"
+                  :data="chartData"
+                  @open-responsible="showResponsibleModal = true"
+                  @open-stages="showStagesModal = true"
+                  @open-carryover="showCarryoverModal = true"
+                />
+              </template>
+            </div>
+          </div>
         </div>
-      </div>
       </div>
     </Transition>
 
@@ -131,6 +147,11 @@
       :week-end-utc="chartMeta?.weekEndUtc || null"
       @close="showCarryoverModal = false"
     />
+
+    <PeriodModeInfoModal
+      :is-visible="showPeriodModeInfo"
+      @close="showPeriodModeInfo = false"
+    />
   </div>
 </template>
 
@@ -139,7 +160,10 @@ import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import StatusMessage from '@/components/common/StatusMessage.vue';
 import FiltersPanel from '@/components/filters/FiltersPanel.vue';
+import PeriodModeSelector from './PeriodModeSelector.vue';
+import PeriodModeInfoModal from './PeriodModeInfoModal.vue';
 import GraphAdmissionClosureChart from './GraphAdmissionClosureChart.vue';
+import GraphAdmissionClosureMonthsDashboard from './GraphAdmissionClosureMonthsDashboard.vue';
 import ResponsibleModal from './ResponsibleModal.vue';
 import StagesModal from './StagesModal.vue';
 import CarryoverDurationModal from './CarryoverDurationModal.vue';
@@ -160,6 +184,7 @@ const chartData = ref({
 const showResponsibleModal = ref(false);
 const showStagesModal = ref(false);
 const showCarryoverModal = ref(false);
+const showPeriodModeInfo = ref(false);
 
 // Навигация "Назад"
 const isNavigatingBack = ref(false);
@@ -210,8 +235,8 @@ const filters = ref({
   }
 });
 
-// Выбранная неделя для барабана прокрутки
-const selectedWeek = ref(null);
+// Режим периода: 'weeks' (4 последние недели) или 'months' (3 последних месяца)
+const periodMode = ref('weeks');
 
 const hasActiveFilters = computed(() => {
   const hasCustomDates = filters.value.customDateRange.startDate || filters.value.customDateRange.endDate;
@@ -220,6 +245,12 @@ const hasActiveFilters = computed(() => {
 });
 
 async function loadData() {
+  // Загружаем данные только для недельного режима
+  // Месячный режим обрабатывается в GraphAdmissionClosureMonthsDashboard
+  if (periodMode.value !== 'weeks') {
+    return;
+  }
+  
   // Устанавливаем isLoading в true сразу для показа прелоадера
   isLoading.value = true;
   error.value = null;
@@ -228,24 +259,17 @@ async function loadData() {
   const minLoadingTime = new Promise(resolve => setTimeout(resolve, 300));
   
   try {
-    // Используем выбранную неделю или вычисляем текущую неделю
-    let weekStartUtc, weekEndUtc;
-    
-    if (selectedWeek.value) {
-      weekStartUtc = selectedWeek.value.startUtc;
-      weekEndUtc = selectedWeek.value.endUtc;
-    } else {
-      // При первом открытии всегда используем текущую неделю
-      const currentWeek = getCurrentWeekBounds();
-      weekStartUtc = currentWeek.weekStartUtc;
-      weekEndUtc = currentWeek.weekEndUtc;
-    }
+    // Режим "4 последние недели" - используем текущую логику
+    const currentWeek = getCurrentWeekBounds();
+    const weekStartUtc = currentWeek.weekStartUtc;
+    const weekEndUtc = currentWeek.weekEndUtc;
     
     // Ждём минимум 300ms и загрузку данных параллельно
     const [_, result] = await Promise.all([
       minLoadingTime,
       fetchAdmissionClosureStats({
         product: '1C',
+        periodMode: 'weeks',
         weekStartUtc,
         weekEndUtc,
         includeTickets: true // TASK-047: Включаем тикеты для вкладки "По сотрудникам"
@@ -255,15 +279,6 @@ async function loadData() {
     const { meta, data } = result;
     chartMeta.value = meta;
     chartData.value = data;
-    
-    // Обновляем selectedWeek из meta, если она не была установлена
-    if (!selectedWeek.value && meta) {
-      selectedWeek.value = {
-        weekNumber: meta.weekNumber,
-        startUtc: meta.weekStartUtc,
-        endUtc: meta.weekEndUtc
-      };
-    }
   } catch (err) {
     error.value = err instanceof Error ? err : new Error('Неизвестная ошибка загрузки');
     console.error('[GraphAdmissionClosureDashboard] loadData error:', err);
@@ -288,8 +303,13 @@ function updateCustomDateRange(newRange) {
   filters.value.customDateRange = newRange;
 }
 
-function updateSelectedWeek(week) {
-  selectedWeek.value = week;
+/**
+ * Обработка изменения режима периода
+ */
+function handlePeriodModeChange(mode) {
+  periodMode.value = mode;
+  // Перезагрузка данных при изменении режима
+  loadData();
 }
 
 function resetFilters() {
@@ -313,7 +333,32 @@ function applyFilters() {
   loadData();
 }
 
+/**
+ * Загрузка режима из localStorage при монтировании
+ */
 onMounted(() => {
+  try {
+    const savedMode = localStorage.getItem('graph-admission-closure-period-mode');
+    if (savedMode === 'weeks' || savedMode === 'months') {
+      periodMode.value = savedMode;
+    }
+  } catch (error) {
+    console.warn('[GraphAdmissionClosureDashboard] Failed to read from localStorage:', error);
+  }
+  
+  // Проверка флага показа информационного попапа
+  try {
+    const STORAGE_KEY = 'graph-admission-closure-period-mode-info-shown';
+    const infoShown = localStorage.getItem(STORAGE_KEY);
+    if (!infoShown || infoShown !== 'true') {
+      showPeriodModeInfo.value = true;
+    }
+  } catch (error) {
+    console.warn('[GraphAdmissionClosureDashboard] Failed to read info modal flag from localStorage:', error);
+    // Показываем попап по умолчанию, если localStorage недоступен
+    showPeriodModeInfo.value = true;
+  }
+  
   loadData();
 });
 
@@ -493,9 +538,29 @@ function getPeriodBounds() {
   width: 100%;
 }
 
+.period-selector-container {
+  margin-bottom: var(--spacing-lg, 20px);
+  display: flex;
+  justify-content: center;
+}
+
+.weeks-dashboard {
+  width: 100%;
+}
+
 .chart-container {
   width: 100%;
   min-height: 360px;
+}
+
+.months-chart-placeholder {
+  padding: var(--spacing-xl, 24px);
+  text-align: center;
+  background-color: var(--b24-bg-light, #f9fafb);
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--b24-border-light, #e5e7eb);
+  color: var(--b24-text-secondary, #6b7280);
+  margin-top: var(--spacing-lg, 20px);
 }
 
 /* Приятный прелоадер для загрузки графика */

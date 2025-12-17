@@ -97,6 +97,102 @@ function getFourWeeksBounds(DateTimeImmutable $currentWeekStart, DateTimeImmutab
 }
 
 /**
+ * Вычисляет последние 3 месяца от текущей даты
+ * TASK-053-03: Функция для расчета периода 3-месячного режима
+ * 
+ * @return array Массив месяцев с границами и неделями
+ * @throws Exception При ошибке работы с датами
+ */
+function calculateLastThreeMonths(): array
+{
+    try {
+        $tz = new DateTimeZone('UTC');
+        $now = new DateTimeImmutable('now', $tz);
+        $months = [];
+        
+        // Текущий месяц
+        $currentMonth = $now->modify('first day of this month');
+        // 2 месяца назад (начало периода)
+        $twoMonthsAgo = $currentMonth->modify('-2 months');
+        
+        $monthNames = [
+            1 => 'Январь', 2 => 'Февраль', 3 => 'Март', 4 => 'Апрель',
+            5 => 'Май', 6 => 'Июнь', 7 => 'Июль', 8 => 'Август',
+            9 => 'Сентябрь', 10 => 'Октябрь', 11 => 'Ноябрь', 12 => 'Декабрь'
+        ];
+        
+        for ($i = 0; $i < 3; $i++) {
+            $monthStart = $twoMonthsAgo->modify("+{$i} months");
+            $monthEnd = $monthStart->modify('last day of this month')->setTime(23, 59, 59);
+            
+            $months[] = [
+                'monthNumber' => (int)$monthStart->format('n'),
+                'monthName' => $monthNames[(int)$monthStart->format('n')],
+                'year' => (int)$monthStart->format('Y'),
+                'monthStartUtc' => $monthStart->setTime(0, 0, 0)->format('Y-m-d\TH:i:s\Z'),
+                'monthEndUtc' => $monthEnd->format('Y-m-d\TH:i:s\Z'),
+                'monthStart' => $monthStart->setTime(0, 0, 0),
+                'monthEnd' => $monthEnd,
+                'weeks' => calculateWeeksInMonth($monthStart->setTime(0, 0, 0), $monthEnd)
+            ];
+        }
+        
+        return $months;
+    } catch (Exception $e) {
+        error_log('[calculateLastThreeMonths] Error: ' . $e->getMessage());
+        throw new Exception('Failed to calculate last three months: ' . $e->getMessage());
+    }
+}
+
+/**
+ * Вычисляет все недели, которые пересекаются с месяцем
+ * TASK-053-03: Функция для расчета недель внутри месяца (ISO-8601)
+ * 
+ * @param DateTimeImmutable $monthStart Начало месяца (UTC)
+ * @param DateTimeImmutable $monthEnd Конец месяца (UTC)
+ * @return array Массив недель с границами
+ */
+function calculateWeeksInMonth(DateTimeImmutable $monthStart, DateTimeImmutable $monthEnd): array
+{
+    $weeks = [];
+    $tz = new DateTimeZone('UTC');
+    
+    // Находим первую неделю месяца (ISO-8601, понедельник)
+    $firstDay = $monthStart;
+    $dayOfWeek = (int)$firstDay->format('N'); // 1 = понедельник, 7 = воскресенье
+    
+    // Если первый день месяца не понедельник, начинаем с предыдущего понедельника
+    if ($dayOfWeek !== 1) {
+        $firstDay = $firstDay->modify('-' . ($dayOfWeek - 1) . ' days');
+    }
+    
+    $currentWeekStart = $firstDay->setTime(0, 0, 0);
+    
+    // Генерируем недели до конца месяца
+    while ($currentWeekStart <= $monthEnd) {
+        $currentWeekEnd = $currentWeekStart->modify('+6 days')->setTime(23, 59, 59);
+        
+        // Проверяем, что неделя пересекается с месяцем
+        if ($currentWeekEnd >= $monthStart && $currentWeekStart <= $monthEnd) {
+            $isoYear = (int)$currentWeekStart->format('o');
+            $isoWeek = (int)$currentWeekStart->format('W');
+            
+            $weeks[] = [
+                'weekNumber' => $isoWeek,
+                'weekStartUtc' => $currentWeekStart->format('Y-m-d\TH:i:s\Z'),
+                'weekEndUtc' => $currentWeekEnd->format('Y-m-d\TH:i:s\Z'),
+                'weekStart' => $currentWeekStart,
+                'weekEnd' => $currentWeekEnd
+            ];
+        }
+        
+        $currentWeekStart = $currentWeekStart->modify('+1 week');
+    }
+    
+    return $weeks;
+}
+
+/**
  * Проверка попадания даты в интервал [start, end]
  * 
  * TASK-054: Улучшена для правильного парсинга дат из Bitrix24 (ISO-8601 с часовым поясом)
@@ -394,13 +490,455 @@ try {
     $product = isset($body['product']) ? (string)$body['product'] : '1C';
     $weekStartParam = isset($body['weekStartUtc']) ? (string)$body['weekStartUtc'] : null;
     $weekEndParam = isset($body['weekEndUtc']) ? (string)$body['weekEndUtc'] : null;
+    $periodMode = isset($body['periodMode']) ? (string)$body['periodMode'] : 'weeks'; // TASK-053-03: Новый параметр
     $includeTickets = isset($body['includeTickets']) ? (bool)$body['includeTickets'] : false;
     $includeNewTicketsByStages = isset($body['includeNewTicketsByStages']) ? (bool)$body['includeNewTicketsByStages'] : false;
     $includeCarryoverTickets = isset($body['includeCarryoverTickets']) ? (bool)$body['includeCarryoverTickets'] : false;
     $includeCarryoverTicketsByDuration = isset($body['includeCarryoverTicketsByDuration']) ? (bool)$body['includeCarryoverTicketsByDuration'] : false;
     $debug = isset($body['debug']) ? (bool)$body['debug'] : false;
+    
+    // TASK-053-03: Валидация periodMode
+    if (!in_array($periodMode, ['weeks', 'months'], true)) {
+        http_response_code(400);
+        jsonResponse([
+            'success' => false,
+            'error' => 'Invalid periodMode. Must be "weeks" or "months".'
+        ]);
+    }
 
-    // Границы недели
+    // TASK-053-03: Обработка режима периода
+    if ($periodMode === 'months') {
+        // Логика для 3-месячного режима
+        $months = calculateLastThreeMonths();
+        $periodStartUtc = $months[0]['monthStartUtc'];
+        $periodEndUtc = $months[2]['monthEndUtc'];
+        $periodStart = new DateTimeImmutable($periodStartUtc, new DateTimeZone('UTC'));
+        $periodEnd = new DateTimeImmutable($periodEndUtc, new DateTimeZone('UTC'));
+        
+        // Форматируем даты для фильтра Bitrix24
+        $periodStartStr = $periodStart->format('Y-m-d H:i:s');
+        $periodEndStr = $periodEnd->format('Y-m-d H:i:s');
+        
+        error_log("[MONTHS] Period for Bitrix24 queries: {$periodStartStr} - {$periodEndStr} (UTC)");
+        
+        // Опорные значения (совпадают с недельным режимом)
+        $targetStages = [
+            'DT140_12:UC_0VHWE2',   // formed
+            'DT140_12:PREPARATION', // review
+            'DT140_12:CLIENT'       // execution
+        ];
+        $closingStages = [
+            'DT140_12:SUCCESS',
+            'DT140_12:FAIL',
+            'DT140_12:UC_0GBU8Z'
+        ];
+        $keeperId = 1051; // KEEPER_OBJECTS_ID
+        
+        // Загрузка тикетов за весь период 3 месяцев с правильной пагинацией (TASK-054)
+        $entityTypeId = 140;
+        $pageSize = 50;
+        $allTicketsMap = [];
+        
+        // Запрос 1: тикеты, созданные за период 3 месяцев
+        $start = 0;
+        $pageNum = 0;
+        do {
+            $result = CRest::call('crm.item.list', [
+                'entityTypeId' => $entityTypeId,
+                'filter' => [
+                    '>=createdTime' => $periodStartStr,
+                    '<=createdTime' => $periodEndStr
+                ],
+                'select' => [
+                    'id',
+                    'title',
+                    'stageId',
+                    'assignedById',
+                    'createdTime',
+                    'updatedTime',
+                    'movedTime',
+                    'UF_CRM_7_TYPE_PRODUCT',
+                    'ufCrm7TypeProduct'
+                ],
+                'start' => $start
+            ]);
+
+            if (isset($result['error'])) {
+                throw new Exception($result['error_description'] ?? $result['error']);
+            }
+
+            $items = $result['result']['items'] ?? [];
+            $pageNum++;
+            
+            foreach ($items as $item) {
+                $allTicketsMap[$item['id']] = $item;
+            }
+
+            // TASK-054: Улучшенная проверка наличия следующей страницы
+            $nextValue = $result['result']['next'] ?? $result['next'] ?? null;
+            $hasNext = $nextValue !== null && 
+                      $nextValue !== '' && 
+                      $nextValue !== '0' && 
+                      (int)$nextValue > 0;
+            
+            $hasMore = count($items) === $pageSize && $hasNext;
+            
+            if ($debug && $hasMore) {
+                error_log("[MONTHS-QUERY1] Page {$pageNum}: loaded " . count($items) . " items, hasNext: " . ($hasNext ? 'true' : 'false') . ", continuing...");
+            }
+            
+            $start += $pageSize;
+        } while ($hasMore);
+        
+        error_log("[MONTHS-QUERY1] Created tickets total count: " . count($allTicketsMap));
+        
+        // Запрос 2: тикеты, закрытые за период 3 месяцев
+        $start = 0;
+        $pageNum = 0;
+        do {
+            $result = CRest::call('crm.item.list', [
+                'entityTypeId' => $entityTypeId,
+                'filter' => [
+                    '>=movedTime' => $periodStartStr,
+                    '<=movedTime' => $periodEndStr,
+                    'stageId' => $closingStages
+                ],
+                'select' => [
+                    'id',
+                    'title',
+                    'stageId',
+                    'assignedById',
+                    'createdTime',
+                    'updatedTime',
+                    'movedTime',
+                    'UF_CRM_7_TYPE_PRODUCT',
+                    'ufCrm7TypeProduct'
+                ],
+                'start' => $start
+            ]);
+
+            if (isset($result['error'])) {
+                throw new Exception($result['error_description'] ?? $result['error']);
+            }
+
+            $items = $result['result']['items'] ?? [];
+            $pageNum++;
+            
+            foreach ($items as $item) {
+                $allTicketsMap[$item['id']] = $item;
+            }
+
+            // TASK-054: Улучшенная проверка наличия следующей страницы
+            $nextValue = $result['result']['next'] ?? $result['next'] ?? null;
+            $hasNext = $nextValue !== null && 
+                      $nextValue !== '' && 
+                      $nextValue !== '0' && 
+                      (int)$nextValue > 0;
+            
+            $hasMore = count($items) === $pageSize && $hasNext;
+            
+            if ($debug && $hasMore) {
+                error_log("[MONTHS-QUERY2] Page {$pageNum}: loaded " . count($items) . " items, hasNext: " . ($hasNext ? 'true' : 'false') . ", continuing...");
+            }
+            
+            $start += $pageSize;
+        } while ($hasMore);
+        
+        error_log("[MONTHS-QUERY2] Closed tickets total count (after merge): " . count($allTicketsMap));
+        
+        // Запрос 3: переходящие тикеты (если запрошено)
+        if ($includeCarryoverTickets) {
+            foreach ($targetStages as $stageId) {
+                $start = 0;
+                $pageNum = 0;
+                $hasMore = true;
+                
+                while ($hasMore) {
+                    $result = CRest::call('crm.item.list', [
+                        'entityTypeId' => $entityTypeId,
+                        'filter' => [
+                            'stageId' => $stageId
+                        ],
+                        'select' => [
+                            'id',
+                            'title',
+                            'stageId',
+                            'assignedById',
+                            'createdTime',
+                            'updatedTime',
+                            'movedTime',
+                            'UF_CRM_7_TYPE_PRODUCT',
+                            'ufCrm7TypeProduct'
+                        ],
+                        'start' => $start
+                    ]);
+
+                    if (isset($result['error'])) {
+                        throw new Exception($result['error_description'] ?? $result['error']);
+                    }
+
+                    $items = $result['result']['items'] ?? [];
+                    $pageNum++;
+                    
+                    foreach ($items as $item) {
+                        if (!isset($allTicketsMap[$item['id']])) {
+                            $allTicketsMap[$item['id']] = $item;
+                        }
+                    }
+
+                    $nextValue = $result['result']['next'] ?? $result['next'] ?? null;
+                    $hasNext = $nextValue !== null && 
+                              $nextValue !== '' && 
+                              $nextValue !== '0' && 
+                              (int)$nextValue > 0;
+                    
+                    $hasMore = count($items) === $pageSize && $hasNext;
+                    
+                    $start += $pageSize;
+                }
+            }
+        }
+        
+        // Фильтруем по product=1C
+        $tickets = [];
+        foreach ($allTicketsMap as $item) {
+            $tagRaw = $item['UF_CRM_7_TYPE_PRODUCT'] ?? $item['ufCrm7TypeProduct'] ?? null;
+            $tags = [];
+            if (is_array($tagRaw)) {
+                $tags = $tagRaw;
+            } elseif (is_string($tagRaw)) {
+                $parts = array_map('trim', explode(',', $tagRaw));
+                $tags = $parts;
+            }
+            $normalized = array_map(function ($v) {
+                return mb_strtoupper(str_replace('С', 'C', trim((string)$v)));
+            }, $tags);
+            $is1C = in_array('1C', $normalized, true);
+            if (!$is1C && mb_strtoupper($product) === '1C') {
+                continue;
+            }
+            $tickets[] = $item;
+        }
+        
+        error_log("[MONTHS] Tickets after product filter: " . count($tickets));
+        
+        // Агрегация данных по месяцам
+        $newTicketsByMonth = [];
+        $closedTicketsByMonth = [];
+        $carryoverTicketsByMonth = [];
+        $totalNewTickets = 0;
+        $totalClosedTickets = 0;
+        $totalCarryoverTickets = 0;
+        
+        // Агрегация по стадиям (суммарно за 3 месяца)
+        $stageAgg = [];
+        $allStages = [
+            'DT140_12:SUCCESS' => ['name' => 'Успешное закрытие', 'color' => '#28a745'],
+            'DT140_12:FAIL' => ['name' => 'Отклонено', 'color' => '#dc3545'],
+            'DT140_12:UC_0GBU8Z' => ['name' => 'Закрыли без задачи', 'color' => '#6c757d']
+        ];
+        
+        foreach ($months as $month) {
+            $monthNewTickets = 0;
+            $monthClosedTickets = 0;
+            $monthClosedTicketsCreatedThisWeek = 0;
+            $monthClosedTicketsCreatedOtherWeek = 0;
+            $monthCarryoverTickets = 0;
+            $monthCarryoverTicketsCreatedThisWeek = 0;
+            $monthCarryoverTicketsCreatedOtherWeek = 0;
+            
+            $weeksData = [];
+            
+            // Для каждой недели в месяце вычисляем метрики
+            foreach ($month['weeks'] as $week) {
+                $weekMetrics = calculateWeekMetrics(
+                    $week['weekStart'],
+                    $week['weekEnd'],
+                    $tickets,
+                    $targetStages,
+                    $closingStages,
+                    $keeperId,
+                    $debug
+                );
+                
+                $monthNewTickets += $weekMetrics['newTickets'];
+                $monthClosedTickets += $weekMetrics['closedTickets'];
+                $monthClosedTicketsCreatedThisWeek += $weekMetrics['closedTicketsCreatedThisWeek'];
+                $monthClosedTicketsCreatedOtherWeek += $weekMetrics['closedTicketsCreatedOtherWeek'];
+                $monthCarryoverTickets += $weekMetrics['carryoverTickets'];
+                $monthCarryoverTicketsCreatedThisWeek += $weekMetrics['carryoverTicketsCreatedThisWeek'];
+                $monthCarryoverTicketsCreatedOtherWeek += $weekMetrics['carryoverTicketsCreatedOtherWeek'];
+                
+                $weeksData[] = [
+                    'weekNumber' => $week['weekNumber'],
+                    'count' => $weekMetrics['newTickets'],
+                    'closedCount' => $weekMetrics['closedTickets'],
+                    'closedCreatedThisWeek' => $weekMetrics['closedTicketsCreatedThisWeek'],
+                    'closedCreatedOtherWeek' => $weekMetrics['closedTicketsCreatedOtherWeek'],
+                    'carryoverCount' => $weekMetrics['carryoverTickets'],
+                    'carryoverCreatedThisWeek' => $weekMetrics['carryoverTicketsCreatedThisWeek'],
+                    'carryoverCreatedOtherWeek' => $weekMetrics['carryoverTicketsCreatedOtherWeek']
+                ];
+            }
+            
+            // Подсчёт новых тикетов за месяц (созданных в этом месяце)
+            $monthStart = $month['monthStart'];
+            $monthEnd = $month['monthEnd'];
+            $monthNewCount = 0;
+            foreach ($tickets as $ticket) {
+                $createdTime = $ticket['createdTime'] ?? null;
+                if (isInRange($createdTime, $monthStart, $monthEnd)) {
+                    $monthNewCount++;
+                }
+            }
+            
+            // Подсчёт закрытых тикетов за месяц (закрытых в этом месяце)
+            $monthClosedCount = 0;
+            $monthClosedCreatedThisWeek = 0;
+            $monthClosedCreatedOtherWeek = 0;
+            foreach ($tickets as $ticket) {
+                $movedTime = $ticket['movedTime'] ?? $ticket['updatedTime'] ?? null;
+                $createdTime = $ticket['createdTime'] ?? null;
+                $stageId = $ticket['stageId'] ?? null;
+                $stageId = $stageId ? strtoupper($stageId) : null;
+                
+                if ($stageId && in_array($stageId, $closingStages, true)) {
+                    if (isInRange($movedTime, $monthStart, $monthEnd)) {
+                        $monthClosedCount++;
+                        if (isInRange($createdTime, $monthStart, $monthEnd)) {
+                            $monthClosedCreatedThisWeek++;
+                        } else {
+                            $monthClosedCreatedOtherWeek++;
+                        }
+                    }
+                }
+            }
+            
+            // Подсчёт переходящих тикетов на конец месяца
+            $monthCarryoverCount = 0;
+            $monthCarryoverCreatedThisWeek = 0;
+            $monthCarryoverCreatedOtherWeek = 0;
+            foreach ($tickets as $ticket) {
+                if (isCarryoverTicket($ticket, $monthEnd, $monthEnd, $targetStages, $closingStages)) {
+                    $monthCarryoverCount++;
+                    $createdTime = $ticket['createdTime'] ?? null;
+                    if (isInRange($createdTime, $monthStart, $monthEnd)) {
+                        $monthCarryoverCreatedThisWeek++;
+                    } else {
+                        $monthCarryoverCreatedOtherWeek++;
+                    }
+                }
+            }
+            
+            // Агрегация по стадиям (только закрытые за месяц)
+            foreach ($tickets as $ticket) {
+                $movedTime = $ticket['movedTime'] ?? $ticket['updatedTime'] ?? null;
+                $stageId = $ticket['stageId'] ?? null;
+                $stageId = $stageId ? strtoupper($stageId) : null;
+                
+                if ($stageId && in_array($stageId, $closingStages, true)) {
+                    if (isInRange($movedTime, $monthStart, $monthEnd)) {
+                        if (!isset($stageAgg[$stageId])) {
+                            $stageAgg[$stageId] = 0;
+                        }
+                        $stageAgg[$stageId]++;
+                    }
+                }
+            }
+            
+            $newTicketsByMonth[] = [
+                'month' => $month['monthNumber'],
+                'monthName' => $month['monthName'],
+                'count' => $monthNewCount,
+                'weeks' => $weeksData
+            ];
+            
+            $closedTicketsByMonth[] = [
+                'month' => $month['monthNumber'],
+                'monthName' => $month['monthName'],
+                'count' => $monthClosedCount,
+                'closedCreatedThisWeek' => $monthClosedCreatedThisWeek,
+                'closedCreatedOtherWeek' => $monthClosedCreatedOtherWeek,
+                'weeks' => array_map(function($week) {
+                    return [
+                        'weekNumber' => $week['weekNumber'],
+                        'count' => $week['closedCount'],
+                        'closedCreatedThisWeek' => $week['closedCreatedThisWeek'],
+                        'closedCreatedOtherWeek' => $week['closedCreatedOtherWeek']
+                    ];
+                }, $weeksData)
+            ];
+            
+            $carryoverTicketsByMonth[] = [
+                'month' => $month['monthNumber'],
+                'monthName' => $month['monthName'],
+                'count' => $monthCarryoverCount,
+                'carryoverCreatedThisWeek' => $monthCarryoverCreatedThisWeek,
+                'carryoverCreatedOtherWeek' => $monthCarryoverCreatedOtherWeek,
+                'weeks' => array_map(function($week) {
+                    return [
+                        'weekNumber' => $week['weekNumber'],
+                        'count' => $week['carryoverCount'],
+                        'carryoverCreatedThisWeek' => $week['carryoverCreatedThisWeek'],
+                        'carryoverCreatedOtherWeek' => $week['carryoverCreatedOtherWeek']
+                    ];
+                }, $weeksData)
+            ];
+            
+            $totalNewTickets += $monthNewCount;
+            $totalClosedTickets += $monthClosedCount;
+            $totalCarryoverTickets += $monthCarryoverCount;
+        }
+        
+        // Формирование массива стадий
+        $stages = [];
+        foreach ($stageAgg as $stageId => $count) {
+            $stageName = isset($allStages[$stageId]) ? $allStages[$stageId]['name'] : $stageId;
+            $stages[] = [
+                'stageId' => $stageId,
+                'stageName' => $stageName,
+                'count' => $count
+            ];
+        }
+        
+        // Формирование ответа
+        jsonResponse([
+            'success' => true,
+            'meta' => [
+                'periodMode' => 'months',
+                'periodStartUtc' => $periodStartUtc,
+                'periodEndUtc' => $periodEndUtc,
+                'months' => array_map(function($month) {
+                    return [
+                        'monthNumber' => $month['monthNumber'],
+                        'monthName' => $month['monthName'],
+                        'year' => $month['year'],
+                        'monthStartUtc' => $month['monthStartUtc'],
+                        'monthEndUtc' => $month['monthEndUtc'],
+                        'weeks' => array_map(function($week) {
+                            return [
+                                'weekNumber' => $week['weekNumber'],
+                                'weekStartUtc' => $week['weekStartUtc'],
+                                'weekEndUtc' => $week['weekEndUtc']
+                            ];
+                        }, $month['weeks'])
+                    ];
+                }, $months)
+            ],
+            'data' => [
+                'newTickets' => $totalNewTickets,
+                'newTicketsByMonth' => $newTicketsByMonth,
+                'closedTickets' => $totalClosedTickets,
+                'closedTicketsByMonth' => $closedTicketsByMonth,
+                'carryoverTickets' => $totalCarryoverTickets,
+                'carryoverTicketsByMonth' => $carryoverTicketsByMonth,
+                'stages' => $stages,
+                'responsible' => [] // TODO: Реализовать агрегацию по сотрудникам при необходимости
+            ]
+        ]);
+    }
+    
+    // Границы недели (для режима 'weeks')
     [$weekStart, $weekEnd] = getWeekBounds($weekStartParam, $weekEndParam);
     
     // TASK-048: Получаем границы 4 недель (текущая + 3 предыдущие)
