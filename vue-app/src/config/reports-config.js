@@ -85,6 +85,16 @@ export const reportsConfig = {
       active: true,
       category: 'analytics',
       order: 7
+    },
+    {
+      id: 8,
+      title: 'Трудозатраты на Тикеты сектора 1С',
+      icon: '⏱',
+      route: '/dashboard/tickets-time-tracking',
+      description: 'Трудозатраты сотрудников сектора 1С по неделям',
+      active: true,
+      category: 'analytics',
+      order: 8
     }
     // Добавьте другие отчёты по мере необходимости
     // Чтобы скрыть отчёт, установите active: false

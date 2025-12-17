@@ -58,6 +58,16 @@ const routes = [
       requiresAuth: true
       // adminOnly: false — просмотр доступен всем авторизованным пользователям
     }
+  },
+  {
+    path: '/dashboard/tickets-time-tracking',
+    name: 'dashboard-tickets-time-tracking',
+    component: () => import('@/components/tickets-time-tracking/TicketsTimeTrackingDashboard.vue'),
+    meta: {
+      title: 'Трудозатраты на Тикеты сектора 1С',
+      description: 'Трудозатраты сотрудников сектора 1С по неделям',
+      requiresAuth: true
+    }
   }
 ];
 

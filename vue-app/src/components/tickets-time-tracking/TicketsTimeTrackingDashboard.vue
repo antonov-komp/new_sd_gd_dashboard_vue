@@ -1,16 +1,45 @@
 <template>
   <div class="tickets-time-tracking-dashboard">
     <!-- Breadcrumbs -->
-    <div class="breadcrumbs" v-if="breadcrumbs">
-      <router-link 
-        v-for="(crumb, index) in breadcrumbs" 
-        :key="index"
-        :to="crumb.to"
-        class="breadcrumb-link"
-      >
-        {{ crumb.label }}
-      </router-link>
-      <span class="breadcrumb-current">Трудозатраты на Тикеты сектора 1С</span>
+    <div class="dashboard-header">
+      <div class="breadcrumbs-row">
+        <button
+          class="btn-back-link"
+          type="button"
+          @click="handleBack"
+          :aria-label="backAriaLabel"
+          :aria-disabled="!hasHistory"
+          :data-fallback="!hasHistory"
+          :disabled="isNavigatingBack"
+          title="Назад"
+        >
+          ←
+        </button>
+        <nav class="breadcrumbs" aria-label="Навигация">
+          <router-link 
+            :to="{ name: 'dashboard-sector-1c' }"
+            class="breadcrumb-link"
+          >
+            Дашборд сектора 1С
+          </router-link>
+          <span class="breadcrumb-separator" aria-hidden="true">/</span>
+          <router-link 
+            :to="{ name: 'dashboard-graph-state' }"
+            class="breadcrumb-link"
+          >
+            График состояния
+          </router-link>
+          <span class="breadcrumb-separator" aria-hidden="true">/</span>
+          <router-link 
+            :to="{ name: 'dashboard-graph-admission-closure' }"
+            class="breadcrumb-link"
+          >
+            График приёма и закрытий
+          </router-link>
+          <span class="breadcrumb-separator" aria-hidden="true">/</span>
+          <span class="breadcrumb-current">Трудозатраты</span>
+        </nav>
+      </div>
     </div>
 
     <!-- Заголовок -->
@@ -49,7 +78,11 @@
       <TicketsTimeTrackingTable 
         v-if="data"
         :data="data"
+        :loading="loading"
+        :error="error"
         @cell-click="handleCellClick"
+        @employee-click="handleEmployeeClick"
+        @week-click="handleWeekClick"
       />
 
       <!-- Графики (опционально) -->
@@ -67,24 +100,21 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import { timeTrackingService } from '@/services/tickets-time-tracking/timeTrackingService.js';
 import { hasData as hasDataUtil } from '@/services/tickets-time-tracking/timeTrackingUtils.js';
 import TicketsTimeTrackingSummary from './TicketsTimeTrackingSummary.vue';
 import TicketsTimeTrackingTable from './TicketsTimeTrackingTable.vue';
 import TimeTrackingDetailModal from './TimeTrackingDetailModal.vue';
 
+const router = useRouter();
+
 // Состояния
 const loading = ref(false);
 const error = ref(null);
 const data = ref(null);
 const selectedCell = ref(null);
-
-// Breadcrumbs
-const breadcrumbs = ref([
-  { to: '/', label: 'Дашборд сектора 1С' },
-  { to: '/graph-state', label: 'График состояния' },
-  { to: '/graph-admission-closure', label: 'График приёма и закрытий' }
-]);
+const isNavigatingBack = ref(false);
 
 // Computed
 const hasData = computed(() => {
@@ -115,8 +145,54 @@ const handleCellClick = (cellData) => {
   selectedCell.value = cellData;
 };
 
+const handleEmployeeClick = (employeeData) => {
+  // Открыть попап с детализацией сотрудника
+  selectedCell.value = {
+    type: 'employee',
+    ...employeeData
+  };
+};
+
+const handleWeekClick = (weekData) => {
+  // Открыть попап с детализацией недели
+  selectedCell.value = {
+    type: 'week',
+    ...weekData
+  };
+};
+
 const closeDetailModal = () => {
   selectedCell.value = null;
+};
+
+// Навигация "Назад"
+const hasHistory = computed(() => {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  return window.history.length > 1;
+});
+
+const backAriaLabel = computed(() => {
+  return hasHistory.value ? 'Вернуться назад' : 'Вернуться на главную';
+});
+
+const handleBack = () => {
+  if (isNavigatingBack.value) {
+    return;
+  }
+  
+  isNavigatingBack.value = true;
+  
+  if (hasHistory.value) {
+    router.go(-1);
+  } else {
+    router.push({ name: 'dashboard-sector-1c' });
+  }
+  
+  setTimeout(() => {
+    isNavigatingBack.value = false;
+  }, 300);
 };
 
 // Lifecycle
@@ -130,29 +206,63 @@ onMounted(() => {
   padding: 20px;
 }
 
-.breadcrumbs {
+.dashboard-header {
   margin-bottom: 20px;
+}
+
+.breadcrumbs-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-back-link {
+  background: none;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 16px;
+  color: #333;
+  transition: all 0.2s;
+}
+
+.btn-back-link:hover:not(:disabled) {
+  background-color: #f8f9fa;
+  border-color: #adb5bd;
+}
+
+.btn-back-link:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.breadcrumbs {
+  display: flex;
+  align-items: center;
   font-size: 14px;
+  flex-wrap: wrap;
 }
 
 .breadcrumb-link {
   color: #007bff;
   text-decoration: none;
-  margin-right: 5px;
+  transition: color 0.2s;
 }
 
 .breadcrumb-link:hover {
+  color: #0056b3;
   text-decoration: underline;
 }
 
-.breadcrumb-link::after {
-  content: ' / ';
+.breadcrumb-separator {
+  margin: 0 8px;
   color: #666;
-  margin-left: 5px;
 }
 
 .breadcrumb-current {
   color: #666;
+  font-weight: 500;
 }
 
 .dashboard-title {

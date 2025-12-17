@@ -39,6 +39,14 @@
           <span class="icon">📈</span>
           <span>График приёма и закрытий</span>
         </button>
+        <button 
+          @click="navigateToTimeTracking"
+          class="btn-navigate-time-tracking"
+          title="Перейти к трудозатратам на тикеты сектора"
+        >
+          <span class="icon">⏱</span>
+          <span>Трудозатраты</span>
+        </button>
       </div>
     </div>
 
@@ -255,6 +263,13 @@ export default {
       router.push({ name: 'dashboard-graph-admission-closure' });
     };
 
+    /**
+     * Переход к модулю трудозатрат на тикеты
+     */
+    const navigateToTimeTracking = () => {
+      router.push({ name: 'dashboard-tickets-time-tracking' });
+    };
+
     // Извлекаем loadingProgress для удобства доступа
     const loadingProgress = actions.loadingProgress;
 
@@ -317,6 +332,7 @@ export default {
       dashboardFadeInTransform,
       navigateToGraphState,
       navigateToAdmissionClosure,
+      navigateToTimeTracking,
       
       // Диагностика
       isDiagnosticsEnabled: isDiagnosticsEnabledFlag,
