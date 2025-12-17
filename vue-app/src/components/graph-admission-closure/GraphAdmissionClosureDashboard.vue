@@ -22,14 +22,6 @@
       </div>
       
       <div v-else-if="!showPeriodModeInfo" key="content">
-        <!-- Переключатель режимов периода -->
-        <div class="period-selector-container">
-          <PeriodModeSelector
-            v-model="periodMode"
-            @change="handlePeriodModeChange"
-          />
-        </div>
-        
         <!-- Условный рендеринг: месячный или недельный режим -->
         <GraphAdmissionClosureMonthsDashboard
           v-if="periodMode === 'months'"
@@ -86,10 +78,13 @@
                 :hasActiveFilters="hasActiveFilters"
                 :hideStages="true"
                 :weekPickerMode="false"
+                :showPeriodMode="true"
+                :period-mode="periodMode"
                 @update:stages="updateStages"
                 @update:employees="updateEmployees"
                 @update:dateRange="updateDateRange"
                 @update:customDateRange="updateCustomDateRange"
+                @update:period-mode="handlePeriodModeChange"
                 @reset="resetFilters"
                 @apply="applyFilters"
               />
@@ -149,6 +144,7 @@
     />
 
     <PeriodModeInfoModal
+      v-if="showPeriodModeInfo"
       :is-visible="showPeriodModeInfo"
       :current-mode="periodMode"
       @close="showPeriodModeInfo = false"
@@ -159,11 +155,10 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import StatusMessage from '@/components/common/StatusMessage.vue';
 import FiltersPanel from '@/components/filters/FiltersPanel.vue';
-import PeriodModeSelector from './PeriodModeSelector.vue';
 import PeriodModeInfoModal from './PeriodModeInfoModal.vue';
 import GraphAdmissionClosureChart from './GraphAdmissionClosureChart.vue';
 import GraphAdmissionClosureMonthsDashboard from './GraphAdmissionClosureMonthsDashboard.vue';
@@ -310,9 +305,37 @@ function updateCustomDateRange(newRange) {
  * Обработка изменения режима периода
  */
 function handlePeriodModeChange(mode) {
+  if (!['weeks', 'months'].includes(mode)) {
+    console.warn('[GraphAdmissionClosureDashboard] Invalid periodMode:', mode);
+    return;
+  }
+  
+  // Не обрабатываем, если режим не изменился
+  if (mode === periodMode.value) {
+    return;
+  }
+  
   periodMode.value = mode;
-  // Перезагрузка данных при изменении режима
+  
+  // Сохранение в localStorage
+  try {
+    localStorage.setItem('graph-admission-closure-period-mode', mode);
+  } catch (error) {
+    console.warn('[GraphAdmissionClosureDashboard] Failed to save mode to localStorage:', error);
+  }
+  
+  // Перезагрузка данных при изменении режима (покажет прелоадер)
   loadData();
+}
+
+/**
+ * Обработка глобального события изменения режима периода
+ */
+function handleGlobalPeriodModeChange(event) {
+  const { mode } = event.detail;
+  if (['weeks', 'months'].includes(mode)) {
+    handlePeriodModeChange(mode);
+  }
 }
 
 function resetFilters() {
@@ -372,26 +395,46 @@ onMounted(() => {
     console.warn('[GraphAdmissionClosureDashboard] Failed to read from localStorage:', error);
   }
   
+  // Подписка на глобальное событие изменения режима
+  window.addEventListener('period-mode-change', handleGlobalPeriodModeChange);
+  
   // Проверка флага показа информационного попапа
+  // ВАЖНО: Для тестирования попапа можно временно очистить localStorage:
+  // localStorage.removeItem('graph-admission-closure-period-mode-info-shown');
   try {
     const STORAGE_KEY = 'graph-admission-closure-period-mode-info-shown';
     const infoShown = localStorage.getItem(STORAGE_KEY);
+    console.log('[GraphAdmissionClosureDashboard] Info modal flag from localStorage:', infoShown);
+    console.log('[GraphAdmissionClosureDashboard] showPeriodModeInfo before check:', showPeriodModeInfo.value);
+    
+    // Показываем попап, если флаг не установлен или не равен 'true'
     if (!infoShown || infoShown !== 'true') {
+      console.log('[GraphAdmissionClosureDashboard] Showing period mode info modal (first visit)');
       showPeriodModeInfo.value = true;
+      console.log('[GraphAdmissionClosureDashboard] showPeriodModeInfo after setting to true:', showPeriodModeInfo.value);
       // Не запускаем загрузку, если показывается попап
       // Загрузка запустится после закрытия попапа
       return;
+    } else {
+      console.log('[GraphAdmissionClosureDashboard] Info modal already shown, skipping');
     }
   } catch (error) {
     console.warn('[GraphAdmissionClosureDashboard] Failed to read info modal flag from localStorage:', error);
     // Показываем попап по умолчанию, если localStorage недоступен
+    console.log('[GraphAdmissionClosureDashboard] Showing period mode info modal (localStorage error)');
     showPeriodModeInfo.value = true;
+    console.log('[GraphAdmissionClosureDashboard] showPeriodModeInfo after error handling:', showPeriodModeInfo.value);
     // Не запускаем загрузку, если показывается попап
     return;
   }
   
   // Запускаем загрузку только если попап не показывается
   loadData();
+});
+
+// Очистка при размонтировании
+onUnmounted(() => {
+  window.removeEventListener('period-mode-change', handleGlobalPeriodModeChange);
 });
 
 /**
@@ -568,12 +611,6 @@ function getPeriodBounds() {
 
 .filters-container > * {
   width: 100%;
-}
-
-.period-selector-container {
-  margin-bottom: var(--spacing-lg, 20px);
-  display: flex;
-  justify-content: center;
 }
 
 .weeks-dashboard {

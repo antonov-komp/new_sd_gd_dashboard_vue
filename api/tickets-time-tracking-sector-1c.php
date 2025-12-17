@@ -659,7 +659,7 @@ function aggregateByWeeksAndEmployees(
                 'recordsCount' => 0,
                 'tasksCount' => 0,
                 'ticketsCount' => 0,
-                'tasks' => []
+                'tasks' => [] // Массив объектов задач: [{id: 123, elapsedTime: 5.0, ticket: {...}}]
             ];
         }
         
@@ -668,13 +668,49 @@ function aggregateByWeeksAndEmployees(
         $aggregated[$weekNumber]['employees'][$employeeId]['recordsCount']++;
         
         // Подсчёт уникальных задач и тикетов
-        if ($taskId && !in_array($taskId, $aggregated[$weekNumber]['employees'][$employeeId]['tasks'], true)) {
-            $aggregated[$weekNumber]['employees'][$employeeId]['tasks'][] = $taskId;
-            $aggregated[$weekNumber]['employees'][$employeeId]['tasksCount']++;
+        if ($taskId) {
+            // Ищем задачу в массиве
+            $taskIndex = null;
+            foreach ($aggregated[$weekNumber]['employees'][$employeeId]['tasks'] as $index => $task) {
+                if (isset($task['id']) && $task['id'] === $taskId) {
+                    $taskIndex = $index;
+                    break;
+                }
+            }
             
-            // Проверка связи с тикетом
-            if (isset($taskTicketMap[$taskId]['ticket'])) {
-                $aggregated[$weekNumber]['employees'][$employeeId]['ticketsCount']++;
+            if ($taskIndex === null) {
+                // Новая задача - добавляем объект
+                $taskData = [
+                    'id' => $taskId,
+                    'elapsedTime' => $elapsedTimeHours
+                ];
+                
+                // Добавляем информацию о тикете, если есть
+                if (isset($taskTicketMap[$taskId]['ticket'])) {
+                    $ticket = $taskTicketMap[$taskId]['ticket'];
+                    $taskData['ticket'] = [
+                        'id' => (int)($ticket['id'] ?? $ticket['ID'] ?? 0),
+                        'title' => $ticket['title'] ?? $ticket['name'] ?? null,
+                        'createdWeek' => null // Определим позже, если нужно
+                    ];
+                    
+                    // Определяем неделю создания тикета (если есть createdTime)
+                    $ticketCreatedTime = $ticket['createdTime'] ?? $ticket['CREATED_TIME'] ?? null;
+                    if ($ticketCreatedTime) {
+                        $ticketCreatedWeek = getWeekNumberByDate($ticketCreatedTime, $weeks);
+                        if ($ticketCreatedWeek) {
+                            $taskData['ticket']['createdWeek'] = $ticketCreatedWeek;
+                        }
+                    }
+                    
+                    $aggregated[$weekNumber]['employees'][$employeeId]['ticketsCount']++;
+                }
+                
+                $aggregated[$weekNumber]['employees'][$employeeId]['tasks'][] = $taskData;
+                $aggregated[$weekNumber]['employees'][$employeeId]['tasksCount']++;
+            } else {
+                // Задача уже есть - добавляем трудозатрату
+                $aggregated[$weekNumber]['employees'][$employeeId]['tasks'][$taskIndex]['elapsedTime'] += $elapsedTimeHours;
             }
         }
         
@@ -685,9 +721,20 @@ function aggregateByWeeksAndEmployees(
     // Преобразование в формат ответа
     $result = [];
     foreach ($aggregated as $week) {
-        // Удаляем временный массив tasks
+        // Округляем трудозатраты в задачах
         foreach ($week['employees'] as &$employee) {
-            unset($employee['tasks']);
+            // Округляем общую трудозатрату сотрудника
+            $employee['elapsedTime'] = round($employee['elapsedTime'], 2);
+            
+            // Округляем трудозатраты в задачах
+            if (isset($employee['tasks']) && is_array($employee['tasks'])) {
+                foreach ($employee['tasks'] as &$task) {
+                    if (isset($task['elapsedTime'])) {
+                        $task['elapsedTime'] = round($task['elapsedTime'], 2);
+                    }
+                }
+                unset($task);
+            }
         }
         unset($employee);
         
@@ -745,6 +792,139 @@ function createEmployeesSummary(array $weeksData): array
     return array_values($summary);
 }
 
+/**
+ * Получение детальной информации о задачах с поддержкой пагинации
+ * 
+ * Используется метод Bitrix24 API: tasks.task.get
+ * Документация: https://context7.com/bitrix24/rest/tasks.task.get
+ * 
+ * @param array $taskIds Массив ID задач
+ * @param int $page Номер страницы (по умолчанию 1)
+ * @param int $perPage Количество задач на страницу (по умолчанию 10)
+ * @return array Массив с задачами и метаданными пагинации
+ */
+function getTasksDetails(array $taskIds, int $page = 1, int $perPage = 10): array
+{
+    if (empty($taskIds)) {
+        return [
+            'tasks' => [],
+            'pagination' => [
+                'totalTasks' => 0,
+                'currentPage' => 1,
+                'perPage' => $perPage,
+                'totalPages' => 0
+            ]
+        ];
+    }
+    
+    $allTasks = [];
+    $batchSize = 50; // Bitrix24 ограничение на батч-запросы
+    
+    // Разбиваем на батчи
+    $batches = array_chunk($taskIds, $batchSize);
+    
+    foreach ($batches as $batch) {
+        $batchData = [];
+        
+        foreach ($batch as $taskId) {
+            $batchData["task_{$taskId}"] = [
+                'method' => 'tasks.task.get',
+                'params' => [
+                    'taskId' => $taskId,
+                    'select' => [
+                        'ID',
+                        'TITLE',
+                        'CREATED_DATE',
+                        'START_DATE_PLAN',
+                        'END_DATE_PLAN',
+                        'DEADLINE',
+                        'CLOSED_DATE',
+                        'STATUS',  // Загружаем, но не отображаем пока
+                        'STAGE_ID',  // Загружаем, но не отображаем пока
+                        'RESPONSIBLE_ID',
+                        'CREATED_BY',
+                        'timeSpentInLogs'
+                    ]
+                ]
+            ];
+        }
+        
+        $result = CRest::callBatch($batchData);
+        
+        if (isset($result['error'])) {
+            error_log(sprintf(
+                "[TimeTracking] Error in batch request: %s",
+                $result['error_description'] ?? $result['error']
+            ));
+            continue;
+        }
+        
+        if (isset($result['result']['result'])) {
+            foreach ($result['result']['result'] as $key => $taskData) {
+                if (isset($taskData['error'])) {
+                    $taskId = str_replace('task_', '', $key);
+                    error_log(sprintf(
+                        "[TimeTracking] Error loading task %s: %s",
+                        $taskId,
+                        $taskData['error_description'] ?? 'Unknown error'
+                    ));
+                    continue;
+                }
+                
+                // Структура ответа от tasks.task.get - данные задачи напрямую
+                // Проверяем наличие обязательных полей
+                if (!isset($taskData['id']) && !isset($taskData['ID'])) {
+                    continue;
+                }
+                
+                // Определяем дату начала (приоритет: START_DATE_PLAN, затем CREATED_DATE)
+                $startDate = $taskData['startDatePlan'] ?? $taskData['START_DATE_PLAN'] ?? 
+                             $taskData['createdDate'] ?? $taskData['CREATED_DATE'] ?? null;
+                
+                // Определяем дедлайн (приоритет: DEADLINE, затем END_DATE_PLAN)
+                $deadline = $taskData['deadline'] ?? $taskData['DEADLINE'] ?? 
+                            $taskData['endDatePlan'] ?? $taskData['END_DATE_PLAN'] ?? null;
+                
+                // Получаем трудозатрату (timeSpentInLogs в секундах, преобразуем в часы)
+                $timeSpentSeconds = (int)($taskData['timeSpentInLogs'] ?? 0);
+                $elapsedTime = $timeSpentSeconds > 0 ? round($timeSpentSeconds / 3600, 2) : 0;
+                
+                $allTasks[] = [
+                    'id' => (int)($taskData['id'] ?? $taskData['ID'] ?? 0),
+                    'title' => $taskData['title'] ?? $taskData['TITLE'] ?? 'Без названия',
+                    'startDate' => $startDate,
+                    'deadline' => $deadline,
+                    'closedDate' => $taskData['closedDate'] ?? $taskData['CLOSED_DATE'] ?? null,
+                    'status' => (int)($taskData['status'] ?? $taskData['STATUS'] ?? 0),  // Для будущего использования
+                    'stageId' => (int)($taskData['stageId'] ?? $taskData['STAGE_ID'] ?? 0),  // Для будущего использования
+                    'responsibleId' => (int)($taskData['responsibleId'] ?? $taskData['RESPONSIBLE_ID'] ?? 0),
+                    'createdBy' => (int)($taskData['createdBy'] ?? $taskData['CREATED_BY'] ?? 0),
+                    'elapsedTime' => $elapsedTime
+                ];
+            }
+        }
+    }
+    
+    // Применяем пагинацию
+    $totalTasks = count($allTasks);
+    $totalPages = $totalTasks > 0 ? (int)ceil($totalTasks / $perPage) : 0;
+    $currentPage = max(1, min($page, $totalPages)); // Ограничиваем текущую страницу
+    
+    $start = ($currentPage - 1) * $perPage;
+    $end = $start + $perPage;
+    $paginatedTasks = array_slice($allTasks, $start, $perPage);
+    
+    return [
+        'tasks' => $paginatedTasks,
+        'pagination' => [
+            'totalTasks' => $totalTasks,
+            'currentPage' => $currentPage,
+            'perPage' => $perPage,
+            'totalPages' => $totalPages
+        ]
+    ];
+}
+
 // Основная логика
 try {
     $body = parseJsonBody();
@@ -778,6 +958,7 @@ try {
     if (empty($employeeIds)) {
         error_log("[TimeTracking] No employees found in sector 1C");
         jsonResponse([
+            'success' => true,
             'meta' => [
                 'weekNumber' => (int)$currentWeekStart->format('W'),
                 'weekStartUtc' => $currentWeekStart->format('Y-m-d\TH:i:s\Z'),
@@ -809,7 +990,29 @@ try {
     
     if (empty($records)) {
         error_log("[TimeTracking] No records found, returning empty response");
+        
+        $responseData = [
+            'totalElapsedTime' => 0,
+            'totalElapsedTimeUnit' => 'hours',
+            'totalRecordsCount' => 0,
+            'weeks' => [],
+            'employeesSummary' => []
+        ];
+        
+        // Если запрошены детальные данные о задачах, добавляем пустые данные
+        $includeTaskDetails = isset($body['includeTaskDetails']) && $body['includeTaskDetails'] === true;
+        if ($includeTaskDetails) {
+            $responseData['tasks'] = [];
+            $responseData['pagination'] = [
+                'totalTasks' => 0,
+                'currentPage' => 1,
+                'perPage' => isset($body['perPage']) ? max(1, min(100, (int)$body['perPage'])) : 10,
+                'totalPages' => 0
+            ];
+        }
+        
         jsonResponse([
+            'success' => true,
             'meta' => [
                 'weekNumber' => (int)$currentWeekStart->format('W'),
                 'weekStartUtc' => $currentWeekStart->format('Y-m-d\TH:i:s\Z'),
@@ -817,13 +1020,7 @@ try {
                 'totalWeeks' => count($weeks),
                 'sector1CEmployeesCount' => count($employeeIds)
             ],
-            'data' => [
-                'totalElapsedTime' => 0,
-                'totalElapsedTimeUnit' => 'hours',
-                'totalRecordsCount' => 0,
-                'weeks' => [],
-                'employeesSummary' => []
-            ]
+            'data' => $responseData
         ]);
     }
     
@@ -871,8 +1068,76 @@ try {
         $totalRecordsCount += $week['recordsCount'];
     }
     
+    // Подготовка данных ответа
+    $responseData = [
+        'totalElapsedTime' => round($totalElapsedTime, 2),
+        'totalElapsedTimeUnit' => 'hours',
+        'totalRecordsCount' => $totalRecordsCount,
+        'weeks' => $weeksData,
+        'employeesSummary' => $employeesSummary
+    ];
+    
+    // Если запрошены детальные данные о задачах
+    $includeTaskDetails = isset($body['includeTaskDetails']) && $body['includeTaskDetails'] === true;
+    if ($includeTaskDetails) {
+        // Получаем ID задач из запроса или из данных
+        $taskIds = [];
+        
+        // Если taskIds переданы в запросе, используем их
+        if (isset($body['taskIds']) && is_array($body['taskIds']) && !empty($body['taskIds'])) {
+            $taskIds = array_map('intval', $body['taskIds']);
+            $taskIds = array_filter($taskIds, function($id) { return $id > 0; });
+            $taskIds = array_values(array_unique($taskIds));
+        } else {
+            // Иначе собираем все уникальные ID задач из записей
+            // Фильтрация по employeeId и weekNumber будет применяться на уровне данных
+            foreach ($records as $record) {
+                $recordTaskId = (int)($record['TASK_ID'] ?? $record['taskId'] ?? 0);
+                if ($recordTaskId > 0 && !in_array($recordTaskId, $taskIds, true)) {
+                    $taskIds[] = $recordTaskId;
+                }
+            }
+        }
+        
+        // Если есть задачи, загружаем детальную информацию
+        if (!empty($taskIds)) {
+            $page = isset($body['page']) ? max(1, (int)$body['page']) : 1;
+            $perPage = isset($body['perPage']) ? max(1, min(100, (int)$body['perPage'])) : 10;
+            
+            error_log(sprintf(
+                "[TimeTracking] Loading task details: taskIds=%d, page=%d, perPage=%d",
+                count($taskIds),
+                $page,
+                $perPage
+            ));
+            
+            $tasksDetails = getTasksDetails($taskIds, $page, $perPage);
+            
+            // Добавляем в ответ
+            $responseData['tasks'] = $tasksDetails['tasks'];
+            $responseData['pagination'] = $tasksDetails['pagination'];
+            
+            error_log(sprintf(
+                "[TimeTracking] Task details loaded: %d tasks, page %d/%d",
+                count($tasksDetails['tasks']),
+                $tasksDetails['pagination']['currentPage'],
+                $tasksDetails['pagination']['totalPages']
+            ));
+        } else {
+            // Если задач нет, возвращаем пустые данные
+            $responseData['tasks'] = [];
+            $responseData['pagination'] = [
+                'totalTasks' => 0,
+                'currentPage' => 1,
+                'perPage' => isset($body['perPage']) ? max(1, min(100, (int)$body['perPage'])) : 10,
+                'totalPages' => 0
+            ];
+        }
+    }
+    
     // Формирование ответа
     jsonResponse([
+        'success' => true,
         'meta' => [
             'weekNumber' => (int)$currentWeekStart->format('W'),
             'weekStartUtc' => $currentWeekStart->format('Y-m-d\TH:i:s\Z'),
@@ -880,13 +1145,7 @@ try {
             'totalWeeks' => count($weeks),
             'sector1CEmployeesCount' => count($employeeIds)
         ],
-        'data' => [
-            'totalElapsedTime' => round($totalElapsedTime, 2),
-            'totalElapsedTimeUnit' => 'hours',
-            'totalRecordsCount' => $totalRecordsCount,
-            'weeks' => $weeksData,
-            'employeesSummary' => $employeesSummary
-        ]
+        'data' => $responseData
     ]);
     
 } catch (\Exception $e) {

@@ -65,6 +65,36 @@
             Период
           </h3>
           <div class="section-content">
+            <!-- Выбор режима отображения (только для графика приёма и закрытий) -->
+            <div v-if="showPeriodMode" class="period-mode-group">
+              <label class="period-mode-label">Режим отображения:</label>
+              <select
+                :value="periodMode"
+                @change="handlePeriodModeChange($event.target.value)"
+                class="period-mode-select"
+                :class="{ 'period-mode-select--current-weeks': periodMode === 'weeks', 'period-mode-select--current-months': periodMode === 'months' }"
+              >
+                <option 
+                  value="weeks"
+                  :disabled="periodMode === 'weeks'"
+                >
+                  4 последние недели
+                </option>
+                <option 
+                  value="months"
+                  :disabled="periodMode === 'months'"
+                >
+                  3 последних месяца
+                </option>
+              </select>
+              <small v-if="periodMode === 'weeks'" class="period-mode-hint">
+                Текущий режим: 4 последние недели
+              </small>
+              <small v-else-if="periodMode === 'months'" class="period-mode-hint">
+                Текущий режим: 3 последних месяца
+              </small>
+            </div>
+            
             <select
               :value="dateRange"
               @change="handleDateRangeChange($event.target.value)"
@@ -196,6 +226,22 @@ const props = defineProps({
   weeksCount: {
     type: Number,
     default: 52
+  },
+  /**
+   * Показывать выбор режима отображения (weeks/months)
+   * Используется в модуле "График приёма и закрытий"
+   */
+  showPeriodMode: {
+    type: Boolean,
+    default: false
+  },
+  /**
+   * Выбранный режим отображения ('weeks' | 'months')
+   */
+  periodMode: {
+    type: String,
+    default: 'weeks',
+    validator: (value) => ['weeks', 'months'].includes(value)
   }
 });
 
@@ -205,6 +251,7 @@ const emit = defineEmits([
   'update:dateRange',
   'update:customDateRange',
   'update:selectedWeek',
+  'update:periodMode',
   'reset',
   'apply'
 ]);
@@ -297,6 +344,31 @@ function handleCustomDateChange(field, value) {
  */
 function handleWeekChange(week) {
   emit('update:selectedWeek', week);
+  emit('apply');
+}
+
+/**
+ * Обработка изменения режима отображения
+ */
+function handlePeriodModeChange(value) {
+  if (!['weeks', 'months'].includes(value)) {
+    console.warn('[FiltersPanel] Invalid periodMode:', value);
+    return;
+  }
+  
+  // Не обрабатываем, если выбран текущий режим (не должно происходить, так как disabled)
+  if (value === props.periodMode) {
+    return;
+  }
+  
+  // Сохранение в localStorage
+  try {
+    localStorage.setItem('graph-admission-closure-period-mode', value);
+  } catch (error) {
+    console.warn('[FiltersPanel] Failed to save periodMode to localStorage:', error);
+  }
+  
+  emit('update:periodMode', value);
   emit('apply');
 }
 
@@ -459,6 +531,75 @@ function handleReset() {
   color: var(--b24-text-secondary);
   font-size: var(--font-size-xs);
   display: block;
+}
+
+.period-mode-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-sm);
+}
+
+.period-mode-label {
+  font-size: var(--font-size-xs);
+  color: var(--b24-text-secondary);
+  font-weight: 500;
+}
+
+.period-mode-select {
+  width: 100%;
+  padding: var(--spacing-sm);
+  border: 1px solid var(--b24-border-medium);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  background-color: var(--b24-bg-white);
+  cursor: pointer;
+  transition: border-color var(--transition-base);
+}
+
+.period-mode-select:hover {
+  border-color: var(--b24-primary);
+}
+
+.period-mode-select:focus {
+  outline: 2px solid var(--b24-primary);
+  outline-offset: 2px;
+  border-color: var(--b24-primary);
+}
+
+/* Визуальное выделение текущего режима */
+.period-mode-select--current-weeks {
+  background-color: var(--b24-primary-light, #e7f3ff);
+  border-color: var(--b24-primary, #007bff);
+  border-width: 2px;
+  font-weight: 600;
+}
+
+.period-mode-select--current-months {
+  background-color: var(--b24-primary-light, #e7f3ff);
+  border-color: var(--b24-primary, #007bff);
+  border-width: 2px;
+  font-weight: 600;
+}
+
+/* Стили для disabled опций (подсветка текущего режима) */
+.period-mode-select option:disabled {
+  background-color: var(--b24-primary-light, #e7f3ff);
+  color: var(--b24-primary, #007bff);
+  font-weight: 600;
+}
+
+.period-mode-select option:not(:disabled) {
+  background-color: var(--b24-bg-white);
+  color: var(--b24-text-primary);
+}
+
+.period-mode-hint {
+  display: block;
+  margin-top: var(--spacing-xs, 4px);
+  font-size: var(--font-size-xs, 12px);
+  color: var(--b24-text-secondary, #6b7280);
+  font-style: italic;
 }
 
 /* Адаптивность */

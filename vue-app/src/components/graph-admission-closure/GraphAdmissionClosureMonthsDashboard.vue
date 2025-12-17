@@ -60,10 +60,13 @@
               :hasActiveFilters="hasActiveFilters"
               :hideStages="true"
               :weekPickerMode="false"
+              :showPeriodMode="true"
+              :period-mode="'months'"
               @update:stages="updateStages"
               @update:employees="updateEmployees"
               @update:dateRange="updateDateRange"
               @update:customDateRange="updateCustomDateRange"
+              @update:period-mode="handlePeriodModeChange"
               @reset="resetFilters"
               @apply="applyFilters"
             />
@@ -282,6 +285,31 @@ function resetFilters() {
 
 function applyFilters() {
   loadData();
+}
+
+/**
+ * Обработка изменения режима периода
+ * Эмитим событие для родительского компонента
+ */
+function handlePeriodModeChange(mode) {
+  if (!['weeks', 'months'].includes(mode)) {
+    console.warn('[GraphAdmissionClosureMonthsDashboard] Invalid periodMode:', mode);
+    return;
+  }
+  
+  // Если выбран 'weeks', нужно переключиться на недельный режим
+  if (mode === 'weeks') {
+    // Сохраняем режим в localStorage
+    try {
+      localStorage.setItem('graph-admission-closure-period-mode', mode);
+    } catch (error) {
+      console.warn('[GraphAdmissionClosureMonthsDashboard] Failed to save mode to localStorage:', error);
+    }
+    
+    // Эмитим глобальное событие для родительского компонента
+    window.dispatchEvent(new CustomEvent('period-mode-change', { detail: { mode } }));
+  }
+  // Если выбран 'months', ничего не делаем (уже в месячном режиме)
 }
 
 onMounted(() => {

@@ -100,9 +100,114 @@ export async function getTimeTrackingData(params = {}) {
 }
 
 /**
+ * @typedef {Object} TaskDetail
+ * @property {number} id - ID задачи
+ * @property {string} title - Название задачи
+ * @property {string|null} startDate - Дата начала (ISO string или null)
+ * @property {string|null} deadline - Дедлайн (ISO string или null)
+ * @property {string|null} closedDate - Дата завершения (ISO string или null)
+ * @property {number} status - Статус задачи (2-7, для будущего использования)
+ * @property {number} stageId - ID стадии (для будущего использования)
+ * @property {number} responsibleId - ID ответственного
+ * @property {number} createdBy - ID создателя
+ * @property {number} elapsedTime - Трудозатрата в часах
+ */
+
+/**
+ * @typedef {Object} TasksPagination
+ * @property {number} totalTasks - Общее количество задач
+ * @property {number} currentPage - Текущая страница
+ * @property {number} perPage - Количество задач на страницу
+ * @property {number} totalPages - Общее количество страниц
+ */
+
+/**
+ * @typedef {Object} TasksDetailsResponse
+ * @property {TaskDetail[]} tasks - Массив задач
+ * @property {TasksPagination} pagination - Метаданные пагинации
+ */
+
+/**
+ * Получение детальной информации о задачах с поддержкой пагинации
+ * 
+ * Используется метод Bitrix24 API: tasks.task.get
+ * Документация: https://context7.com/bitrix24/rest/tasks.task.get
+ * 
+ * @param {Object} params Параметры запроса
+ * @param {Array<number>} params.taskIds Массив ID задач
+ * @param {number} [params.employeeId] ID сотрудника (опционально)
+ * @param {number} [params.weekNumber] Номер недели (опционально)
+ * @param {number} [params.page=1] Номер страницы (по умолчанию 1)
+ * @param {number} [params.perPage=10] Количество задач на страницу (по умолчанию 10)
+ * @returns {Promise<TasksDetailsResponse>} Объект с массивом задач и метаданными пагинации
+ * @throws {Error} При ошибке запроса или API
+ */
+export async function getTasksDetails({ 
+  taskIds, 
+  employeeId, 
+  weekNumber, 
+  page = 1, 
+  perPage = 10 
+}) {
+  if (!taskIds || !Array.isArray(taskIds) || taskIds.length === 0) {
+    return {
+      tasks: [],
+      pagination: {
+        totalTasks: 0,
+        currentPage: 1,
+        perPage: perPage,
+        totalPages: 0
+      }
+    };
+  }
+  
+  try {
+    const response = await fetch(DEFAULT_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        product: '1C',
+        includeTaskDetails: true,
+        taskIds: taskIds,
+        employeeId: employeeId || undefined,
+        weekNumber: weekNumber || undefined,
+        page: page,
+        perPage: perPage
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const result = await response.json();
+    
+    if (!result.success) {
+      throw new Error(result.error || result.error_description || 'Ошибка получения данных о задачах');
+    }
+    
+    return {
+      tasks: result.data.tasks || [],
+      pagination: result.data.pagination || {
+        totalTasks: 0,
+        currentPage: 1,
+        perPage: perPage,
+        totalPages: 0
+      }
+    };
+  } catch (error) {
+    console.error('[timeTrackingService] Error loading tasks details:', error);
+    throw error;
+  }
+}
+
+/**
  * Экспорт сервиса
  */
 export const timeTrackingService = {
-  getTimeTrackingData
+  getTimeTrackingData,
+  getTasksDetails
 };
 

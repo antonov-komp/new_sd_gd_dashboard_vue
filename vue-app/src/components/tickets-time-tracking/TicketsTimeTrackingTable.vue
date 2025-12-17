@@ -172,12 +172,13 @@ const formatWeekDate = (weekStartUtc) => {
 // Обработчики событий
 const handleCellClick = (employeeId, weekNumber) => {
   const employee = tableData.value?.employees.find(e => e.id === employeeId);
-  const week = weeks.value.find(w => w.weekNumber === weekNumber);
+  // Получаем полную структуру недели из исходных данных (с employees и tasks)
+  const weekData = props.data?.data?.weeks?.find(w => w.weekNumber === weekNumber);
   
-  if (employee && week) {
+  if (employee && weekData) {
     emit('cell-click', {
       employee,
-      week,
+      week: weekData, // Передаём полную структуру недели с employees
       elapsedTime: getEmployeeWeekTime(employeeId, weekNumber)
     });
   }
