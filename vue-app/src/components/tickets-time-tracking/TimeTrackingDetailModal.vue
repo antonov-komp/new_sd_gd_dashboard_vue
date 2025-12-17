@@ -154,6 +154,64 @@
                         </div>
                       </div>
                       
+                      <!-- Информация о тикете -->
+                      <div v-if="task.ticket" class="task-card__ticket">
+                        <div class="ticket-header">
+                          <div class="ticket-header__left">
+                            <span class="ticket-id">Тикет #{{ task.ticket.id }}</span>
+                            <span 
+                              v-if="task.ticket.createdWeek && task.ticket.createdWeek !== cellData.week?.weekNumber"
+                              class="ticket-week-badge"
+                              :title="`Тикет создан в неделе ${task.ticket.createdWeek}, трудозатрата записана в неделе ${cellData.week?.weekNumber}`"
+                            >
+                              Создан в нед. {{ task.ticket.createdWeek }}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        <div class="ticket-title">
+                          {{ task.ticket.title || task.ticket.ufSubject || 'Без названия' }}
+                        </div>
+                        
+                        <div class="ticket-meta">
+                          <div class="ticket-meta__row">
+                            <div class="ticket-meta__item">
+                              <span class="meta-label">Сектор:</span>
+                              <span class="meta-value">{{ task.ticket.ufSlaBlockStr || 'Не указан' }}</span>
+                            </div>
+                            
+                            <div class="ticket-meta__item">
+                              <span class="meta-label">Сервис:</span>
+                              <span class="meta-value">{{ task.ticket.ufSlaServiceStr || 'Не указан' }}</span>
+                            </div>
+                          </div>
+                          
+                          <div class="ticket-meta__row">
+                            <div class="ticket-meta__item">
+                              <span class="meta-label">Действие:</span>
+                              <span class="meta-value">{{ task.ticket.ufActionStr || 'Не указано' }}</span>
+                            </div>
+                            
+                            <div class="ticket-meta__item">
+                              <span class="meta-label">Приоритет:</span>
+                              <span class="meta-value">{{ task.ticket.ufCrm7UfPriority || 'Не указан' }}</span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div class="ticket-dates">
+                          <div class="ticket-date-item">
+                            <span class="date-icon">📅</span>
+                            <span class="date-label">Создан:</span>
+                            <span class="date-value">{{ formatDate(task.ticket.createdTime) }}</span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div v-else class="task-card__no-ticket">
+                        <span class="no-ticket-label">Тикет не связан</span>
+                      </div>
+                      
                       <!-- Статус будет добавлен позже -->
                       <div class="task-card__status-placeholder">
                         <!-- Статус задачи будет отображаться здесь в следующих этапах -->
@@ -305,6 +363,10 @@ const ticketsCount = computed(() => {
   if (!props.cellData?.week?.employees) return 0;
   const employee = props.cellData.week.employees.find(e => e.id === props.cellData.employee?.id);
   return employee?.ticketsCount || 0;
+});
+
+const currentWeek = computed(() => {
+  return props.cellData?.week?.weekNumber || null;
 });
 
 // Метаданные пагинации с бэкенда
@@ -1020,6 +1082,98 @@ watch(() => props.cellData, (newValue) => {
   color: #9ca3af;
   font-style: italic;
   min-height: 20px;
+}
+
+/* Блок тикета */
+.task-card__ticket {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.ticket-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.ticket-header__left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ticket-id {
+  font-weight: bold;
+  color: #3b82f6;
+  font-size: 14px;
+}
+
+.ticket-week-badge {
+  padding: 2px 8px;
+  background-color: #fef3c7;
+  color: #92400e;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.ticket-title {
+  font-size: 14px;
+  color: #1f2937;
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+
+.ticket-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.ticket-meta__row {
+  display: flex;
+  gap: 16px;
+}
+
+.ticket-meta__item {
+  display: flex;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.meta-label {
+  color: #6b7280;
+}
+
+.meta-value {
+  color: #1f2937;
+  font-weight: 500;
+}
+
+.ticket-dates {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ticket-date-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.task-card__no-ticket {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+  color: #9ca3af;
+  font-style: italic;
+  font-size: 12px;
 }
 
 /* Пагинация */

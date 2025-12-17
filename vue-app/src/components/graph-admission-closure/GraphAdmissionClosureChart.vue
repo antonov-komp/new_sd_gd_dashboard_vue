@@ -112,6 +112,7 @@
 <script setup>
 import { computed, ref } from 'vue';
 import { Line, Bar, Doughnut } from 'vue-chartjs';
+import { Chart as ChartJS } from 'chart.js';
 import { chartColors } from '@/utils/chart-config.js';
 
 const props = defineProps({
@@ -168,6 +169,43 @@ const getWeekLabels = () => {
     : [props.meta?.weekNumber ? `Неделя ${props.meta.weekNumber}` : 'Неделя'];
 };
 
+// TASK-056-01: Функция для создания градиента под линией графика
+/**
+ * Создаёт градиент для заливки под линией графика
+ * 
+ * @param {CanvasRenderingContext2D} ctx - Контекст canvas
+ * @param {Object} chartArea - Область графика {top, bottom, left, right}
+ * @param {string} color - Цвет линии в формате hex (#007bff)
+ * @param {number} opacityStart - Начальная прозрачность (0-1), по умолчанию 0.3
+ * @param {number} opacityEnd - Конечная прозрачность (0-1), по умолчанию 0
+ * @returns {CanvasGradient|string} Градиент для использования в backgroundColor или fallback цвет
+ */
+function createGradient(ctx, chartArea, color, opacityStart = 0.3, opacityEnd = 0) {
+  if (!chartArea) {
+    // Fallback: конвертируем hex в rgba с прозрачностью
+    const hexToRgba = (hex, alpha) => {
+      const r = parseInt(hex.slice(1, 3), 16);
+      const g = parseInt(hex.slice(3, 5), 16);
+      const b = parseInt(hex.slice(5, 7), 16);
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    };
+    return hexToRgba(color, opacityStart);
+  }
+  
+  const hexToRgba = (hex, alpha) => {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  };
+  
+  const gradient = ctx.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
+  gradient.addColorStop(0, hexToRgba(color, opacityStart)); // Внизу: opacity 0.3
+  gradient.addColorStop(1, hexToRgba(color, opacityEnd)); // Вверху: прозрачный
+  
+  return gradient;
+}
+
 // TASK-052: Данные для левого графика (Новые и Закрытые)
 const newClosedChartData = computed(() => {
   const labels = getWeekLabels();
@@ -192,38 +230,74 @@ const newClosedChartData = computed(() => {
     labels,
     datasets: [
       {
+        // TASK-056-01: Основная линия - Новые
         label: 'Новые',
         data: newSeries,
-        backgroundColor: chartColors.primary,
+        backgroundColor: (context) => {
+          const chart = context.chart;
+          const {ctx, chartArea} = chart;
+          return createGradient(ctx, chartArea, chartColors.primary);
+        },
         borderColor: chartColors.primary,
-        tension: 0.3,
-        fill: false
+        borderWidth: 3, // TASK-056-01: Увеличена толщина для основных линий
+        tension: 0.4, // TASK-056-01: Увеличено скругление
+        fill: true, // TASK-056-01: Включена заливка для градиента
+        pointRadius: 0, // TASK-056-01: Скрыты точки по умолчанию
+        pointHoverRadius: 5, // TASK-056-01: Показывать точки при hover
+        pointHoverBorderWidth: 2, // TASK-056-01: Обводка точек
+        pointHoverBorderColor: '#ffffff', // TASK-056-01: Белая обводка
+        pointBackgroundColor: chartColors.primary
       },
       {
+        // TASK-056-01: Основная линия - Закрытые (все)
         label: 'Закрытые (все)',
         data: closedSeries,
-        backgroundColor: chartColors.success,
+        backgroundColor: (context) => {
+          const chart = context.chart;
+          const {ctx, chartArea} = chart;
+          return createGradient(ctx, chartArea, chartColors.success);
+        },
         borderColor: chartColors.success,
-        tension: 0.3,
-        fill: false
+        borderWidth: 3, // TASK-056-01: Увеличена толщина для основных линий
+        tension: 0.4, // TASK-056-01: Увеличено скругление
+        fill: true, // TASK-056-01: Включена заливка для градиента
+        pointRadius: 0, // TASK-056-01: Скрыты точки по умолчанию
+        pointHoverRadius: 5, // TASK-056-01: Показывать точки при hover
+        pointHoverBorderWidth: 2, // TASK-056-01: Обводка точек
+        pointHoverBorderColor: '#ffffff', // TASK-056-01: Белая обводка
+        pointBackgroundColor: chartColors.success
       },
       {
+        // TASK-056-01: Вспомогательная линия - Закрытые (созданы этой неделей)
         label: 'Закрытые (созданы этой неделей)',
         data: closedCreatedThisWeekSeries,
         backgroundColor: chartColors.successLight,
         borderColor: chartColors.successLight,
-        tension: 0.3,
-        fill: false,
-        borderDash: [5, 5] // Пунктирная линия
+        borderWidth: 2, // TASK-056-01: Уменьшена толщина для вспомогательных линий
+        tension: 0.4, // TASK-056-01: Увеличено скругление
+        borderDash: [8, 4], // TASK-056-01: Обновлён стиль пунктира
+        fill: false, // TASK-056-01: Без градиента для вспомогательных линий
+        pointRadius: 0, // TASK-056-01: Скрыты точки по умолчанию
+        pointHoverRadius: 4, // TASK-056-01: Показывать точки при hover (меньший радиус)
+        pointHoverBorderWidth: 2, // TASK-056-01: Обводка точек
+        pointHoverBorderColor: '#ffffff', // TASK-056-01: Белая обводка
+        pointBackgroundColor: chartColors.successLight
       },
       {
+        // TASK-056-01: Вспомогательная линия - Закрытые (созданы другой неделей)
         label: 'Закрытые (созданы другой неделей)',
         data: closedCreatedOtherWeekSeries,
         backgroundColor: chartColors.warning,
         borderColor: chartColors.warning,
-        tension: 0.3,
-        fill: false,
-        borderDash: [5, 5] // Пунктирная линия
+        borderWidth: 2, // TASK-056-01: Уменьшена толщина для вспомогательных линий
+        tension: 0.4, // TASK-056-01: Увеличено скругление
+        borderDash: [8, 4], // TASK-056-01: Обновлён стиль пунктира
+        fill: false, // TASK-056-01: Без градиента для вспомогательных линий
+        pointRadius: 0, // TASK-056-01: Скрыты точки по умолчанию
+        pointHoverRadius: 4, // TASK-056-01: Показывать точки при hover (меньший радиус)
+        pointHoverBorderWidth: 2, // TASK-056-01: Обводка точек
+        pointHoverBorderColor: '#ffffff', // TASK-056-01: Белая обводка
+        pointBackgroundColor: chartColors.warning
       }
     ]
   };
@@ -249,30 +323,55 @@ const carryoverChartData = computed(() => {
     labels,
     datasets: [
       {
+        // TASK-056-01: Основная линия - Переходящие (все)
         label: 'Переходящие (все)',
         data: carryoverSeries,
-        backgroundColor: chartColors.carryover,
+        backgroundColor: (context) => {
+          const chart = context.chart;
+          const {ctx, chartArea} = chart;
+          return createGradient(ctx, chartArea, chartColors.carryover);
+        },
         borderColor: chartColors.carryover,
-        tension: 0.3,
-        fill: false
+        borderWidth: 3, // TASK-056-01: Увеличена толщина для основных линий
+        tension: 0.4, // TASK-056-01: Увеличено скругление
+        fill: true, // TASK-056-01: Включена заливка для градиента
+        pointRadius: 0, // TASK-056-01: Скрыты точки по умолчанию
+        pointHoverRadius: 5, // TASK-056-01: Показывать точки при hover
+        pointHoverBorderWidth: 2, // TASK-056-01: Обводка точек
+        pointHoverBorderColor: '#ffffff', // TASK-056-01: Белая обводка
+        pointBackgroundColor: chartColors.carryover
       },
       {
+        // TASK-056-01: Вспомогательная линия - Переходящие (созданы этой неделей)
         label: 'Переходящие (созданы этой неделей)',
         data: carryoverCreatedThisWeekSeries,
         backgroundColor: chartColors.carryoverLight,
         borderColor: chartColors.carryoverLight,
-        tension: 0.3,
-        fill: false,
-        borderDash: [5, 5] // Пунктирная линия
+        borderWidth: 2, // TASK-056-01: Уменьшена толщина для вспомогательных линий
+        tension: 0.4, // TASK-056-01: Увеличено скругление
+        borderDash: [8, 4], // TASK-056-01: Обновлён стиль пунктира
+        fill: false, // TASK-056-01: Без градиента для вспомогательных линий
+        pointRadius: 0, // TASK-056-01: Скрыты точки по умолчанию
+        pointHoverRadius: 4, // TASK-056-01: Показывать точки при hover (меньший радиус)
+        pointHoverBorderWidth: 2, // TASK-056-01: Обводка точек
+        pointHoverBorderColor: '#ffffff', // TASK-056-01: Белая обводка
+        pointBackgroundColor: chartColors.carryoverLight
       },
       {
+        // TASK-056-01: Вспомогательная линия - Переходящие (созданы другой неделей)
         label: 'Переходящие (созданы другой неделей)',
         data: carryoverCreatedOtherWeekSeries,
         backgroundColor: chartColors.carryoverDark,
         borderColor: chartColors.carryoverDark,
-        tension: 0.3,
-        fill: false,
-        borderDash: [5, 5] // Пунктирная линия
+        borderWidth: 2, // TASK-056-01: Уменьшена толщина для вспомогательных линий
+        tension: 0.4, // TASK-056-01: Увеличено скругление
+        borderDash: [8, 4], // TASK-056-01: Обновлён стиль пунктира
+        fill: false, // TASK-056-01: Без градиента для вспомогательных линий
+        pointRadius: 0, // TASK-056-01: Скрыты точки по умолчанию
+        pointHoverRadius: 4, // TASK-056-01: Показывать точки при hover (меньший радиус)
+        pointHoverBorderWidth: 2, // TASK-056-01: Обводка точек
+        pointHoverBorderColor: '#ffffff', // TASK-056-01: Белая обводка
+        pointBackgroundColor: chartColors.carryoverDark
       }
     ]
   };
@@ -427,13 +526,78 @@ const formatDate = (dateStr) => {
   }
 };
 
+// TASK-056-02: Форматирование числа с разделителем тысяч
+/**
+ * Форматирует число с разделителем тысяч (пробел)
+ * Переиспользована логика из LineChartMonths.vue (TASK-053-05)
+ * 
+ * @param {number} value - Число для форматирования
+ * @returns {string} Отформатированное число
+ */
+function formatNumber(value) {
+  if (value === null || value === undefined || isNaN(value)) {
+    return '0';
+  }
+  
+  if (value >= 1000) {
+    return value.toLocaleString('ru-RU'); // Использует разделитель тысяч
+  }
+  
+  return value.toString();
+}
+
+// TASK-056-02: Склонение единиц измерения
+/**
+ * Возвращает правильную форму слова "тикет" в зависимости от числа
+ * 
+ * @param {number} count - Количество тикетов
+ * @returns {string} "тикет", "тикета" или "тикетов"
+ */
+function getUnitLabel(count) {
+  const lastDigit = count % 10;
+  const lastTwoDigits = count % 100;
+  
+  if (lastTwoDigits >= 11 && lastTwoDigits <= 14) {
+    return 'тикетов';
+  }
+  
+  if (lastDigit === 1) {
+    return 'тикет';
+  }
+  
+  if (lastDigit >= 2 && lastDigit <= 4) {
+    return 'тикета';
+  }
+  
+  return 'тикетов';
+}
+
 const chartOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
   resizeDelay: 0, /* Минимальная задержка для предотвращения бесконечной прокрутки */
+  // TASK-056-06: Настройки анимации загрузки графика
+  animation: {
+    duration: 800, // TASK-056-06: Длительность анимации в миллисекундах
+    easing: 'easeOutQuart' // TASK-056-06: Тип easing (ease-out для плавного завершения)
+    // Альтернативные значения: 'linear', 'easeInOutQuad', 'easeInOutCubic'
+  },
+  // TASK-056-06: Настройки взаимодействия (важно для hover-эффектов)
+  interaction: {
+    intersect: false, // TASK-056-06: Показывать tooltip при приближении к точке
+    mode: 'index' // TASK-056-06: Показывать все серии для текущего индекса
+  },
   plugins: {
     tooltip: {
+      // TASK-056-02: Улучшенные стили tooltip
       enabled: true,
+      backgroundColor: 'rgba(255, 255, 255, 0.98)',
+      titleColor: '#111827',
+      bodyColor: '#374151',
+      borderColor: '#e5e7eb',
+      borderWidth: 1,
+      cornerRadius: 8,
+      padding: 16, // TASK-056-02: Увеличен padding
       titleFont: {
         size: 14,
         weight: 'bold'
@@ -441,41 +605,143 @@ const chartOptions = computed(() => ({
       bodyFont: {
         size: 13
       },
-      padding: 12,
+      displayColors: true, // TASK-056-02: Показывать цветные индикаторы
+      boxPadding: 6,
+      usePointStyle: true,
+      animation: {
+        duration: 300, // TASK-056-06: Плавная анимация появления tooltip
+        easing: 'easeOutQuart' // TASK-056-06: Тип easing для плавности
+      },
+      // TASK-056-06: Задержка появления tooltip (через CSS, так как Chart.js не поддерживает напрямую)
       callbacks: {
         title: (items) => {
-          // TASK-048: Показываем информацию о неделе в tooltip
+          // TASK-048, TASK-056-02: Показываем информацию о неделе в tooltip
+          if (!items || items.length === 0) {
+            return '';
+          }
+          
           const index = items[0]?.dataIndex;
           const weeks = props.meta?.weeks || [];
+          
+          // Режим "4 недели" - используем weeks
           if (weeks.length > 0 && index !== undefined && weeks[index]) {
             const week = weeks[index];
             return `Неделя ${week.weekNumber} (${formatDate(week.weekStartUtc)} — ${formatDate(week.weekEndUtc)})`;
           }
-          // Fallback для обратной совместимости
+          
+          // Fallback для обратной совместимости (режим одной недели)
           const weekNumber = props.meta?.weekNumber;
           const weekStartUtc = props.meta?.weekStartUtc;
           const weekEndUtc = props.meta?.weekEndUtc;
           if (weekNumber && weekStartUtc && weekEndUtc) {
             return `Неделя ${weekNumber} (${formatDate(weekStartUtc)} — ${formatDate(weekEndUtc)})`;
           }
+          
+          // Последний fallback
           return items[0]?.label || '';
+        },
+        label: (context) => {
+          // TASK-056-02: Улучшенное форматирование значений с единицами измерения
+          const value = context.parsed.y;
+          const label = context.dataset.label || '';
+          
+          // Обработка null/undefined/NaN
+          if (value === null || value === undefined || isNaN(value)) {
+            return `${label}: 0 тикетов`;
+          }
+          
+          const formattedValue = formatNumber(value);
+          const unit = getUnitLabel(value);
+          
+          return `${label}: ${formattedValue} ${unit}`;
         }
       }
     },
     legend: {
-      position: 'top',
+      // TASK-056-03: Оптимизация легенды
+      position: 'bottom', // TASK-056-03: Перемещена вниз
       labels: {
         font: {
-          size: 15, /* Уменьшено на ~6% от 16px */
+          size: 13, // TASK-056-03: Уменьшен размер шрифта
           weight: '500'
         },
-        padding: 16, /* Уменьшено на 20% от 20px */
-        boxWidth: 20, /* Уменьшено на ~17% от 24px */
-        boxHeight: 12
+        padding: 12, // TASK-056-03: Уменьшен padding
+        boxWidth: 18, // TASK-056-03: Уменьшен boxWidth
+        boxHeight: 12,
+        usePointStyle: true, // TASK-056-03: Использовать круглые точки
+        pointStyle: 'circle', // TASK-056-03: Стиль точки
+        generateLabels: (chart) => {
+          // TASK-056-03: Кастомная генерация labels для группировки серий
+          const original = ChartJS.defaults.plugins.legend.labels.generateLabels(chart);
+          return original.map((label, index) => {
+            const dataset = chart.data.datasets[index];
+            const meta = chart.getDatasetMeta(index);
+            
+            // TASK-056-03: Определить, является ли серия вспомогательной
+            // Критерии: пунктирная линия, толщина 2px, или отсутствие заливки
+            const isAuxiliary = (dataset.borderDash && Array.isArray(dataset.borderDash) && dataset.borderDash.length > 0) ||
+                               (dataset.borderWidth === 2) ||
+                               (dataset.fill === false);
+            
+            // TASK-056-03: Визуальная индикация скрытых серий
+            if (meta.hidden) {
+              label.fontColor = '#9ca3af'; // Серый для скрытых
+              label.textDecoration = 'line-through'; // Зачёркнутый текст
+              label.opacity = 0.5; // Уменьшенная прозрачность
+            } else if (isAuxiliary) {
+              // TASK-056-03: Вспомогательные серии - светло-серый цвет
+              label.fontColor = '#6b7280';
+            } else {
+              // TASK-056-03: Основные серии - тёмно-серый цвет
+              label.fontColor = '#111827';
+            }
+            
+            return label;
+          });
+        }
+      },
+      onClick: (e, legendItem) => {
+        // TASK-056-03: Toggle видимости серии при клике
+        const index = legendItem.datasetIndex;
+        if (index === undefined || index === null) {
+          console.warn('[Legend] Invalid datasetIndex:', index);
+          return;
+        }
+        
+        const chart = e.chart;
+        if (!chart) {
+          console.warn('[Legend] Chart not found');
+          return;
+        }
+        
+        const meta = chart.getDatasetMeta(index);
+        if (!meta) {
+          console.warn('[Legend] Dataset meta not found for index:', index);
+          return;
+        }
+        
+        // TASK-056-03: Toggle видимости серии
+        meta.hidden = !meta.hidden;
+        
+        // TASK-056-03: Обновить график с анимацией
+        chart.update('active'); // 'active' для плавной анимации
+      },
+      onHover: (e, legendItem) => {
+        // TASK-056-03: Hover-эффект - изменить курсор
+        if (e.native && e.native.target) {
+          e.native.target.style.cursor = 'pointer';
+        }
+      },
+      onLeave: (e, legendItem) => {
+        // TASK-056-03: Сброс курсора при уходе
+        if (e.native && e.native.target) {
+          e.native.target.style.cursor = 'default';
+        }
       }
     }
   },
   // TASK-048: Убран onClick обработчик - клики на точки графика не открывают попапы
+  // TASK-056-04: Улучшение сетки и осей
   scales: chartType.value === 'doughnut'
     ? {}
     : {
@@ -484,31 +750,85 @@ const chartOptions = computed(() => ({
           ticks: {
             precision: 0,
             font: {
-              size: 14 /* Уменьшено на ~7% от 15px */
+              size: 14 // TASK-056-04: Размер шрифта
             },
-            padding: 10
+            padding: 10, // TASK-056-04: Padding
+            color: '#374151', // TASK-056-04: Цвет текста
+            callback: (value) => {
+              // TASK-056-04: Форматирование с разделителем тысяч
+              // Обработка edge cases
+              if (value === null || value === undefined || isNaN(value)) {
+                return '0';
+              }
+              
+              // Использовать функцию formatNumber из TASK-056-02
+              return formatNumber(value);
+            }
           },
           title: {
             display: false
           },
           grid: {
-            lineWidth: 1.5 /* Более заметные линии сетки */
+            // TASK-056-04: Тонкие линии сетки с выделением основных делений
+            color: (context) => {
+              // Обработка edge cases
+              if (!context || !context.tick || context.tick.value === undefined) {
+                return '#e5e7eb'; // Fallback
+              }
+              
+              const value = context.tick.value;
+              
+              // Проверка на NaN или Infinity
+              if (isNaN(value) || !isFinite(value)) {
+                return '#e5e7eb';
+              }
+              
+              // TASK-056-04: Более тёмные линии для основных делений (каждые 5 единиц)
+              // Также выделяем 0
+              if (value === 0 || value % 5 === 0) {
+                return '#d1d5db'; // Чуть темнее для основных делений
+              }
+              
+              return '#e5e7eb'; // Обычный цвет для обычных линий
+            },
+            lineWidth: (context) => {
+              // Обработка edge cases
+              if (!context || !context.tick || context.tick.value === undefined) {
+                return 1; // Fallback
+              }
+              
+              const value = context.tick.value;
+              
+              if (isNaN(value) || !isFinite(value)) {
+                return 1;
+              }
+              
+              // TASK-056-04: Чуть толще для основных делений и 0
+              if (value === 0 || value % 5 === 0) {
+                return 1.5; // Толще для основных делений
+              }
+              
+              return 1; // Обычная толщина
+            }
           }
         },
         x: {
           ticks: {
-            maxRotation: 45,
+            maxRotation: 45, // TASK-056-04: Угол поворота
             minRotation: 45,
             font: {
-              size: 14 /* Уменьшено на ~7% от 15px */
+              size: 14 // TASK-056-04: Размер шрифта
             },
-            padding: 10
+            padding: 10, // TASK-056-04: Padding
+            color: '#374151' // TASK-056-04: Цвет текста
           },
           title: {
             display: false
           },
           grid: {
-            lineWidth: 1.5 /* Более заметные линии сетки */
+            // TASK-056-04: Тонкие линии сетки
+            color: '#e5e7eb', // Светло-серый цвет
+            lineWidth: 1 // Тонкие линии
           }
         }
       }
@@ -757,13 +1077,6 @@ const handleSummaryClick = (type) => {
   height: 100%;
 }
 
-.chart-wrapper--left {
-  /* Левый график */
-}
-
-.chart-wrapper--right {
-  /* Правый график */
-}
 
 .chart-subtitle {
   margin: 0 0 var(--spacing-lg, 16px) 0;
@@ -891,6 +1204,57 @@ const handleSummaryClick = (type) => {
   
   .summary-card__value-main {
     font-size: 20px;
+  }
+}
+</style>
+
+<!-- TASK-056-02: Глобальные стили для tooltip Chart.js -->
+<!-- TASK-056-03: Глобальные стили для легенды Chart.js -->
+<!-- TASK-056-06: Глобальные стили для анимаций Chart.js -->
+<style>
+/* Chart.js создаёт tooltip динамически, поэтому нужны глобальные стили */
+.chartjs-tooltip {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  /* TASK-056-06: Плавное появление tooltip с задержкой */
+  transition: opacity 0.3s ease-out 0.2s !important; /* Задержка 200ms, длительность 300ms */
+  opacity: 0;
+  animation: tooltipFadeIn 0.3s ease-out 0.2s forwards; /* Задержка 200ms */
+}
+
+@keyframes tooltipFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* TASK-056-03: Стили для элементов легенды Chart.js */
+.chartjs-legend-item {
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.chartjs-legend-item:hover {
+  opacity: 0.7;
+}
+
+/* TASK-056-06: Оптимизация производительности для анимаций */
+.chart-canvas-wrapper canvas {
+  will-change: transform;
+  transition: opacity 0.3s ease-out;
+}
+
+/* TASK-056-03: Адаптивность легенды на мобильных */
+@media (max-width: 768px) {
+  .chartjs-legend {
+    max-width: 100%;
+  }
+  
+  .chartjs-legend-item {
+    font-size: 11px !important;
+    padding: 8px !important;
   }
 }
 </style>

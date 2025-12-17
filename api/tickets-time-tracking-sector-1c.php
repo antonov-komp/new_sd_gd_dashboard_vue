@@ -481,7 +481,13 @@ function matchTasksWithTickets(array $tasks): array
                 'id',
                 'title',
                 'createdTime',
-                'UF_CRM_7_TYPE_PRODUCT'
+                'UF_CRM_7_TYPE_PRODUCT',
+                'stageId',
+                'ufSubject',
+                'ufSlaBlockStr',
+                'ufSlaServiceStr',
+                'ufActionStr',
+                'ufCrm7UfPriority'
             ]
         ]);
         
@@ -793,7 +799,7 @@ function createEmployeesSummary(array $weeksData): array
 }
 
 /**
- * Получение детальной информации о задачах с поддержкой пагинации
+ * Получение детальной информации о задачах с информацией о тикетах
  * 
  * Используется метод Bitrix24 API: tasks.task.get
  * Документация: https://context7.com/bitrix24/rest/tasks.task.get
@@ -801,9 +807,11 @@ function createEmployeesSummary(array $weeksData): array
  * @param array $taskIds Массив ID задач
  * @param int $page Номер страницы (по умолчанию 1)
  * @param int $perPage Количество задач на страницу (по умолчанию 10)
- * @return array Массив с задачами и метаданными пагинации
+ * @param array|null $weeks Массив недель (для расчёта недели создания тикета)
+ * @param array|null $taskTicketMap Массив связи задач с тикетами (если уже получен)
+ * @return array Массив с задачами, тикетами и метаданными пагинации
  */
-function getTasksDetails(array $taskIds, int $page = 1, int $perPage = 10): array
+function getTasksDetails(array $taskIds, int $page = 1, int $perPage = 10, ?array $weeks = null, ?array $taskTicketMap = null): array
 {
     if (empty($taskIds)) {
         return [
@@ -843,7 +851,8 @@ function getTasksDetails(array $taskIds, int $page = 1, int $perPage = 10): arra
                         'STAGE_ID',  // Загружаем, но не отображаем пока
                         'RESPONSIBLE_ID',
                         'CREATED_BY',
-                        'timeSpentInLogs'
+                        'timeSpentInLogs',
+                        'UF_CRM_TASK'  // Поле для связи с тикетами
                     ]
                 ]
             ];
@@ -889,8 +898,10 @@ function getTasksDetails(array $taskIds, int $page = 1, int $perPage = 10): arra
                 $timeSpentSeconds = (int)($taskData['timeSpentInLogs'] ?? 0);
                 $elapsedTime = $timeSpentSeconds > 0 ? round($timeSpentSeconds / 3600, 2) : 0;
                 
+                $taskId = (int)($taskData['id'] ?? $taskData['ID'] ?? 0);
+                
                 $allTasks[] = [
-                    'id' => (int)($taskData['id'] ?? $taskData['ID'] ?? 0),
+                    'id' => $taskId,
                     'title' => $taskData['title'] ?? $taskData['TITLE'] ?? 'Без названия',
                     'startDate' => $startDate,
                     'deadline' => $deadline,
@@ -899,11 +910,63 @@ function getTasksDetails(array $taskIds, int $page = 1, int $perPage = 10): arra
                     'stageId' => (int)($taskData['stageId'] ?? $taskData['STAGE_ID'] ?? 0),  // Для будущего использования
                     'responsibleId' => (int)($taskData['responsibleId'] ?? $taskData['RESPONSIBLE_ID'] ?? 0),
                     'createdBy' => (int)($taskData['createdBy'] ?? $taskData['CREATED_BY'] ?? 0),
-                    'elapsedTime' => $elapsedTime
+                    'elapsedTime' => $elapsedTime,
+                    '_rawTask' => $taskData  // Сохраняем сырые данные для матчинга с тикетами
                 ];
             }
         }
     }
+    
+    // Связь задач с тикетами
+    if ($taskTicketMap === null) {
+        // Если маппинг не передан, создаём его из сырых данных задач
+        $tasksForMatching = [];
+        foreach ($allTasks as $task) {
+            if (isset($task['_rawTask'])) {
+                $tasksForMatching[$task['id']] = $task['_rawTask'];
+            }
+        }
+        if (!empty($tasksForMatching)) {
+            $taskTicketMap = matchTasksWithTickets($tasksForMatching);
+        } else {
+            $taskTicketMap = [];
+        }
+    }
+    
+    // Добавить информацию о тикетах к задачам
+    foreach ($allTasks as &$task) {
+        $taskId = $task['id'];
+        
+        if (isset($taskTicketMap[$taskId]['ticket'])) {
+            $ticket = $taskTicketMap[$taskId]['ticket'];
+            
+            // Рассчитать неделю создания тикета
+            $ticketCreatedWeek = null;
+            if ($weeks && isset($ticket['createdTime'])) {
+                $ticketCreatedWeek = getWeekNumberByDate($ticket['createdTime'], $weeks);
+            }
+            
+            $task['ticket'] = [
+                'id' => (int)($ticket['id'] ?? 0),
+                'title' => $ticket['title'] ?? null,
+                'createdTime' => $ticket['createdTime'] ?? null,
+                'createdWeek' => $ticketCreatedWeek,
+                'stageId' => $ticket['stageId'] ?? null,
+                'ufSubject' => $ticket['ufSubject'] ?? null,
+                'ufCrm7TypeProduct' => $ticket['UF_CRM_7_TYPE_PRODUCT'] ?? $ticket['ufCrm7TypeProduct'] ?? null,
+                'ufSlaBlockStr' => $ticket['ufSlaBlockStr'] ?? null,
+                'ufSlaServiceStr' => $ticket['ufSlaServiceStr'] ?? null,
+                'ufActionStr' => $ticket['ufActionStr'] ?? null,
+                'ufCrm7UfPriority' => $ticket['ufCrm7UfPriority'] ?? null
+            ];
+        } else {
+            $task['ticket'] = null;
+        }
+        
+        // Удаляем временное поле _rawTask
+        unset($task['_rawTask']);
+    }
+    unset($task);
     
     // Применяем пагинацию
     $totalTasks = count($allTasks);
@@ -1111,7 +1174,7 @@ try {
                 $perPage
             ));
             
-            $tasksDetails = getTasksDetails($taskIds, $page, $perPage);
+            $tasksDetails = getTasksDetails($taskIds, $page, $perPage, $weeks, $taskTicketMap);
             
             // Добавляем в ответ
             $responseData['tasks'] = $tasksDetails['tasks'];
