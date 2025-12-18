@@ -25,9 +25,7 @@
             </div>
           </div>
           <div class="summary-analysis">
-            <p v-for="(analysis, index) in summaryAnalysis" :key="index">
-              {{ analysis }}
-            </p>
+            <p v-for="(analysis, index) in summaryAnalysis" :key="index" v-html="analysis"></p>
           </div>
         </div>
       </div>
@@ -47,11 +45,9 @@
         <!-- TASK-058-07: Анализ справа от графика -->
         <div class="chart-analysis">
           <h4 class="analysis-title">Анализ</h4>
-          <div class="analysis-content">
-            <p v-for="(analysis, index) in carryoverAnalysis" :key="index">
-              {{ analysis }}
-            </p>
-          </div>
+        <div class="analysis-content">
+          <p v-for="(analysis, index) in carryoverAnalysis" :key="index" v-html="analysis"></p>
+        </div>
         </div>
       </div>
     </div>
@@ -473,6 +469,7 @@ const summaryNumbers = computed(() => {
 /**
  * Словесный анализ динамики
  * TASK-058-04: Computed-свойство для словесного анализа
+ * TASK-058-08: Улучшена читаемость - добавлены конкретные значения и месяцы
  */
 const summaryAnalysis = computed(() => {
   const months = props.data?.newTicketsByMonth || [];
@@ -483,6 +480,8 @@ const summaryAnalysis = computed(() => {
   }
   
   const analysis = [];
+  const newTicketsChanges = [];
+  const closedTicketsChanges = [];
   
   // Анализ новых тикетов
   if (months.length >= 2) {
@@ -492,36 +491,59 @@ const summaryAnalysis = computed(() => {
     
     // Изменение между первым и вторым месяцем
     if (month2 && month1 && typeof month1.count === 'number' && typeof month2.count === 'number') {
+      const month1Name = month1.monthName || month1.month;
+      const month2Name = month2.monthName || month2.month;
+      const month1Value = formatNumber(month1.count || 0);
+      const month2Value = formatNumber(month2.count || 0);
+      
       if (month1.count > 0) {
         const change1 = ((month2.count - month1.count) / month1.count) * 100;
         if (isFinite(change1) && !isNaN(change1)) {
-          const trend = change1 >= 0 ? 'рост' : 'снижение';
+          const trend = change1 >= 0 ? 'Рост' : 'Снижение';
           const absChange = Math.abs(change1);
-          analysis.push(
-            `Новые тикеты: ${trend} на ${absChange.toFixed(1)}% в ${month2.monthName || month2.month}`
+          const sign = change1 >= 0 ? '+' : '-';
+          const trendColor = change1 >= 0 ? '#28a745' : '#dc3545';
+          const percentageColor = change1 >= 0 ? '#28a745' : '#dc3545';
+          newTicketsChanges.push(
+            `  • <span style="color: ${trendColor}; font-weight: 600;">${trend}</span> с ${month1Value} (${month1Name}) до ${month2Value} (${month2Name}) — <span style="color: ${percentageColor}; font-weight: 600;">${sign}${absChange.toFixed(1)}%</span>`
           );
         }
       } else if (month1.count === 0 && month2.count > 0) {
-        analysis.push(
-          `Новые тикеты: появление тикетов (${month2.count}) в ${month2.monthName || month2.month}`
+        newTicketsChanges.push(
+          `  • Появление тикетов: с 0 (${month1Name}) до ${month2Value} (${month2Name})`
         );
       }
     }
     
     // Изменение между вторым и третьим месяцем
     if (month3 && month2 && typeof month2.count === 'number' && typeof month3.count === 'number') {
+      const month2Name = month2.monthName || month2.month;
+      const month3Name = month3.monthName || month3.month;
+      const month2Value = formatNumber(month2.count || 0);
+      const month3Value = formatNumber(month3.count || 0);
+      
       if (month2.count > 0) {
         const change2 = ((month3.count - month2.count) / month2.count) * 100;
         if (isFinite(change2) && !isNaN(change2)) {
-          const trend = change2 >= 0 ? 'рост' : 'снижение';
-          const absChange = Math.abs(change2);
-          analysis.push(
-            `Новые тикеты: ${trend} на ${absChange.toFixed(1)}% в ${month3.monthName || month3.month}`
-          );
+          if (Math.abs(change2) < 0.1) {
+            // Без изменений
+            newTicketsChanges.push(
+              `  • Без изменений: ${month2Value} (${month2Name}) → ${month3Value} (${month3Name}) — 0.0%`
+            );
+          } else {
+            const trend = change2 >= 0 ? 'Рост' : 'Снижение';
+            const absChange = Math.abs(change2);
+            const sign = change2 >= 0 ? '+' : '-';
+            const trendColor = change2 >= 0 ? '#28a745' : '#dc3545';
+            const percentageColor = change2 >= 0 ? '#28a745' : '#dc3545';
+            newTicketsChanges.push(
+              `  • <span style="color: ${trendColor}; font-weight: 600;">${trend}</span> с ${month2Value} (${month2Name}) до ${month3Value} (${month3Name}) — <span style="color: ${percentageColor}; font-weight: 600;">${sign}${absChange.toFixed(1)}%</span>`
+            );
+          }
         }
       } else if (month2.count === 0 && month3.count > 0) {
-        analysis.push(
-          `Новые тикеты: появление тикетов (${month3.count}) в ${month3.monthName || month3.month}`
+        newTicketsChanges.push(
+          `  • Появление тикетов: с 0 (${month2Name}) до ${month3Value} (${month3Name})`
         );
       }
     }
@@ -535,55 +557,112 @@ const summaryAnalysis = computed(() => {
     
     // Изменение между первым и вторым месяцем
     if (month2 && month1 && typeof month1.count === 'number' && typeof month2.count === 'number') {
+      const month1Name = month1.monthName || month1.month;
+      const month2Name = month2.monthName || month2.month;
+      const month1Value = formatNumber(month1.count || 0);
+      const month2Value = formatNumber(month2.count || 0);
+      
       if (month1.count > 0) {
         const change1 = ((month2.count - month1.count) / month1.count) * 100;
         if (isFinite(change1) && !isNaN(change1)) {
-          const trend = change1 >= 0 ? 'рост' : 'снижение';
-          const absChange = Math.abs(change1);
-          analysis.push(
-            `Закрытые тикеты: ${trend} на ${absChange.toFixed(1)}% в ${month2.monthName || month2.month}`
-          );
+          if (Math.abs(change1) < 0.1) {
+            closedTicketsChanges.push(
+              `  • Без изменений: ${month1Value} (${month1Name}) → ${month2Value} (${month2Name}) — 0.0%`
+            );
+          } else {
+            const trend = change1 >= 0 ? 'Рост' : 'Снижение';
+            const absChange = Math.abs(change1);
+            const sign = change1 >= 0 ? '+' : '-';
+            const trendColor = change1 >= 0 ? '#28a745' : '#dc3545';
+            const percentageColor = change1 >= 0 ? '#28a745' : '#dc3545';
+            closedTicketsChanges.push(
+              `  • <span style="color: ${trendColor}; font-weight: 600;">${trend}</span> с ${month1Value} (${month1Name}) до ${month2Value} (${month2Name}) — <span style="color: ${percentageColor}; font-weight: 600;">${sign}${absChange.toFixed(1)}%</span>`
+            );
+          }
         }
       } else if (month1.count === 0 && month2.count > 0) {
-        analysis.push(
-          `Закрытые тикеты: появление закрытий (${month2.count}) в ${month2.monthName || month2.month}`
+        closedTicketsChanges.push(
+          `  • Появление закрытий: с 0 (${month1Name}) до ${month2Value} (${month2Name})`
         );
       }
     }
     
     // Изменение между вторым и третьим месяцем
     if (month3 && month2 && typeof month2.count === 'number' && typeof month3.count === 'number') {
+      const month2Name = month2.monthName || month2.month;
+      const month3Name = month3.monthName || month3.month;
+      const month2Value = formatNumber(month2.count || 0);
+      const month3Value = formatNumber(month3.count || 0);
+      
       if (month2.count > 0) {
         const change2 = ((month3.count - month2.count) / month2.count) * 100;
         if (isFinite(change2) && !isNaN(change2)) {
-          const trend = change2 >= 0 ? 'рост' : 'снижение';
-          const absChange = Math.abs(change2);
-          analysis.push(
-            `Закрытые тикеты: ${trend} на ${absChange.toFixed(1)}% в ${month3.monthName || month3.month}`
-          );
+          if (Math.abs(change2) < 0.1) {
+            closedTicketsChanges.push(
+              `  • Без изменений: ${month2Value} (${month2Name}) → ${month3Value} (${month3Name}) — 0.0%`
+            );
+          } else {
+            const trend = change2 >= 0 ? 'Рост' : 'Снижение';
+            const absChange = Math.abs(change2);
+            const sign = change2 >= 0 ? '+' : '-';
+            const trendColor = change2 >= 0 ? '#28a745' : '#dc3545';
+            const percentageColor = change2 >= 0 ? '#28a745' : '#dc3545';
+            closedTicketsChanges.push(
+              `  • <span style="color: ${trendColor}; font-weight: 600;">${trend}</span> с ${month2Value} (${month2Name}) до ${month3Value} (${month3Name}) — <span style="color: ${percentageColor}; font-weight: 600;">${sign}${absChange.toFixed(1)}%</span>`
+            );
+          }
         }
       } else if (month2.count === 0 && month3.count > 0) {
-        analysis.push(
-          `Закрытые тикеты: появление закрытий (${month3.count}) в ${month3.monthName || month3.month}`
+        closedTicketsChanges.push(
+          `  • Появление закрытий: с 0 (${month2Name}) до ${month3Value} (${month3Name})`
         );
       }
     }
   }
   
+  // Добавляем сгруппированные изменения
+  if (newTicketsChanges.length > 0) {
+    analysis.push('Новые тикеты:');
+    analysis.push(...newTicketsChanges);
+  }
+  
+  if (closedTicketsChanges.length > 0) {
+    analysis.push('Закрытые тикеты:');
+    analysis.push(...closedTicketsChanges);
+  }
+  
   // Общая тенденция за период (если есть данные за все 3 месяца)
   if (months.length >= 3 && closedMonths.length >= 3) {
-    const firstNew = months[0].count || 0;
-    const lastNew = months[months.length - 1].count || 0;
-    const firstClosed = closedMonths[0].count || 0;
-    const lastClosed = closedMonths[closedMonths.length - 1].count || 0;
+    const firstNew = months[0];
+    const lastNew = months[months.length - 1];
+    const firstClosed = closedMonths[0];
+    const lastClosed = closedMonths[closedMonths.length - 1];
     
-    if (firstNew > 0 && firstClosed > 0) {
-      const newChange = ((lastNew - firstNew) / firstNew) * 100;
-      const closedChange = ((lastClosed - firstClosed) / firstClosed) * 100;
+    const firstNewValue = firstNew.count || 0;
+    const lastNewValue = lastNew.count || 0;
+    const firstClosedValue = firstClosed.count || 0;
+    const lastClosedValue = lastClosed.count || 0;
+    
+    if (firstNewValue > 0 && firstClosedValue > 0) {
+      const newChange = ((lastNewValue - firstNewValue) / firstNewValue) * 100;
+      const closedChange = ((lastClosedValue - firstClosedValue) / firstClosedValue) * 100;
       
       if (isFinite(newChange) && isFinite(closedChange)) {
+        const firstNewName = firstNew.monthName || firstNew.month;
+        const lastNewName = lastNew.monthName || lastNew.month;
+        const firstClosedName = firstClosed.monthName || firstClosed.month;
+        const lastClosedName = lastClosed.monthName || lastClosed.month;
+        
+        const newTrendColor = newChange >= 0 ? '#28a745' : '#dc3545';
+        const newPercentageColor = newChange >= 0 ? '#28a745' : '#dc3545';
+        const closedTrendColor = closedChange >= 0 ? '#28a745' : '#dc3545';
+        const closedPercentageColor = closedChange >= 0 ? '#28a745' : '#dc3545';
+        analysis.push('Общая динамика за период:');
         analysis.push(
-          `Общая динамика за период: новые тикеты ${newChange >= 0 ? 'выросли' : 'снизились'} на ${Math.abs(newChange).toFixed(1)}%, закрытые тикеты ${closedChange >= 0 ? 'выросли' : 'снизились'} на ${Math.abs(closedChange).toFixed(1)}%`
+          `  • Новые тикеты: <span style="color: ${newTrendColor}; font-weight: 600;">${newChange >= 0 ? 'рост' : 'снижение'}</span> с ${formatNumber(firstNewValue)} (${firstNewName}) до ${formatNumber(lastNewValue)} (${lastNewName}) — <span style="color: ${newPercentageColor}; font-weight: 600;">${newChange >= 0 ? '+' : '-'}${Math.abs(newChange).toFixed(1)}%</span>`
+        );
+        analysis.push(
+          `  • Закрытые тикеты: <span style="color: ${closedTrendColor}; font-weight: 600;">${closedChange >= 0 ? 'рост' : 'снижение'}</span> с ${formatNumber(firstClosedValue)} (${firstClosedName}) до ${formatNumber(lastClosedValue)} (${lastClosedName}) — <span style="color: ${closedPercentageColor}; font-weight: 600;">${closedChange >= 0 ? '+' : '-'}${Math.abs(closedChange).toFixed(1)}%</span>`
         );
       }
     }
@@ -595,6 +674,7 @@ const summaryAnalysis = computed(() => {
 /**
  * Словесный анализ для переходящих тикетов
  * TASK-058-05: Computed-свойство для словесного анализа переходящих тикетов
+ * TASK-058-08: Улучшена читаемость - добавлены конкретные значения и месяцы
  */
 const carryoverAnalysis = computed(() => {
   const months = props.data?.carryoverTicketsByMonth || [];
@@ -604,6 +684,7 @@ const carryoverAnalysis = computed(() => {
   }
   
   const analysis = [];
+  const monthlyChanges = [];
   
   // Формирование строки с цифрами
   const values = months
@@ -615,7 +696,7 @@ const carryoverAnalysis = computed(() => {
     analysis.push(`Переходящие тикеты: ${values}`);
   }
   
-  // Анализ динамики
+  // Анализ динамики по месяцам
   if (months.length >= 2) {
     const month1 = months[0];
     const month2 = months[1];
@@ -623,39 +704,73 @@ const carryoverAnalysis = computed(() => {
     
     // Изменение между первым и вторым месяцем
     if (month2 && month1 && typeof month1.count === 'number' && typeof month2.count === 'number') {
+      const month1Name = month1.monthName || month1.month;
+      const month2Name = month2.monthName || month2.month;
+      const month1Value = formatNumber(month1.count || 0);
+      const month2Value = formatNumber(month2.count || 0);
+      
       if (month1.count > 0) {
         const change1 = ((month2.count - month1.count) / month1.count) * 100;
         if (isFinite(change1) && !isNaN(change1)) {
-          const trend = change1 >= 0 ? 'рост' : 'снижение';
-          const absChange = Math.abs(change1);
-          analysis.push(
-            `Динамика: ${trend} на ${absChange.toFixed(1)}% в ${month2.monthName || month2.month}`
-          );
+          if (Math.abs(change1) < 0.1) {
+            monthlyChanges.push(
+              `  • Без изменений: ${month1Value} (${month1Name}) → ${month2Value} (${month2Name}) — 0.0%`
+            );
+          } else {
+            const trend = change1 >= 0 ? 'Рост' : 'Снижение';
+            const absChange = Math.abs(change1);
+            const sign = change1 >= 0 ? '+' : '-';
+            const trendColor = change1 >= 0 ? '#28a745' : '#dc3545';
+            const percentageColor = change1 >= 0 ? '#28a745' : '#dc3545';
+            monthlyChanges.push(
+              `  • <span style="color: ${trendColor}; font-weight: 600;">${trend}</span> с ${month1Value} (${month1Name}) до ${month2Value} (${month2Name}) — <span style="color: ${percentageColor}; font-weight: 600;">${sign}${absChange.toFixed(1)}%</span>`
+            );
+          }
         }
       } else if (month1.count === 0 && month2.count > 0) {
-        analysis.push(
-          `Динамика: появление переходящих тикетов (${month2.count}) в ${month2.monthName || month2.month}`
+        monthlyChanges.push(
+          `  • Появление переходящих тикетов: с 0 (${month1Name}) до ${month2Value} (${month2Name})`
         );
       }
     }
     
     // Изменение между вторым и третьим месяцем
     if (month3 && month2 && typeof month2.count === 'number' && typeof month3.count === 'number') {
+      const month2Name = month2.monthName || month2.month;
+      const month3Name = month3.monthName || month3.month;
+      const month2Value = formatNumber(month2.count || 0);
+      const month3Value = formatNumber(month3.count || 0);
+      
       if (month2.count > 0) {
         const change2 = ((month3.count - month2.count) / month2.count) * 100;
         if (isFinite(change2) && !isNaN(change2)) {
-          const trend = change2 >= 0 ? 'рост' : 'снижение';
-          const absChange = Math.abs(change2);
-          analysis.push(
-            `${trend} на ${absChange.toFixed(1)}% в ${month3.monthName || month3.month}`
-          );
+          if (Math.abs(change2) < 0.1) {
+            monthlyChanges.push(
+              `  • Без изменений: ${month2Value} (${month2Name}) → ${month3Value} (${month3Name}) — 0.0%`
+            );
+          } else {
+            const trend = change2 >= 0 ? 'Рост' : 'Снижение';
+            const absChange = Math.abs(change2);
+            const sign = change2 >= 0 ? '+' : '-';
+            const trendColor = change2 >= 0 ? '#28a745' : '#dc3545';
+            const percentageColor = change2 >= 0 ? '#28a745' : '#dc3545';
+            monthlyChanges.push(
+              `  • <span style="color: ${trendColor}; font-weight: 600;">${trend}</span> с ${month2Value} (${month2Name}) до ${month3Value} (${month3Name}) — <span style="color: ${percentageColor}; font-weight: 600;">${sign}${absChange.toFixed(1)}%</span>`
+            );
+          }
         }
       } else if (month2.count === 0 && month3.count > 0) {
-        analysis.push(
-          `появление переходящих тикетов (${month3.count}) в ${month3.monthName || month3.month}`
+        monthlyChanges.push(
+          `  • Появление переходящих тикетов: с 0 (${month2Name}) до ${month3Value} (${month3Name})`
         );
       }
     }
+  }
+  
+  // Добавляем динамику по месяцам
+  if (monthlyChanges.length > 0) {
+    analysis.push('Динамика по месяцам:');
+    analysis.push(...monthlyChanges);
   }
   
   // Общая тенденция за период
@@ -668,25 +783,41 @@ const carryoverAnalysis = computed(() => {
         typeof last.count === 'number') {
       const firstCount = first.count || 0;
       const lastCount = last.count || 0;
+      const firstName = first.monthName || first.month;
+      const lastName = last.monthName || last.month;
+      const firstValue = formatNumber(firstCount);
+      const lastValue = formatNumber(lastCount);
       
       if (firstCount > 0) {
         const totalChange = ((lastCount - firstCount) / firstCount) * 100;
         if (isFinite(totalChange) && !isNaN(totalChange)) {
           if (Math.abs(totalChange) < 1) {
-            // Изменение менее 1% считается стабильным
-            analysis.push(`Тенденция: стабильное количество переходящих тикетов (изменение менее 1%)`);
-          } else if (totalChange > 5) {
-            analysis.push(`Тенденция: рост переходящих тикетов за период на ${totalChange.toFixed(1)}%`);
-          } else if (totalChange < -5) {
-            analysis.push(`Тенденция: снижение переходящих тикетов за период на ${Math.abs(totalChange).toFixed(1)}%`);
+            analysis.push('Тенденция за период:');
+            analysis.push(
+              `  • Стабильное количество: ${firstValue} (${firstName}) → ${lastValue} (${lastName}) — изменение менее 1%`
+            );
           } else {
-            analysis.push(`Тенденция: незначительное изменение переходящих тикетов (${totalChange >= 0 ? '+' : ''}${totalChange.toFixed(1)}%)`);
+            const trend = totalChange >= 0 ? 'Рост' : 'Снижение';
+            const absChange = Math.abs(totalChange);
+            const sign = totalChange >= 0 ? '+' : '-';
+            const trendColor = totalChange >= 0 ? '#28a745' : '#dc3545';
+            const percentageColor = totalChange >= 0 ? '#28a745' : '#dc3545';
+            analysis.push('Тенденция за период:');
+            analysis.push(
+              `  • <span style="color: ${trendColor}; font-weight: 600;">${trend}</span> с ${firstValue} (${firstName}) до ${lastValue} (${lastName}) — <span style="color: ${percentageColor}; font-weight: 600;">${sign}${absChange.toFixed(1)}%</span>`
+            );
           }
         }
       } else if (firstCount === 0 && lastCount > 0) {
-        analysis.push(`Тенденция: появление переходящих тикетов в конце периода (${lastCount})`);
+        analysis.push('Тенденция за период:');
+        analysis.push(
+          `  • Появление переходящих тикетов: с 0 (${firstName}) до ${lastValue} (${lastName})`
+        );
       } else if (firstCount > 0 && lastCount === 0) {
-        analysis.push(`Тенденция: полное отсутствие переходящих тикетов в конце периода`);
+        analysis.push('Тенденция за период:');
+        analysis.push(
+          `  • Полное отсутствие переходящих тикетов: с ${firstValue} (${firstName}) до 0 (${lastName})`
+        );
       }
     }
   }
@@ -845,8 +976,19 @@ function getWeekData(type, weekNumber) {
   margin: 8px 0;
   font-size: 14px;
   color: var(--b24-text-primary, #111827);
-  line-height: 1.5;
+  line-height: 1.6;
+  white-space: pre-line; /* TASK-058-08: Сохранять переносы строк */
 }
+
+/* TASK-058-08: Стили для заголовков групп в улучшенном тексте */
+.summary-analysis p:first-child {
+  font-weight: 600;
+  margin-bottom: 4px;
+  margin-top: 0;
+}
+
+/* TASK-058-08: Цвета применяются через inline стили в HTML для совместимости с v-html */
+/* Inline стили используются для гарантированного применения цветов к динамическому HTML */
 
 /* TASK-058-05: Стили для блока анализа переходящих тикетов */
 /* TASK-058-07: Анализ справа от графика */
@@ -874,16 +1016,18 @@ function getWeekData(type, weekNumber) {
 }
 
 .analysis-content p {
-  margin: 0;
+  margin: 8px 0;
   font-size: 14px;
   color: var(--b24-text-primary, #111827);
-  line-height: 1.5;
+  line-height: 1.6;
+  white-space: pre-line; /* TASK-058-08: Сохранять переносы строк */
 }
 
 .analysis-content p:first-child {
   font-weight: 600;
-  color: var(--b24-text-secondary, #6b7280);
+  margin-bottom: 4px;
 }
+
 
 .chart-table-section {
   width: 100%;

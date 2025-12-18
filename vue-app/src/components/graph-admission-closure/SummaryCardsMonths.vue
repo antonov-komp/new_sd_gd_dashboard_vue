@@ -54,15 +54,18 @@
               <span class="month-name">{{ month.monthName }}:</span>
               <span class="month-value">{{ formatNumber(month.count || 0) }}</span>
             </div>
+            <!-- TASK-058-03: Терминология исправлена - "этой неделей"/"другой неделей" заменены на "этого месяца"/"другого месяца" -->
+            <!-- В месячном режиме: "этого месяца" = закрытые тикеты, созданные в этом же месяце -->
+            <!-- "другого месяца" = закрытые тикеты, созданные в предыдущих месяцах -->
             <div class="month-breakdown">
               <div class="breakdown-item breakdown-this-week">
                 <span class="breakdown-icon">✓</span>
-                <span class="breakdown-label">этой неделей:</span>
+                <span class="breakdown-label">этого месяца:</span>
                 <span class="breakdown-value">{{ formatNumber(month.closedCreatedThisWeek || 0) }}</span>
               </div>
               <div class="breakdown-item breakdown-other-week">
                 <span class="breakdown-icon">↻</span>
-                <span class="breakdown-label">другой неделей:</span>
+                <span class="breakdown-label">другого месяца:</span>
                 <span class="breakdown-value">{{ formatNumber(month.closedCreatedOtherWeek || 0) }}</span>
               </div>
             </div>
@@ -75,17 +78,24 @@
     </div>
 
     <!-- Карточка "Переходящие всего" -->
+    <!-- TASK-058-09: Убрана сумма "Переходящие всего", так как это текущее состояние на момент, а не сумма за период -->
     <div class="summary-card summary-card--carryover">
       <h3 class="card-title">Переходящие всего</h3>
+      <!-- TASK-058-10: Добавлена словесная подсказка для понимания метрики -->
+      <p class="card-hint">Активные тикеты сектора в трех основных рабочих стадиях (текущее состояние)</p>
       <div class="card-content">
-        <div class="card-main-value">
-          {{ formatNumber(data.carryoverTickets || 0) }}
-          <span 
-            v-if="carryoverTicketsPercentage !== null"
-            :class="['percentage-badge', carryoverTicketsPercentage >= 0 ? 'positive' : 'negative']"
-            :title="`Изменение относительно предыдущего периода: ${formatPercentage(carryoverTicketsPercentage)}`"
-          >
-            {{ formatPercentage(carryoverTicketsPercentage) }}
+        <!-- TASK-058-09: Показываем только текущее значение (последний месяц) с процентом -->
+        <div class="card-current-value">
+          <span class="current-label">Текущее состояние:</span>
+          <span class="current-value">
+            {{ formatNumber(currentCarryoverValue) }}
+            <span 
+              v-if="carryoverTicketsPercentage !== null"
+              :class="['percentage-badge', carryoverTicketsPercentage >= 0 ? 'positive' : 'negative']"
+              :title="`Изменение относительно предыдущего периода: ${formatPercentage(carryoverTicketsPercentage)}`"
+            >
+              {{ formatPercentage(carryoverTicketsPercentage) }}
+            </span>
           </span>
         </div>
         <div class="card-month-breakdown">
@@ -245,6 +255,17 @@ const carryoverTicketsByMonth = computed(() => {
   return props.data?.carryoverTicketsByMonth || [];
 });
 
+// TASK-058-09: Текущее значение переходящих тикетов (последний месяц - текущее состояние)
+const currentCarryoverValue = computed(() => {
+  const months = carryoverTicketsByMonth.value;
+  if (months.length === 0) {
+    return 0;
+  }
+  // Берем последний месяц (текущее состояние на момент)
+  const lastMonth = months[months.length - 1];
+  return lastMonth?.count || 0;
+});
+
 // TASK-058-02: Computed-свойства для расчета процентов
 const newTicketsPercentage = computed(() => {
   // Безопасное получение текущего значения
@@ -268,12 +289,14 @@ const closedTicketsPercentage = computed(() => {
   return calculatePercentage(current, previous);
 });
 
+// TASK-058-09: Процент рассчитывается от текущего значения (последний месяц) к предыдущему периоду
 const carryoverTicketsPercentage = computed(() => {
-  const current = typeof props.data?.carryoverTickets === 'number' 
-    ? props.data.carryoverTickets 
-    : (parseInt(props.data?.carryoverTickets) || 0);
+  // Текущее значение = последний месяц (текущее состояние)
+  const current = currentCarryoverValue.value;
   
-  const previous = props.data?.previousPeriodData?.carryoverTickets;
+  // Предыдущее значение = первый месяц из отображаемых (для сравнения)
+  const months = carryoverTicketsByMonth.value;
+  const previous = months.length > 0 ? (months[0]?.count || 0) : null;
   
   return calculatePercentage(current, previous);
 });
@@ -342,10 +365,20 @@ function getStageIcon(stageId) {
 }
 
 .card-title {
-  margin: 0 0 var(--spacing-md, 16px) 0;
+  margin: 0 0 var(--spacing-xs, 4px) 0;
   font-size: var(--font-size-lg, 16px);
   font-weight: 600;
   color: var(--b24-text-primary, #111827);
+}
+
+/* TASK-058-10: Стили для подсказки в карточке "Переходящие всего" */
+.card-hint {
+  margin: 0 0 var(--spacing-md, 16px) 0;
+  font-size: var(--font-size-sm, 13px);
+  font-weight: 400;
+  color: var(--b24-text-secondary, #6b7280);
+  line-height: 1.4;
+  font-style: italic;
 }
 
 .card-content {
@@ -358,6 +391,31 @@ function getStageIcon(stageId) {
   font-size: 36px;
   font-weight: 700;
   color: var(--b24-primary, #007bff);
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* TASK-058-09: Стили для текущего значения переходящих тикетов */
+.card-current-value {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: var(--spacing-md, 16px);
+}
+
+.current-label {
+  font-size: var(--font-size-sm, 14px);
+  color: var(--b24-text-secondary, #6b7280);
+  font-weight: 500;
+}
+
+.current-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: #ff9800;
   line-height: 1;
   display: flex;
   align-items: center;

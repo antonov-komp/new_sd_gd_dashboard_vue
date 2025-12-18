@@ -13,8 +13,35 @@
  */
 
 require_once __DIR__ . '/../crest.php';
+require_once __DIR__ . '/cache/GraphAdmissionClosureCache.php';
 
 header('Content-Type: application/json; charset=utf-8');
+
+/**
+ * TASK-059: Логирование в локальный файл приложения
+ * 
+ * Настройка логирования для записи в logs/app/ вместо системного nginx лога
+ */
+function setupAppLogging() {
+    $logDir = __DIR__ . '/../logs/app';
+    
+    // Создаём директорию, если не существует
+    if (!is_dir($logDir)) {
+        @mkdir($logDir, 0755, true);
+    }
+    
+    // Формируем путь к файлу лога (по дням)
+    $logFile = $logDir . '/graph-admission-closure-' . date('Y-m-d') . '.log';
+    
+    // Настраиваем error_log для записи в локальный файл
+    ini_set('log_errors', '1');
+    ini_set('error_log', $logFile);
+    
+    return $logFile;
+}
+
+// Инициализация логирования
+$appLogFile = setupAppLogging();
 
 function jsonResponse($data)
 {
@@ -339,14 +366,16 @@ function calculateWeekMetrics(
                 }
             }
             
-            error_log("[CALCULATE-DEBUG] Ticket {$ticketId}:");
-            error_log("  - stageId: {$stageId} (inClosingStages: " . ($isInClosingStages ? 'true' : 'false') . ")");
-            error_log("  - createdTime: {$createdTime} -> " . ($createdDt ? $createdDt->format('Y-m-d H:i:s') : 'null'));
-            error_log("  - movedTime: {$movedTime} -> " . ($movedDt ? $movedDt->format('Y-m-d H:i:s') : 'null'));
-            error_log("  - weekStart: {$weekStartStr}, weekEnd: {$weekEndStr}");
-            error_log("  - isCreatedInRange: " . ($isCreatedInRange ? 'true' : 'false'));
-            error_log("  - isMovedInRange: " . ($isMovedInRange ? 'true' : 'false'));
-            error_log("  - Will be counted as closed: " . ($isInClosingStages && $isMovedInRange ? 'YES' : 'NO'));
+            // Детальное отладочное логирование отключено
+            //             // Детальное отладочное логирование отключено для уменьшения объёма логов
+            // error_log("[CALCULATE-DEBUG] Ticket {$ticketId}:");
+            // error_log("  - stageId: {$stageId} (inClosingStages: " . ($isInClosingStages ? 'true' : 'false') . ")");
+            // error_log("  - createdTime: {$createdTime} -> " . ($createdDt ? $createdDt->format('Y-m-d H:i:s') : 'null'));
+            // error_log("  - movedTime: {$movedTime} -> " . ($movedDt ? $movedDt->format('Y-m-d H:i:s') : 'null'));
+            // error_log("  - weekStart: {$weekStartStr}, weekEnd: {$weekEndStr}");
+            // error_log("  - isCreatedInRange: " . ($isCreatedInRange ? 'true' : 'false'));
+            // error_log("  - isMovedInRange: " . ($isMovedInRange ? 'true' : 'false'));
+            // error_log("  - Will be counted as closed: " . ($isInClosingStages && $isMovedInRange ? 'YES' : 'NO'));
             if ($isInClosingStages && $isMovedInRange) {
                 error_log("  - Category: " . ($isCreatedInRange ? 'closedTicketsCreatedThisWeek' : 'closedTicketsCreatedOtherWeek'));
             }
@@ -382,7 +411,8 @@ function calculateWeekMetrics(
                 $closedReason = 'created_this_week_movedTime_out_of_range';
                 
                 // TASK-054: Логирование для диагностики
-                error_log("[CALCULATE] Ticket {$ticketId}: Created this week but movedTime out of range - createdTime: {$createdTime}, movedTime: {$movedTime}, stageId: {$stageId}");
+                // Детальное логирование отключено для производительности
+                // error_log("[CALCULATE] Ticket {$ticketId}: Created this week but movedTime out of range - createdTime: {$createdTime}, movedTime: {$movedTime}, stageId: {$stageId}");
             }
         }
         
@@ -394,13 +424,15 @@ function calculateWeekMetrics(
                 $closedTicketsCreatedThisWeek++;
                 
                 // TASK-054: Логирование тикетов, созданных и закрытых на текущей неделе
-                error_log("[CALCULATE] Ticket {$ticketId}: closedTicketsCreatedThisWeek (reason: {$closedReason}) - createdTime: {$createdTime}, movedTime: {$movedTime}, stageId: {$stageId}");
+                // Детальное логирование отключено для производительности
+                // error_log("[CALCULATE] Ticket {$ticketId}: closedTicketsCreatedThisWeek (reason: {$closedReason}) - createdTime: {$createdTime}, movedTime: {$movedTime}, stageId: {$stageId}");
             } else {
                 $closedTicketsCreatedOtherWeek++;
             }
         } else if ($isInClosingStages && !$isMovedInRange) {
             // TASK-054: Логирование закрытых тикетов, которые не попали в диапазон
-            error_log("[CALCULATE] Ticket {$ticketId}: Closed ticket but not counted - createdTime: {$createdTime}, movedTime: {$movedTime}, stageId: {$stageId}, isCreatedInRange: " . ($isCreatedInRange ? 'true' : 'false') . ", isMovedInRange: " . ($isMovedInRange ? 'true' : 'false'));
+            // Детальное логирование отключено для производительности
+            // error_log("[CALCULATE] Ticket {$ticketId}: Closed ticket but not counted - createdTime: {$createdTime}, movedTime: {$movedTime}, stageId: {$stageId}, isCreatedInRange: " . ($isCreatedInRange ? 'true' : 'false') . ", isMovedInRange: " . ($isMovedInRange ? 'true' : 'false'));
         }
         
         // Переходящие тикеты (в рабочих стадиях, не закрытые)
@@ -543,6 +575,7 @@ try {
     $includeNewTicketsByStages = isset($body['includeNewTicketsByStages']) ? (bool)$body['includeNewTicketsByStages'] : false;
     $includeCarryoverTickets = isset($body['includeCarryoverTickets']) ? (bool)$body['includeCarryoverTickets'] : false;
     $includeCarryoverTicketsByDuration = isset($body['includeCarryoverTicketsByDuration']) ? (bool)$body['includeCarryoverTicketsByDuration'] : false;
+    $forceRefresh = isset($body['forceRefresh']) ? (bool)$body['forceRefresh'] : false; // TASK-059-05: Параметр для принудительного обновления кеша
     $debug = isset($body['debug']) ? (bool)$body['debug'] : false;
     
     // TASK-053-03: Валидация periodMode
@@ -556,6 +589,33 @@ try {
 
     // TASK-053-03: Обработка режима периода
     if ($periodMode === 'months') {
+        // TASK-059: Логирование общего времени выполнения для режима "months"
+        $monthsModeStartTime = microtime(true);
+        
+        // TASK-059-05: Проверка кеша для режима "months"
+        if (!$forceRefresh) {
+            $cacheKey = GraphAdmissionClosureCache::generateKey([
+                'product' => $product,
+                'periodMode' => $periodMode,
+                'includeTickets' => $includeTickets,
+                'includeNewTicketsByStages' => $includeNewTicketsByStages,
+                'includeCarryoverTickets' => $includeCarryoverTickets,
+                'includeCarryoverTicketsByDuration' => $includeCarryoverTicketsByDuration
+            ]);
+            
+            $cachedData = GraphAdmissionClosureCache::get($cacheKey);
+            if ($cachedData !== null) {
+                $cacheResponseTime = microtime(true) - $monthsModeStartTime;
+                error_log("[Cache] Cache hit for key: {$cacheKey}");
+                error_log("[MONTHS-PERFORMANCE] Total execution time (from cache): " . round($cacheResponseTime, 3) . " seconds");
+                jsonResponse($cachedData);
+            }
+            
+            error_log("[Cache] Cache miss for key: {$cacheKey}");
+        } else {
+            error_log("[Cache] Force refresh requested, skipping cache check");
+        }
+        
         // TASK-058-01: Получаем 4 месяца (3 для отображения + 1 для процентов)
         $allMonths = calculateLastFourMonths();
         // Структура $allMonths: [0 => Сентябрь (4-й, для процентов), 1 => Октябрь, 2 => Ноябрь, 3 => Декабрь]
@@ -567,14 +627,10 @@ try {
         // 4-й месяц (самый старый, Сентябрь) для расчета процентов
         $previousMonth = $allMonths[0] ?? null; // Индекс 0
         
-        // TASK-058-01-FIX: Логирование для отладки
-        error_log("[MONTHS] All 4 months: " . json_encode(array_map(function($m) {
-            return $m['monthName'] . ' ' . $m['year'];
-        }, $allMonths)));
-        error_log("[MONTHS] Months for display (3): " . json_encode(array_map(function($m) {
-            return $m['monthName'] . ' ' . $m['year'];
-        }, $months)));
-        error_log("[MONTHS] Previous month (4th, for percentages): " . ($previousMonth ? $previousMonth['monthName'] . ' ' . $previousMonth['year'] : 'NOT FOUND'));
+        // Логирование месяцев отключено для уменьшения объёма логов
+        // error_log("[MONTHS] All 4 months: " . json_encode(array_map(function($m) {
+        //     return $m['monthName'] . ' ' . $m['year'];
+        // }, $allMonths), JSON_UNESCAPED_UNICODE));
         
         // Период для запросов к Bitrix24 (включая 4-й месяц для расчета процентов)
         $periodStartUtc = $allMonths[0]['monthStartUtc']; // Самый старый месяц (4-й, Сентябрь)
@@ -606,10 +662,291 @@ try {
         $pageSize = 50;
         $allTicketsMap = [];
         
+        /**
+         * TASK-059-03: Параллельное выполнение запросов к Bitrix24 API
+         * 
+         * Выполняет первые страницы запросов 1 и 2 параллельно через curl_multi_exec
+         * 
+         * @param array $query1Params Параметры запроса 1
+         * @param array $query2Params Параметры запроса 2
+         * @return array [query1Result, query2Result]
+         */
+        function executeParallelQueries(array $query1Params, array $query2Params): array
+        {
+            // Получаем настройки через рефлексию (как в CRest)
+            $settings = null;
+            $isWebhook = false;
+            
+            try {
+                $reflection = new ReflectionClass('CRest');
+                $method = $reflection->getMethod('getAppSettings');
+                $method->setAccessible(true);
+                $settings = $method->invoke(null);
+            } catch (Exception $e) {
+                error_log("[PARALLEL-QUERIES] Failed to get settings: " . $e->getMessage());
+                return [
+                    ['error' => 'settings_not_available'],
+                    ['error' => 'settings_not_available']
+                ];
+            }
+            
+            if (!$settings || $settings === false) {
+                return [
+                    ['error' => 'settings_not_available'],
+                    ['error' => 'settings_not_available']
+                ];
+            }
+            
+            // Определяем тип авторизации
+            $isWebhook = !empty($settings['is_web_hook']) && $settings['is_web_hook'] === 'Y';
+            $baseUrl = '';
+            
+            if ($isWebhook) {
+                // Webhook URL уже содержит токен авторизации
+                $baseUrl = defined('C_REST_WEB_HOOK_URL') ? C_REST_WEB_HOOK_URL : '';
+                if (empty($baseUrl) && isset($settings['client_endpoint'])) {
+                    $baseUrl = $settings['client_endpoint'];
+                }
+                // error_log("[PARALLEL-QUERIES] Using webhook authentication");
+            } else {
+                // OAuth - используем client_endpoint и добавляем токен в параметры
+                $baseUrl = isset($settings['client_endpoint']) ? $settings['client_endpoint'] : '';
+                
+                // Получаем токен из настроек
+                $accessToken = $settings['access_token'] ?? '';
+                
+                // Проверяем, не истёк ли токен (проверяем expires_at если есть)
+                $expiresAt = isset($settings['expires_at']) ? (int)$settings['expires_at'] : 0;
+                $now = time();
+                
+                // Если токен истёк или истекает в ближайшие 60 секунд, пытаемся обновить
+                if (empty($accessToken) || ($expiresAt > 0 && $now >= ($expiresAt - 60))) {
+                    // error_log("[PARALLEL-QUERIES] Token expired or expiring soon, attempting refresh...");
+                    
+                    // Пытаемся сделать тестовый запрос через CRest, который автоматически обновит токен при ошибке
+                    // Это вызовет GetNewAuth внутри CRest
+                    try {
+                        $testResult = CRest::call('app.info', []);
+                        // if (isset($testResult['error']) && $testResult['error'] === 'expired_token') {
+                        //     error_log("[PARALLEL-QUERIES] Token expired, CRest should refresh it automatically");
+                        // }
+                        
+                        // Получаем обновлённые настройки после возможного обновления
+                        $reflection = new ReflectionClass('CRest');
+                        $getMethod = $reflection->getMethod('getAppSettings');
+                        $getMethod->setAccessible(true);
+                        $settings = $getMethod->invoke(null);
+                        $accessToken = $settings['access_token'] ?? '';
+                    } catch (Exception $e) {
+                        error_log("[PARALLEL-QUERIES] Error checking token: " . $e->getMessage());
+                    }
+                }
+                
+                if (!empty($accessToken)) {
+                    // Добавляем токен авторизации в параметры
+                    $query1Params['auth'] = $accessToken;
+                    $query2Params['auth'] = $accessToken;
+                    // error_log("[PARALLEL-QUERIES] Using OAuth authentication with token");
+                } else {
+                    error_log("[PARALLEL-QUERIES] ERROR: OAuth mode but access_token not available");
+                }
+            }
+            
+            if (empty($baseUrl)) {
+                error_log("[PARALLEL-QUERIES] Base URL not found");
+                return [
+                    ['error' => 'base_url_not_configured'],
+                    ['error' => 'base_url_not_configured']
+                ];
+            }
+            
+            // Формируем URL для запросов (как в CRest::callCurl)
+            // Для webhook URL уже содержит путь /rest/1/token/, для OAuth - только /rest/
+            // В обоих случаях добавляем метод и расширение
+            $method = 'crm.item.list';
+            $extension = '.json';
+            
+            if ($isWebhook) {
+                // Webhook URL уже содержит полный путь, просто добавляем метод
+                $url1 = rtrim($baseUrl, '/') . '/' . $method . $extension;
+                $url2 = rtrim($baseUrl, '/') . '/' . $method . $extension;
+            } else {
+                // OAuth - добавляем метод к client_endpoint
+                $url1 = rtrim($baseUrl, '/') . '/' . $method . $extension;
+                $url2 = rtrim($baseUrl, '/') . '/' . $method . $extension;
+            }
+            
+            // Создаем POST данные
+            $postData1 = http_build_query($query1Params);
+            $postData2 = http_build_query($query2Params);
+            
+            // Инициализируем curl_multi
+            $multiHandle = curl_multi_init();
+            $handles = [];
+            $results = [];
+            
+            // Создаем curl дескрипторы
+            foreach ([
+                ['url' => $url1, 'data' => $postData1, 'index' => 0],
+                ['url' => $url2, 'data' => $postData2, 'index' => 1]
+            ] as $query) {
+                $ch = curl_init($query['url']);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_POST, true);
+                curl_setopt($ch, CURLOPT_POSTFIELDS, $query['data']);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+                curl_setopt($ch, CURLOPT_USERAGENT, 'Bitrix24 CRest PHP Parallel');
+                
+                if (defined("C_REST_IGNORE_SSL") && C_REST_IGNORE_SSL === true) {
+                    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+                    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+                }
+                
+                curl_multi_add_handle($multiHandle, $ch);
+                $handles[$query['index']] = $ch;
+            }
+            
+            // Выполняем параллельные запросы
+            $running = null;
+            do {
+                curl_multi_exec($multiHandle, $running);
+                curl_multi_select($multiHandle, 0.1);
+            } while ($running > 0);
+            
+            // Получаем результаты
+            foreach ($handles as $index => $ch) {
+                $response = curl_multi_getcontent($ch);
+                $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                $error = curl_error($ch);
+                
+                if ($error) {
+                    error_log("[PARALLEL-QUERIES] Error for query {$index}: {$error}");
+                    $results[$index] = ['error' => $error];
+                } elseif ($httpCode !== 200) {
+                    error_log("[PARALLEL-QUERIES] HTTP error {$httpCode} for query {$index}");
+                    $results[$index] = ['error' => "HTTP {$httpCode}"];
+                } else {
+                    // Парсим JSON ответ
+                    $data = json_decode($response, true);
+                    if ($data === null) {
+                        error_log("[PARALLEL-QUERIES] Failed to decode JSON for query {$index}");
+                        $results[$index] = ['error' => 'invalid_json'];
+                    } else {
+                        $results[$index] = $data;
+                    }
+                }
+                
+                curl_multi_remove_handle($multiHandle, $ch);
+                curl_close($ch);
+            }
+            
+            curl_multi_close($multiHandle);
+            
+            return [
+                $results[0] ?? ['error' => 'unknown_error'],
+                $results[1] ?? ['error' => 'unknown_error']
+            ];
+        }
+        
+        // TASK-059-03: Параллельная загрузка первых страниц запросов 1 и 2
+        $query1StartTime = microtime(true);
+        $query2StartTime = microtime(true);
+        
+        // Параметры запроса 1 (первая страница)
+        $query1Params = [
+            'entityTypeId' => $entityTypeId,
+            'filter' => [
+                '>=createdTime' => $periodStartStr,
+                '<=createdTime' => $periodEndStr
+            ],
+            'select' => [
+                'id',
+                'title',
+                'stageId',
+                'assignedById',
+                'createdTime',
+                'updatedTime',
+                'movedTime',
+                'UF_CRM_7_TYPE_PRODUCT',
+                'ufCrm7TypeProduct'
+            ],
+            'start' => 0
+        ];
+        
+        // Параметры запроса 2 (первая страница)
+        $query2Params = [
+            'entityTypeId' => $entityTypeId,
+            'filter' => [
+                '>=movedTime' => $periodStartStr,
+                '<=movedTime' => $periodEndStr,
+                'stageId' => $closingStages
+            ],
+            'select' => [
+                'id',
+                'title',
+                'stageId',
+                'assignedById',
+                'createdTime',
+                'updatedTime',
+                'movedTime',
+                'UF_CRM_7_TYPE_PRODUCT',
+                'ufCrm7TypeProduct'
+            ],
+            'start' => 0
+        ];
+        
+        // Выполняем первые страницы параллельно
+        $parallelResults = executeParallelQueries($query1Params, $query2Params);
+        $query1FirstPage = $parallelResults[0];
+        $query2FirstPage = $parallelResults[1];
+        
+        // Проверяем ошибки и fallback на последовательные запросы при необходимости
+        $useParallel = !isset($query1FirstPage['error']) && !isset($query2FirstPage['error']);
+        
+        if (!$useParallel) {
+            error_log("[MONTHS-PARALLEL] Parallel queries failed, falling back to sequential queries");
+            error_log("[MONTHS-PARALLEL] Query1 error: " . ($query1FirstPage['error'] ?? 'none'));
+            error_log("[MONTHS-PARALLEL] Query2 error: " . ($query2FirstPage['error'] ?? 'none'));
+        }
+        
         // Запрос 1: тикеты, созданные за период 3 месяцев
-        $start = 0;
-        $pageNum = 0;
-        do {
+        // TASK-059-03: Используем результат параллельного запроса для первой страницы
+        if ($useParallel) {
+            $result = $query1FirstPage;
+            $pageNum = 1;
+        } else {
+            // Fallback на последовательный запрос
+            $result = CRest::call('crm.item.list', $query1Params);
+            $pageNum = 1;
+        }
+        
+        if (isset($result['error'])) {
+            throw new Exception($result['error_description'] ?? $result['error']);
+        }
+
+        $items = $result['result']['items'] ?? [];
+        
+        foreach ($items as $item) {
+            $allTicketsMap[$item['id']] = $item;
+        }
+
+        // TASK-054: Улучшенная проверка наличия следующей страницы
+        $nextValue = $result['result']['next'] ?? $result['next'] ?? null;
+        $hasNext = $nextValue !== null && 
+                  $nextValue !== '' && 
+                  $nextValue !== '0' && 
+                  (int)$nextValue > 0;
+        
+        $hasMore = count($items) === $pageSize && $hasNext;
+        
+        if ($debug && $hasMore) {
+            // Логирование пагинации отключено для уменьшения объёма логов
+            // error_log("[MONTHS-QUERY1] Page {$pageNum}: loaded " . count($items) . " items, hasNext: " . ($hasNext ? 'true' : 'false') . ", continuing...");
+        }
+        
+        // Продолжаем пагинацию последовательно (если нужно)
+        $start = $pageSize;
+        while ($hasMore) {
             $result = CRest::call('crm.item.list', [
                 'entityTypeId' => $entityTypeId,
                 'filter' => [
@@ -641,7 +978,6 @@ try {
                 $allTicketsMap[$item['id']] = $item;
             }
 
-            // TASK-054: Улучшенная проверка наличия следующей страницы
             $nextValue = $result['result']['next'] ?? $result['next'] ?? null;
             $hasNext = $nextValue !== null && 
                       $nextValue !== '' && 
@@ -651,18 +987,54 @@ try {
             $hasMore = count($items) === $pageSize && $hasNext;
             
             if ($debug && $hasMore) {
-                error_log("[MONTHS-QUERY1] Page {$pageNum}: loaded " . count($items) . " items, hasNext: " . ($hasNext ? 'true' : 'false') . ", continuing...");
+                // Логирование пагинации отключено для уменьшения объёма логов
+            // error_log("[MONTHS-QUERY1] Page {$pageNum}: loaded " . count($items) . " items, hasNext: " . ($hasNext ? 'true' : 'false') . ", continuing...");
             }
             
             $start += $pageSize;
-        } while ($hasMore);
+        }
         
-        error_log("[MONTHS-QUERY1] Created tickets total count: " . count($allTicketsMap));
+        $query1Time = microtime(true) - $query1StartTime;
+        error_log("[MONTHS-QUERY1] Created tickets total count: " . count($allTicketsMap) . " (time: " . round($query1Time, 2) . "s, parallel: " . ($useParallel ? 'yes' : 'no') . ")");
         
         // Запрос 2: тикеты, закрытые за период 3 месяцев
-        $start = 0;
-        $pageNum = 0;
-        do {
+        // TASK-059-03: Используем результат параллельного запроса для первой страницы
+        if ($useParallel) {
+            $result = $query2FirstPage;
+            $pageNum = 1;
+        } else {
+            // Fallback на последовательный запрос
+            $result = CRest::call('crm.item.list', $query2Params);
+            $pageNum = 1;
+        }
+        
+        if (isset($result['error'])) {
+            throw new Exception($result['error_description'] ?? $result['error']);
+        }
+
+        $items = $result['result']['items'] ?? [];
+        
+        foreach ($items as $item) {
+            $allTicketsMap[$item['id']] = $item;
+        }
+
+        // TASK-054: Улучшенная проверка наличия следующей страницы
+        $nextValue = $result['result']['next'] ?? $result['next'] ?? null;
+        $hasNext = $nextValue !== null && 
+                  $nextValue !== '' && 
+                  $nextValue !== '0' && 
+                  (int)$nextValue > 0;
+        
+        $hasMore = count($items) === $pageSize && $hasNext;
+        
+        if ($debug && $hasMore) {
+            // Логирование пагинации отключено для уменьшения объёма логов
+            // error_log("[MONTHS-QUERY2] Page {$pageNum}: loaded " . count($items) . " items, hasNext: " . ($hasNext ? 'true' : 'false') . ", continuing...");
+        }
+        
+        // Продолжаем пагинацию последовательно (если нужно)
+        $start = $pageSize;
+        while ($hasMore) {
             $result = CRest::call('crm.item.list', [
                 'entityTypeId' => $entityTypeId,
                 'filter' => [
@@ -695,7 +1067,6 @@ try {
                 $allTicketsMap[$item['id']] = $item;
             }
 
-            // TASK-054: Улучшенная проверка наличия следующей страницы
             $nextValue = $result['result']['next'] ?? $result['next'] ?? null;
             $hasNext = $nextValue !== null && 
                       $nextValue !== '' && 
@@ -705,16 +1076,26 @@ try {
             $hasMore = count($items) === $pageSize && $hasNext;
             
             if ($debug && $hasMore) {
-                error_log("[MONTHS-QUERY2] Page {$pageNum}: loaded " . count($items) . " items, hasNext: " . ($hasNext ? 'true' : 'false') . ", continuing...");
+                // Логирование пагинации отключено для уменьшения объёма логов
+                // error_log("[MONTHS-QUERY2] Page {$pageNum}: loaded " . count($items) . " items, hasNext: " . ($hasNext ? 'true' : 'false') . ", continuing...");
             }
             
             $start += $pageSize;
-        } while ($hasMore);
+        }
         
-        error_log("[MONTHS-QUERY2] Closed tickets total count (after merge): " . count($allTicketsMap));
+        $query2Time = microtime(true) - $query2StartTime;
+        error_log("[MONTHS-QUERY2] Closed tickets total count (after merge): " . count($allTicketsMap) . " (time: " . round($query2Time, 2) . "s, parallel: " . ($useParallel ? 'yes' : 'no') . ")");
         
         // Запрос 3: переходящие тикеты (если запрошено)
         if ($includeCarryoverTickets) {
+            // TASK-059-01: Оптимизация запроса переходящих тикетов
+            // Добавлен фильтр по createdTime для ограничения периода загрузки
+            // Переходящие тикеты — это тикеты, созданные до конца периода и находящиеся в рабочих стадиях
+            // Поэтому достаточно фильтровать по createdTime <= periodEnd
+            $query3StartTime = microtime(true);
+            $ticketsCountBeforeQuery3 = count($allTicketsMap);
+            error_log("[MONTHS-QUERY3] Starting carryover tickets query with createdTime filter: <= {$periodEndStr}");
+            
             foreach ($targetStages as $stageId) {
                 $start = 0;
                 $pageNum = 0;
@@ -724,7 +1105,9 @@ try {
                     $result = CRest::call('crm.item.list', [
                         'entityTypeId' => $entityTypeId,
                         'filter' => [
-                            'stageId' => $stageId
+                            'stageId' => $stageId,
+                            // TASK-059-01: Фильтр по createdTime для ограничения периода
+                            '<=createdTime' => $periodEndStr
                         ],
                         'select' => [
                             'id',
@@ -764,6 +1147,10 @@ try {
                     $start += $pageSize;
                 }
             }
+            
+            $query3Time = microtime(true) - $query3StartTime;
+            $query3TicketsCount = count($allTicketsMap) - $ticketsCountBeforeQuery3;
+            error_log("[MONTHS-QUERY3] Carryover tickets query completed in " . round($query3Time, 2) . " seconds, loaded {$query3TicketsCount} new tickets (total: " . count($allTicketsMap) . ")");
         }
         
         // Фильтруем по product=1C
@@ -789,15 +1176,9 @@ try {
         
         error_log("[MONTHS] Tickets after product filter: " . count($tickets));
         
-        // Агрегация данных по месяцам
-        $newTicketsByMonth = [];
-        $closedTicketsByMonth = [];
-        $carryoverTicketsByMonth = [];
-        $totalNewTickets = 0;
-        $totalClosedTickets = 0;
-        $totalCarryoverTickets = 0;
-        
-        // Агрегация по стадиям (суммарно за 3 месяца)
+        // TASK-059-02: Объединённая агрегация в один цикл по тикетам
+        // Инициализация структуры данных для агрегации всех метрик
+        $monthMetrics = [];
         $stageAgg = [];
         $allStages = [
             'DT140_12:SUCCESS' => ['name' => 'Успешное закрытие', 'color' => '#28a745'],
@@ -805,39 +1186,182 @@ try {
             'DT140_12:UC_0GBU8Z' => ['name' => 'Закрыли без задачи', 'color' => '#6c757d']
         ];
         
+        // Инициализация структуры данных для каждого месяца и недели
         foreach ($months as $month) {
-            $monthNewTickets = 0;
-            $monthClosedTickets = 0;
-            $monthClosedTicketsCreatedThisWeek = 0;
-            $monthClosedTicketsCreatedOtherWeek = 0;
-            $monthCarryoverTickets = 0;
-            $monthCarryoverTicketsCreatedThisWeek = 0;
-            $monthCarryoverTicketsCreatedOtherWeek = 0;
+            $monthNumber = $month['monthNumber'];
+            $monthMetrics[$monthNumber] = [
+                'newTickets' => 0,
+                'closedTickets' => 0,
+                'closedTicketsCreatedThisWeek' => 0,
+                'closedTicketsCreatedOtherWeek' => 0,
+                'carryoverTickets' => 0,
+                'carryoverTicketsCreatedThisWeek' => 0,
+                'carryoverTicketsCreatedOtherWeek' => 0,
+                'weeks' => []
+            ];
             
-            $weeksData = [];
-            
-            // Для каждой недели в месяце вычисляем метрики
             foreach ($month['weeks'] as $week) {
-                $weekMetrics = calculateWeekMetrics(
-                    $week['weekStart'],
-                    $week['weekEnd'],
-                    $tickets,
-                    $targetStages,
-                    $closingStages,
-                    $keeperId,
-                    $debug
-                );
+                $weekNumber = $week['weekNumber'];
+                $monthMetrics[$monthNumber]['weeks'][$weekNumber] = [
+                    'newTickets' => 0,
+                    'closedTickets' => 0,
+                    'closedTicketsCreatedThisWeek' => 0,
+                    'closedTicketsCreatedOtherWeek' => 0,
+                    'carryoverTickets' => 0,
+                    'carryoverTicketsCreatedThisWeek' => 0,
+                    'carryoverTicketsCreatedOtherWeek' => 0
+                ];
+            }
+        }
+        
+        // TASK-059-02: Один проход по тикетам для агрегации всех метрик
+        $aggregationStartTime = microtime(true);
+        error_log("[MONTHS-AGGREGATION] Starting unified aggregation for " . count($tickets) . " tickets");
+        
+        foreach ($tickets as $ticket) {
+            $createdTime = $ticket['createdTime'] ?? null;
+            $movedTime = $ticket['movedTime'] ?? $ticket['updatedTime'] ?? null;
+            $stageId = $ticket['stageId'] ?? null;
+            $stageId = $stageId ? strtoupper($stageId) : null;
+            
+            // Для каждого месяца определяем метрики
+            foreach ($months as $month) {
+                $monthStart = $month['monthStart'];
+                $monthEnd = $month['monthEnd'];
+                $monthNumber = $month['monthNumber'];
                 
-                $monthNewTickets += $weekMetrics['newTickets'];
-                $monthClosedTickets += $weekMetrics['closedTickets'];
-                $monthClosedTicketsCreatedThisWeek += $weekMetrics['closedTicketsCreatedThisWeek'];
-                $monthClosedTicketsCreatedOtherWeek += $weekMetrics['closedTicketsCreatedOtherWeek'];
-                $monthCarryoverTickets += $weekMetrics['carryoverTickets'];
-                $monthCarryoverTicketsCreatedThisWeek += $weekMetrics['carryoverTicketsCreatedThisWeek'];
-                $monthCarryoverTicketsCreatedOtherWeek += $weekMetrics['carryoverTicketsCreatedOtherWeek'];
+                // Новые тикеты за месяц
+                if (isInRange($createdTime, $monthStart, $monthEnd)) {
+                    $monthMetrics[$monthNumber]['newTickets']++;
+                }
+                
+                // Закрытые тикеты за месяц
+                if ($stageId && in_array($stageId, $closingStages, true)) {
+                    if (isInRange($movedTime, $monthStart, $monthEnd)) {
+                        $monthMetrics[$monthNumber]['closedTickets']++;
+                        
+                        // Разбивка по критерию создания (TASK-058-03)
+                        if (isInRange($createdTime, $monthStart, $monthEnd)) {
+                            $monthMetrics[$monthNumber]['closedTicketsCreatedThisWeek']++;
+                        } else {
+                            $monthMetrics[$monthNumber]['closedTicketsCreatedOtherWeek']++;
+                        }
+                        
+                        // Агрегация по стадиям
+                        if (!isset($stageAgg[$stageId])) {
+                            $stageAgg[$stageId] = 0;
+                        }
+                        $stageAgg[$stageId]++;
+                    }
+                }
+                
+                // Переходящие тикеты на конец месяца
+                if (isCarryoverTicket($ticket, $monthEnd, $monthEnd, $targetStages, $closingStages)) {
+                    $monthMetrics[$monthNumber]['carryoverTickets']++;
+                    
+                    // Разбивка по критерию создания
+                    if (isInRange($createdTime, $monthStart, $monthEnd)) {
+                        $monthMetrics[$monthNumber]['carryoverTicketsCreatedThisWeek']++;
+                    } else {
+                        $monthMetrics[$monthNumber]['carryoverTicketsCreatedOtherWeek']++;
+                    }
+                }
+                
+                // Агрегация по неделям внутри месяца
+                foreach ($month['weeks'] as $week) {
+                    $weekStart = $week['weekStart'];
+                    $weekEnd = $week['weekEnd'];
+                    $weekNumber = $week['weekNumber'];
+                    
+                    // Новые тикеты за неделю
+                    if (isInRange($createdTime, $weekStart, $weekEnd)) {
+                        $monthMetrics[$monthNumber]['weeks'][$weekNumber]['newTickets']++;
+                    }
+                    
+                    // Закрытые тикеты за неделю
+                    if ($stageId && in_array($stageId, $closingStages, true)) {
+                        // Используем логику из calculateWeekMetrics для определения закрытых тикетов
+                        $isMovedInRange = isInRange($movedTime, $weekStart, $weekEnd);
+                        $isCreatedInRange = isInRange($createdTime, $weekStart, $weekEnd);
+                        $shouldCountAsClosed = false;
+                        
+                        if ($isMovedInRange) {
+                            $shouldCountAsClosed = true;
+                        } else if ($isCreatedInRange && !$movedTime) {
+                            $shouldCountAsClosed = true;
+                        } else if ($isCreatedInRange) {
+                            $shouldCountAsClosed = true;
+                        }
+                        
+                        if ($shouldCountAsClosed) {
+                            $monthMetrics[$monthNumber]['weeks'][$weekNumber]['closedTickets']++;
+                            
+                            // Разбивка по критерию создания
+                            if ($isCreatedInRange) {
+                                $monthMetrics[$monthNumber]['weeks'][$weekNumber]['closedTicketsCreatedThisWeek']++;
+                            } else {
+                                $monthMetrics[$monthNumber]['weeks'][$weekNumber]['closedTicketsCreatedOtherWeek']++;
+                            }
+                        }
+                    }
+                    
+                    // Переходящие тикеты за неделю
+                    if (isCarryoverTicket($ticket, $weekStart, $weekEnd, $targetStages, $closingStages)) {
+                        $monthMetrics[$monthNumber]['weeks'][$weekNumber]['carryoverTickets']++;
+                        
+                        // Разбивка по критерию создания
+                        if (isInRange($createdTime, $weekStart, $weekEnd)) {
+                            $monthMetrics[$monthNumber]['weeks'][$weekNumber]['carryoverTicketsCreatedThisWeek']++;
+                        } else {
+                            $monthMetrics[$monthNumber]['weeks'][$weekNumber]['carryoverTicketsCreatedOtherWeek']++;
+                        }
+                    }
+                }
+            }
+        }
+        
+        $aggregationTime = microtime(true) - $aggregationStartTime;
+        error_log("[MONTHS-AGGREGATION] Unified aggregation completed in " . round($aggregationTime, 2) . " seconds");
+        
+        // Формирование ответа из агрегированных данных
+        $newTicketsByMonth = [];
+        $closedTicketsByMonth = [];
+        $carryoverTicketsByMonth = [];
+        $totalNewTickets = 0;
+        $totalClosedTickets = 0;
+        $totalCarryoverTickets = 0;
+        
+        foreach ($months as $month) {
+            $monthNumber = $month['monthNumber'];
+            $metrics = $monthMetrics[$monthNumber];
+            
+            // Подсчёт итогов
+            $totalNewTickets += $metrics['newTickets'];
+            $totalClosedTickets += $metrics['closedTickets'];
+            $totalCarryoverTickets += $metrics['carryoverTickets'];
+            
+            // TASK-058-03: Проверка корректности расчета
+            // Общее число закрытых тикетов должно равняться сумме "этой неделей" + "другой неделей"
+            if ($metrics['closedTickets'] !== ($metrics['closedTicketsCreatedThisWeek'] + $metrics['closedTicketsCreatedOtherWeek'])) {
+                error_log("[MONTHS] Warning: Total closed tickets ({$metrics['closedTickets']}) != thisWeek ({$metrics['closedTicketsCreatedThisWeek']}) + otherWeek ({$metrics['closedTicketsCreatedOtherWeek']}) for month: {$month['monthName']} {$month['year']}");
+            }
+            
+            // Формирование данных для недель
+            $weeksData = [];
+            foreach ($month['weeks'] as $week) {
+                $weekNumber = $week['weekNumber'];
+                $weekMetrics = $metrics['weeks'][$weekNumber] ?? [
+                    'newTickets' => 0,
+                    'closedTickets' => 0,
+                    'closedTicketsCreatedThisWeek' => 0,
+                    'closedTicketsCreatedOtherWeek' => 0,
+                    'carryoverTickets' => 0,
+                    'carryoverTicketsCreatedThisWeek' => 0,
+                    'carryoverTicketsCreatedOtherWeek' => 0
+                ];
                 
                 $weeksData[] = [
-                    'weekNumber' => $week['weekNumber'],
+                    'weekNumber' => $weekNumber,
                     'count' => $weekMetrics['newTickets'],
                     'closedCount' => $weekMetrics['closedTickets'],
                     'closedCreatedThisWeek' => $weekMetrics['closedTicketsCreatedThisWeek'],
@@ -848,105 +1372,20 @@ try {
                 ];
             }
             
-            // Подсчёт новых тикетов за месяц (созданных в этом месяце)
-            $monthStart = $month['monthStart'];
-            $monthEnd = $month['monthEnd'];
-            $monthNewCount = 0;
-            foreach ($tickets as $ticket) {
-                $createdTime = $ticket['createdTime'] ?? null;
-                if (isInRange($createdTime, $monthStart, $monthEnd)) {
-                    $monthNewCount++;
-                }
-            }
-            
-            // Подсчёт закрытых тикетов за месяц (закрытых в этом месяце)
-            // TASK-058-03: Логика расчета "этой неделей" и "другой неделей"
-            // ВАЖНО: Названия "этой неделей" и "другой неделей" — исторические (из недельного режима),
-            // но в месячном режиме логика работает с месяцами, а не неделями.
-            // 
-            // Логика:
-            // - "Этой неделей" (monthClosedCreatedThisWeek) = закрытые тикеты месяца, которые были созданы в этом же месяце
-            // - "Другой неделей" (monthClosedCreatedOtherWeek) = закрытые тикеты месяца, которые были созданы в предыдущих месяцах
-            // 
-            // Пример для октября:
-            // - Тикет создан 2025-10-05, закрыт 2025-10-15 → "этой неделей" (создан в октябре)
-            // - Тикет создан 2025-09-20, закрыт 2025-10-10 → "другой неделей" (создан в сентябре)
-            $monthClosedCount = 0;
-            $monthClosedCreatedThisWeek = 0;  // "Этой неделей" = создан в этом же месяце
-            $monthClosedCreatedOtherWeek = 0;  // "Другой неделей" = создан в другом месяце
-            foreach ($tickets as $ticket) {
-                $movedTime = $ticket['movedTime'] ?? $ticket['updatedTime'] ?? null;
-                $createdTime = $ticket['createdTime'] ?? null;
-                $stageId = $ticket['stageId'] ?? null;
-                $stageId = $stageId ? strtoupper($stageId) : null;
-                
-                // Тикет закрыт в этом месяце?
-                if ($stageId && in_array($stageId, $closingStages, true)) {
-                    if (isInRange($movedTime, $monthStart, $monthEnd)) {
-                        $monthClosedCount++;
-                        
-                        // TASK-058-03: Определение "этой неделей" vs "другой неделей"
-                        // "Этой неделей" = создан в этом же месяце (название историческое, но логика месячная)
-                        if (isInRange($createdTime, $monthStart, $monthEnd)) {
-                            $monthClosedCreatedThisWeek++;  // Создан в этом же месяце
-                        } else {
-                            $monthClosedCreatedOtherWeek++; // Создан в другом месяце
-                        }
-                    }
-                }
-            }
-            
-            // TASK-058-03: Проверка корректности расчета
-            // Общее число закрытых тикетов должно равняться сумме "этой неделей" + "другой неделей"
-            if ($monthClosedCount !== ($monthClosedCreatedThisWeek + $monthClosedCreatedOtherWeek)) {
-                error_log("[MONTHS] Warning: Total closed tickets ({$monthClosedCount}) != thisWeek ({$monthClosedCreatedThisWeek}) + otherWeek ({$monthClosedCreatedOtherWeek}) for month: {$month['monthName']} {$month['year']}");
-            }
-            
-            // Подсчёт переходящих тикетов на конец месяца
-            $monthCarryoverCount = 0;
-            $monthCarryoverCreatedThisWeek = 0;
-            $monthCarryoverCreatedOtherWeek = 0;
-            foreach ($tickets as $ticket) {
-                if (isCarryoverTicket($ticket, $monthEnd, $monthEnd, $targetStages, $closingStages)) {
-                    $monthCarryoverCount++;
-                    $createdTime = $ticket['createdTime'] ?? null;
-                    if (isInRange($createdTime, $monthStart, $monthEnd)) {
-                        $monthCarryoverCreatedThisWeek++;
-                    } else {
-                        $monthCarryoverCreatedOtherWeek++;
-                    }
-                }
-            }
-            
-            // Агрегация по стадиям (только закрытые за месяц)
-            foreach ($tickets as $ticket) {
-                $movedTime = $ticket['movedTime'] ?? $ticket['updatedTime'] ?? null;
-                $stageId = $ticket['stageId'] ?? null;
-                $stageId = $stageId ? strtoupper($stageId) : null;
-                
-                if ($stageId && in_array($stageId, $closingStages, true)) {
-                    if (isInRange($movedTime, $monthStart, $monthEnd)) {
-                        if (!isset($stageAgg[$stageId])) {
-                            $stageAgg[$stageId] = 0;
-                        }
-                        $stageAgg[$stageId]++;
-                    }
-                }
-            }
-            
+            // Формирование ответа для месяца
             $newTicketsByMonth[] = [
-                'month' => $month['monthNumber'],
+                'month' => $monthNumber,
                 'monthName' => $month['monthName'],
-                'count' => $monthNewCount,
+                'count' => $metrics['newTickets'],
                 'weeks' => $weeksData
             ];
             
             $closedTicketsByMonth[] = [
-                'month' => $month['monthNumber'],
+                'month' => $monthNumber,
                 'monthName' => $month['monthName'],
-                'count' => $monthClosedCount,
-                'closedCreatedThisWeek' => $monthClosedCreatedThisWeek,
-                'closedCreatedOtherWeek' => $monthClosedCreatedOtherWeek,
+                'count' => $metrics['closedTickets'],
+                'closedCreatedThisWeek' => $metrics['closedTicketsCreatedThisWeek'],
+                'closedCreatedOtherWeek' => $metrics['closedTicketsCreatedOtherWeek'],
                 'weeks' => array_map(function($week) {
                     return [
                         'weekNumber' => $week['weekNumber'],
@@ -958,11 +1397,11 @@ try {
             ];
             
             $carryoverTicketsByMonth[] = [
-                'month' => $month['monthNumber'],
+                'month' => $monthNumber,
                 'monthName' => $month['monthName'],
-                'count' => $monthCarryoverCount,
-                'carryoverCreatedThisWeek' => $monthCarryoverCreatedThisWeek,
-                'carryoverCreatedOtherWeek' => $monthCarryoverCreatedOtherWeek,
+                'count' => $metrics['carryoverTickets'],
+                'carryoverCreatedThisWeek' => $metrics['carryoverTicketsCreatedThisWeek'],
+                'carryoverCreatedOtherWeek' => $metrics['carryoverTicketsCreatedOtherWeek'],
                 'weeks' => array_map(function($week) {
                     return [
                         'weekNumber' => $week['weekNumber'],
@@ -973,9 +1412,7 @@ try {
                 }, $weeksData)
             ];
             
-            $totalNewTickets += $monthNewCount;
-            $totalClosedTickets += $monthClosedCount;
-            $totalCarryoverTickets += $monthCarryoverCount;
+            // Подсчёт итогов уже выполнен выше (строки 1234-1236), эти строки удалены как дубликаты
         }
         
         // TASK-058-01: Расчет данных 4-го месяца для процентов
@@ -996,8 +1433,8 @@ try {
                     throw new Exception('Invalid date objects for previous month');
                 }
                 
-                error_log("[MONTHS] Calculating previous period data for month: {$previousMonth['monthName']} {$previousMonth['year']}");
-                error_log("[MONTHS] Previous month period: {$previousMonthStart->format('Y-m-d H:i:s')} to {$previousMonthEnd->format('Y-m-d H:i:s')}");
+                // error_log("[MONTHS] Calculating previous period data for month: {$previousMonth['monthName']} {$previousMonth['year']}");
+                // error_log("[MONTHS] Previous month period: {$previousMonthStart->format('Y-m-d H:i:s')} to {$previousMonthEnd->format('Y-m-d H:i:s')}");
                 
                 // Проверка наличия массива тикетов
                 if (!is_array($tickets)) {
@@ -1037,7 +1474,7 @@ try {
                         }
                     }
                     
-                    error_log("[MONTHS] Previous period data (4th month): " . json_encode($previousPeriodData));
+                    error_log("[MONTHS] Previous period data (4th month): " . json_encode($previousPeriodData, JSON_UNESCAPED_UNICODE));
                 }
             } else {
                 error_log("[MONTHS] Warning: Previous month (4th) not found or invalid, previousPeriodData will be empty");
@@ -1065,7 +1502,7 @@ try {
         }
         
         // Формирование ответа
-        jsonResponse([
+        $response = [
             'success' => true,
             'meta' => [
                 'periodMode' => 'months',
@@ -1100,7 +1537,37 @@ try {
                 // TASK-058-01: Данные 4-го месяца для расчета процентов
                 'previousPeriodData' => $previousPeriodData
             ]
+        ];
+        
+        // TASK-059-05: Сохранение в кеш для режима "months"
+        $cacheKey = GraphAdmissionClosureCache::generateKey([
+            'product' => $product,
+            'periodMode' => $periodMode,
+            'includeTickets' => $includeTickets,
+            'includeNewTicketsByStages' => $includeNewTicketsByStages,
+            'includeCarryoverTickets' => $includeCarryoverTickets,
+            'includeCarryoverTicketsByDuration' => $includeCarryoverTicketsByDuration
         ]);
+        
+        if (GraphAdmissionClosureCache::set($cacheKey, $response, 300)) {
+            error_log("[Cache] Cache saved for key: {$cacheKey}");
+        } else {
+            error_log("[Cache] Failed to save cache for key: {$cacheKey}");
+        }
+        
+        // Периодическая очистка устаревших кешей (каждый 10-й запрос)
+        if (rand(1, 10) === 1) {
+            $deleted = GraphAdmissionClosureCache::clearExpired();
+            if ($deleted > 0) {
+                error_log("[Cache] Cleared {$deleted} expired cache entries");
+            }
+        }
+        
+        // TASK-059: Логирование общего времени выполнения для режима "months"
+        $monthsModeTotalTime = microtime(true) - $monthsModeStartTime;
+        error_log("[MONTHS-PERFORMANCE] Total execution time: " . round($monthsModeTotalTime, 2) . " seconds");
+        
+        jsonResponse($response);
     }
     
     // Границы недели (для режима 'weeks')

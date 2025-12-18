@@ -122,7 +122,13 @@ const chartData = ref({
   carryoverTickets: 0,
   newTicketsByMonth: [],
   closedTicketsByMonth: [],
-  carryoverTicketsByMonth: []
+  carryoverTicketsByMonth: [],
+  // TASK-058-01: Данные 4-го месяца для расчета процентов
+  previousPeriodData: {
+    newTickets: null,
+    closedTickets: null,
+    carryoverTickets: null
+  }
 });
 
 // Навигация "Назад"
@@ -201,6 +207,11 @@ async function updateProgress(targetProgress, stage, duration = 500) {
   currentLoadingStage.value = stage;
 }
 
+/**
+ * TASK-059-04: Загрузка данных с реальным прогрессом
+ * 
+ * Использует промежуточные обновления прогресса на основе времени выполнения запроса
+ */
 async function loadData() {
   console.log('[DEBUG MonthsDashboard] loadData called');
   console.log('[DEBUG MonthsDashboard] isLoading before:', isLoading.value);
@@ -213,22 +224,46 @@ async function loadData() {
   
   console.log('[DEBUG MonthsDashboard] isLoading set to true');
   
+  // TASK-059-04: Переменные для отслеживания прогресса (объявлены вне try-catch для доступа в catch)
+  let progressTracker = null;
+  let timeoutId = null;
+  
   try {
     console.log('[DEBUG MonthsDashboard] Starting API call');
-    // Этап 1: Подготовка данных (0-10%)
-    await updateProgress(10, 'Подготовка данных...', 300);
     
-    // Этап 2: Загрузка данных за октябрь (10-40%)
-    await updateProgress(40, 'Загрузка данных за октябрь...', 800);
+    // Этап 1: Подготовка данных (0-5%)
+    await updateProgress(5, 'Подготовка данных...', 200);
     
-    // Этап 3: Загрузка данных за ноябрь (40-70%)
-    await updateProgress(70, 'Загрузка данных за ноябрь...', 800);
+    // Этап 2: Запрос к API с промежуточными обновлениями (5-90%)
+    // TASK-059-04: Реальный прогресс загрузки на основе времени выполнения
+    const apiStartTime = Date.now();
+    const estimatedApiTime = 20000; // Оценочное время: 20 секунд
     
-    // Этап 4: Загрузка данных за декабрь (70-90%)
-    await updateProgress(90, 'Загрузка данных за декабрь...', 800);
+    // Создаём интервал для отслеживания прогресса
+    progressTracker = setInterval(() => {
+      const elapsed = Date.now() - apiStartTime;
+      const progress = Math.min(5 + (elapsed / estimatedApiTime) * 85, 90);
+      loadingProgress.value = progress;
+      
+      // Обновляем этап на основе прогресса
+      if (progress < 35) {
+        currentLoadingStage.value = 'Загрузка данных за период (запрос 1)...';
+      } else if (progress < 65) {
+        currentLoadingStage.value = 'Загрузка данных за период (запрос 2)...';
+      } else if (progress < 85) {
+        currentLoadingStage.value = 'Загрузка данных за период (запрос 3)...';
+      } else {
+        currentLoadingStage.value = 'Агрегация данных...';
+      }
+    }, 500); // Обновление каждые 500ms
     
-    // Этап 5: Агрегация данных (90-95%)
-    await updateProgress(95, 'Агрегация данных...', 400);
+    // Таймаут для автоматической остановки интервала (на случай долгого запроса)
+    timeoutId = setTimeout(() => {
+      if (progressTracker) {
+        clearInterval(progressTracker);
+        progressTracker = null;
+      }
+    }, estimatedApiTime + 10000); // +10 секунд запас
     
     // Выполняем реальный запрос к API
     const result = await fetchAdmissionClosureStats({
@@ -237,7 +272,20 @@ async function loadData() {
       includeTickets: true
     });
     
-    // Этап 6: Формирование графиков (95-100%)
+    // Очищаем таймаут, так как запрос завершился
+    clearTimeout(timeoutId);
+    
+    // Останавливаем отслеживание прогресса
+    if (progressTracker) {
+      clearInterval(progressTracker);
+      progressTracker = null;
+    }
+    
+    // Устанавливаем прогресс на 90% после завершения запроса
+    loadingProgress.value = 90;
+    currentLoadingStage.value = 'Агрегация данных завершена';
+    
+    // Этап 3: Формирование графиков (90-100%)
     await updateProgress(100, 'Формирование графиков...', 300);
     
     console.log('[DEBUG MonthsDashboard] API call successful, result:', result);
@@ -249,11 +297,23 @@ async function loadData() {
     // Небольшая задержка перед скрытием прелоадера
     await new Promise(resolve => setTimeout(resolve, 200));
   } catch (err) {
+    // TASK-059-04: Останавливаем отслеживание прогресса при ошибке
+    if (progressTracker) {
+      clearInterval(progressTracker);
+      progressTracker = null;
+    }
+    
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+    
     console.error('[DEBUG MonthsDashboard] API call failed:', err);
     error.value = err instanceof Error ? err : new Error('Неизвестная ошибка загрузки');
     console.error('[GraphAdmissionClosureMonthsDashboard] loadData error:', err);
     // При ошибке показываем прогресс 100%, чтобы прелоадер скрылся
     loadingProgress.value = 100;
+    currentLoadingStage.value = 'Ошибка загрузки данных';
   } finally {
     console.log('[DEBUG MonthsDashboard] Finally block: setting isLoading to false');
     isLoading.value = false;
