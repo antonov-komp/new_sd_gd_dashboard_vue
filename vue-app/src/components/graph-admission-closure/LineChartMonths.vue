@@ -6,26 +6,29 @@
         Новые и Закрытые тикеты
         <span v-if="chartPeriod" class="chart-period">({{ chartPeriod }})</span>
       </h3>
-      <div class="chart-container">
-        <Line :data="newClosedChartData" :options="chartOptions" />
-      </div>
-      <!-- TASK-058-04: Сводный итог под графиком -->
-      <div class="chart-summary">
-        <h4 class="summary-title">Сводный итог</h4>
-        <div class="summary-numbers">
-          <div class="summary-row">
-            <span class="summary-label">Новые:</span>
-            <span class="summary-values">{{ summaryNumbers.new }}</span>
-          </div>
-          <div class="summary-row">
-            <span class="summary-label">Закрытые:</span>
-            <span class="summary-values">{{ summaryNumbers.closed }}</span>
-          </div>
+      <!-- TASK-058-07: Обертка для графика и сводного итога -->
+      <div class="chart-wrapper">
+        <div class="chart-container">
+          <Line :data="newClosedChartData" :options="chartOptions" />
         </div>
-        <div class="summary-analysis">
-          <p v-for="(analysis, index) in summaryAnalysis" :key="index">
-            {{ analysis }}
-          </p>
+        <!-- TASK-058-07: Сводный итог справа от графика -->
+        <div class="chart-summary">
+          <h4 class="summary-title">Сводный итог</h4>
+          <div class="summary-numbers">
+            <div class="summary-row">
+              <span class="summary-label">Новые:</span>
+              <span class="summary-values">{{ summaryNumbers.new }}</span>
+            </div>
+            <div class="summary-row">
+              <span class="summary-label">Закрытые:</span>
+              <span class="summary-values">{{ summaryNumbers.closed }}</span>
+            </div>
+          </div>
+          <div class="summary-analysis">
+            <p v-for="(analysis, index) in summaryAnalysis" :key="index">
+              {{ analysis }}
+            </p>
+          </div>
         </div>
       </div>
     </div>
@@ -36,16 +39,19 @@
         Переходящие тикеты
         <span v-if="carryoverChartPeriod" class="chart-period">({{ carryoverChartPeriod }})</span>
       </h3>
-      <div class="chart-container">
-        <Line :data="carryoverChartData" :options="chartOptions" />
-      </div>
-      <!-- TASK-058-05: Словесный отчет под графиком -->
-      <div class="chart-analysis">
-        <h4 class="analysis-title">Анализ</h4>
-        <div class="analysis-content">
-          <p v-for="(analysis, index) in carryoverAnalysis" :key="index">
-            {{ analysis }}
-          </p>
+      <!-- TASK-058-07: Обертка для графика и анализа -->
+      <div class="chart-wrapper">
+        <div class="chart-container">
+          <Line :data="carryoverChartData" :options="chartOptions" />
+        </div>
+        <!-- TASK-058-07: Анализ справа от графика -->
+        <div class="chart-analysis">
+          <h4 class="analysis-title">Анализ</h4>
+          <div class="analysis-content">
+            <p v-for="(analysis, index) in carryoverAnalysis" :key="index">
+              {{ analysis }}
+            </p>
+          </div>
         </div>
       </div>
     </div>
@@ -297,11 +303,12 @@ const chartOptions = {
   responsive: true,
   maintainAspectRatio: false,
   // TASK-058-06: Отступы для легенды (слева) и цифр на точках (сверху)
+  // TASK-058-07: Увеличен padding сверху, чтобы цифры не залипали на верхний край
   layout: {
     padding: {
       left: 16,  // Отступ от левого края для легенды
       right: 0,
-      top: 32,  // Отступ сверху для цифр на точках, чтобы не перекрывали легенду (увеличен)
+      top: 56,  // Увеличен отступ сверху для цифр на точках (было 32px)
       bottom: 0
     }
   },
@@ -769,15 +776,28 @@ function getWeekData(type, weekNumber) {
   color: var(--b24-text-secondary, #6b7280);
 }
 
-.chart-container {
+/* TASK-058-07: Обертка для графика и сводного итога */
+.chart-wrapper {
+  display: flex;
+  flex-direction: row;
+  gap: 20px;
+  align-items: flex-start;
   width: 100%;
-  height: 400px;
+}
+
+.chart-container {
+  flex: 0 0 60%;
+  width: 60%;
+  height: 240px; /* TASK-058-07: Увеличена высота для лучшей читаемости графика (было 160px) */
   position: relative;
 }
 
 /* TASK-058-04: Стили для сводного итога */
+/* TASK-058-07: Сводный итог справа от графика */
 .chart-summary {
-  margin-top: 24px;
+  flex: 0 0 35%;
+  width: 35%;
+  margin-top: 0; /* TASK-058-07: Убрать отступ сверху, так как теперь справа */
   padding: 20px;
   background-color: var(--b24-bg-light, #f9fafb);
   border-radius: 8px;
@@ -829,8 +849,11 @@ function getWeekData(type, weekNumber) {
 }
 
 /* TASK-058-05: Стили для блока анализа переходящих тикетов */
+/* TASK-058-07: Анализ справа от графика */
 .chart-analysis {
-  margin-top: 24px;
+  flex: 0 0 35%;
+  width: 35%;
+  margin-top: 0; /* TASK-058-07: Убрать отступ сверху, так как теперь справа */
   padding: 20px;
   background-color: var(--b24-bg-light, #f9fafb);
   border-radius: 8px;
@@ -943,15 +966,22 @@ function getWeekData(type, weekNumber) {
 
 /* Адаптивность */
 @media (max-width: 768px) {
+  /* TASK-058-07: Вертикальная компоновка на мобильных устройствах */
+  .chart-wrapper {
+    flex-direction: column; /* Вертикальная компоновка на мобильных */
+  }
+  
   .chart-container {
-    height: 300px;
+    flex: 0 0 100%;
+    width: 100%;
+    height: 280px; /* Увеличена высота на мобильных для лучшей читаемости (было 200px) */
   }
   
-  .chart-summary {
-    padding: 16px;
-  }
-  
+  .chart-summary,
   .chart-analysis {
+    flex: 0 0 100%;
+    width: 100%;
+    margin-top: 16px; /* Вернуть отступ сверху на мобильных */
     padding: 16px;
   }
   
