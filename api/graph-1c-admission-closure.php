@@ -558,16 +558,27 @@ try {
     if ($periodMode === 'months') {
         // TASK-058-01: Получаем 4 месяца (3 для отображения + 1 для процентов)
         $allMonths = calculateLastFourMonths();
+        // Структура $allMonths: [0 => Сентябрь (4-й, для процентов), 1 => Октябрь, 2 => Ноябрь, 3 => Декабрь]
         
-        // Первые 3 месяца для отображения
-        $months = array_slice($allMonths, 0, 3);
+        // Последние 3 месяца для отображения (Октябрь, Ноябрь, Декабрь)
+        // TASK-058-01-FIX: Берем последние 3 месяца для отображения, а не первые
+        $months = array_slice($allMonths, 1, 3); // Индексы 1, 2, 3
         
-        // 4-й месяц для расчета процентов
-        $previousMonth = $allMonths[3] ?? null;
+        // 4-й месяц (самый старый, Сентябрь) для расчета процентов
+        $previousMonth = $allMonths[0] ?? null; // Индекс 0
         
-        // Период для запросов к Bitrix24 (включая 4-й месяц)
-        $periodStartUtc = $allMonths[0]['monthStartUtc']; // Самый старый месяц (4-й)
-        $periodEndUtc = $months[2]['monthEndUtc']; // Последний месяц из 3-х для отображения
+        // TASK-058-01-FIX: Логирование для отладки
+        error_log("[MONTHS] All 4 months: " . json_encode(array_map(function($m) {
+            return $m['monthName'] . ' ' . $m['year'];
+        }, $allMonths)));
+        error_log("[MONTHS] Months for display (3): " . json_encode(array_map(function($m) {
+            return $m['monthName'] . ' ' . $m['year'];
+        }, $months)));
+        error_log("[MONTHS] Previous month (4th, for percentages): " . ($previousMonth ? $previousMonth['monthName'] . ' ' . $previousMonth['year'] : 'NOT FOUND'));
+        
+        // Период для запросов к Bitrix24 (включая 4-й месяц для расчета процентов)
+        $periodStartUtc = $allMonths[0]['monthStartUtc']; // Самый старый месяц (4-й, Сентябрь)
+        $periodEndUtc = $allMonths[3]['monthEndUtc']; // Последний месяц (Декабрь, текущий)
         $periodStart = new DateTimeImmutable($periodStartUtc, new DateTimeZone('UTC'));
         $periodEnd = new DateTimeImmutable($periodEndUtc, new DateTimeZone('UTC'));
         

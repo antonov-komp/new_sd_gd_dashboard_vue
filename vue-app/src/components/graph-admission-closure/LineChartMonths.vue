@@ -212,11 +212,21 @@ const newClosedChartData = computed(() => {
         tension: 0.4,
         fill: false,
         // TASK-058-04: Настройка datalabels для новых тикетов (справа от точки)
+        // TASK-058-06: Улучшено позиционирование для избежания перекрытия
         datalabels: {
           anchor: 'end',
           align: 'top',
-          offset: 4,
-          color: chartColors.primary
+          offset: 10,  // Увеличенное смещение для лучшей видимости
+          color: chartColors.primary,
+          font: {
+            size: 12,
+            weight: 'bold'
+          },
+          backgroundColor: 'rgba(255, 255, 255, 0.9)',
+          borderColor: chartColors.primary,
+          borderWidth: 1,
+          borderRadius: 4,
+          padding: 4
         }
       },
       {
@@ -226,12 +236,22 @@ const newClosedChartData = computed(() => {
         backgroundColor: 'rgba(40, 167, 69, 0.1)',
         tension: 0.4,
         fill: false,
-        // TASK-058-04: Настройка datalabels для закрытых тикетов (слева от точки, чтобы не перекрывались)
+        // TASK-058-04: Настройка datalabels для закрытых тикетов
+        // TASK-058-06: Изменено на 'bottom' для избежания перекрытия с новыми тикетами
         datalabels: {
           anchor: 'start',
-          align: 'top',
-          offset: 4,
-          color: chartColors.success
+          align: 'bottom',  // Изменено с 'top' на 'bottom' для разделения по вертикали
+          offset: 10,  // Увеличенное смещение для лучшей видимости
+          color: chartColors.success,
+          font: {
+            size: 12,
+            weight: 'bold'
+          },
+          backgroundColor: 'rgba(255, 255, 255, 0.9)',
+          borderColor: chartColors.success,
+          borderWidth: 1,
+          borderRadius: 4,
+          padding: 4
         }
       }
     ]
@@ -276,9 +296,18 @@ const carryoverChartData = computed(() => {
 const chartOptions = {
   responsive: true,
   maintainAspectRatio: false,
+  // TASK-058-06: Отступы для легенды (слева) и цифр на точках (сверху)
+  layout: {
+    padding: {
+      left: 16,  // Отступ от левого края для легенды
+      right: 0,
+      top: 32,  // Отступ сверху для цифр на точках, чтобы не перекрывали легенду (увеличен)
+      bottom: 0
+    }
+  },
   plugins: {
     legend: {
-      position: 'top',
+      position: 'left',  // TASK-058-06: Легенда размещена слева
       labels: {
         font: {
           size: 14,
