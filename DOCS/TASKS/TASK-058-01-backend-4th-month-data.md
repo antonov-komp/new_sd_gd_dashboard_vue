@@ -281,28 +281,54 @@ if ($previousMonth) {
 ### 4. Добавление previousPeriodData в ответ
 
 **Файл:** `api/graph-1c-admission-closure.php`  
-**Строка:** ~900-930 (формирование финального ответа)
+**Строка:** ~905-938 (формирование финального ответа для режима months)
 
 **Задачи:**
-1. Добавить поле `previousPeriodData` в структуру ответа
+1. Добавить поле `previousPeriodData` в структуру ответа (в массив `data`)
 2. Убедиться, что поле присутствует только в режиме `months`
 3. Сохранить обратную совместимость (не ломать режим `weeks`)
+4. Обработать случай, когда `previousPeriodData` не может быть рассчитан
+
+**Точное место вставки:**
+- После строки 891 (после расчета `$totalCarryoverTickets`)
+- Перед строкой 905 (перед `jsonResponse`)
 
 **Изменения в коде:**
 ```php
-// В блоке формирования ответа для режима months (строка ~900)
+// После строки 891 (после расчета данных за 3 месяца)
 
+// TASK-058-01: Расчет данных 4-го месяца для процентов
+$previousPeriodData = [
+    'newTickets' => 0,
+    'closedTickets' => 0,
+    'carryoverTickets' => 0
+];
+
+if ($previousMonth) {
+    // ... расчет данных (см. раздел 3) ...
+}
+
+// В блоке формирования ответа для режима months (строка ~905)
 jsonResponse([
     'success' => true,
     'meta' => [
         'periodMode' => 'months',
+        'periodStartUtc' => $periodStartUtc,
+        'periodEndUtc' => $periodEndUtc,
         'months' => array_map(function($month) {
             return [
                 'monthNumber' => $month['monthNumber'],
                 'monthName' => $month['monthName'],
                 'year' => $month['year'],
                 'monthStartUtc' => $month['monthStartUtc'],
-                'monthEndUtc' => $month['monthEndUtc']
+                'monthEndUtc' => $month['monthEndUtc'],
+                'weeks' => array_map(function($week) {
+                    return [
+                        'weekNumber' => $week['weekNumber'],
+                        'weekStartUtc' => $week['weekStartUtc'],
+                        'weekEndUtc' => $week['weekEndUtc']
+                    ];
+                }, $month['weeks'])
             ];
         }, $months)
     ],
@@ -313,13 +339,30 @@ jsonResponse([
         'closedTicketsByMonth' => $closedTicketsByMonth,
         'carryoverTickets' => $totalCarryoverTickets,
         'carryoverTicketsByMonth' => $carryoverTicketsByMonth,
-        'stages' => $stagesSummary,
-        'responsible' => $responsibleSummary,
+        'stages' => $stages,
+        'responsible' => [], // TODO: Реализовать агрегацию по сотрудникам при необходимости
         // TASK-058-01: Данные 4-го месяца для расчета процентов
         'previousPeriodData' => $previousPeriodData
     ]
 ]);
 ```
+
+**Важные детали:**
+
+1. **Структура `previousPeriodData`:**
+   - Всегда должен быть объектом (не null), даже если данные не рассчитаны
+   - Если расчет не удался, значения будут 0
+   - Frontend должен проверять значения на 0 перед расчетом процентов
+
+2. **Обратная совместимость:**
+   - Поле `previousPeriodData` добавляется только в режиме `months`
+   - В режиме `weeks` это поле отсутствует (не добавлять в ответ)
+   - Frontend должен проверять наличие поля перед использованием
+
+3. **Валидация данных:**
+   - Проверить, что `$previousMonth` существует перед расчетом
+   - Проверить, что `$tickets` не пустой массив
+   - Проверить, что функции `isInRange()` и `isCarryoverTicket()` доступны
 
 ---
 
@@ -333,9 +376,50 @@ jsonResponse([
 
 ### Обработка ошибок
 
-- Если 4-й месяц не может быть рассчитан → `previousPeriodData` должен быть `null` или пустым объектом
+- Если 4-й месяц не может быть рассчитан → `previousPeriodData` должен быть объектом с нулевыми значениями
 - Не прерывать основной процесс, если расчет 4-го месяца не удался
 - Логировать ошибки в `error_log`
+- Обрабатывать исключения при работе с датами
+
+**Детальная обработка ошибок:**
+```php
+// TASK-058-01: Расчет данных 4-го месяца для процентов
+$previousPeriodData = [
+    'newTickets' => 0,
+    'closedTickets' => 0,
+    'carryoverTickets' => 0
+];
+
+try {
+    if ($previousMonth) {
+        $previousMonthStart = $previousMonth['monthStart'];
+        $previousMonthEnd = $previousMonth['monthEnd'];
+        
+        // Проверка валидности дат
+        if (!($previousMonthStart instanceof DateTimeImmutable) || 
+            !($previousMonthEnd instanceof DateTimeImmutable)) {
+            throw new Exception('Invalid date objects for previous month');
+        }
+        
+        // Проверка наличия массива тикетов
+        if (!is_array($tickets) || empty($tickets)) {
+            error_log("[MONTHS] Warning: Tickets array is empty, cannot calculate previous period data");
+        } else {
+            // ... расчет данных ...
+        }
+    } else {
+        error_log("[MONTHS] Warning: Previous month (4th) not found, previousPeriodData will be empty");
+    }
+} catch (Exception $e) {
+    error_log("[MONTHS] Error calculating previous period data: " . $e->getMessage());
+    // Продолжаем работу с нулевыми значениями
+    $previousPeriodData = [
+        'newTickets' => 0,
+        'closedTickets' => 0,
+        'carryoverTickets' => 0
+    ];
+}
+```
 
 ### Обратная совместимость
 
@@ -415,60 +499,106 @@ function calculateLastFourMonths(): array
 }
 ```
 
-### Пример 2: Расчет previousPeriodData
+### Пример 2: Полный расчет previousPeriodData с использованием существующих функций
 
 ```php
-// После получения всех тикетов и расчета данных за 3 месяца
+// После строки 891 (после расчета данных за 3 месяца)
+// Перед строкой 905 (перед формированием ответа)
 
-// TASK-058-01: Расчет данных 4-го месяца
+// TASK-058-01: Расчет данных 4-го месяца для процентов
 $previousPeriodData = [
     'newTickets' => 0,
     'closedTickets' => 0,
     'carryoverTickets' => 0
 ];
 
-if ($previousMonth) {
-    $previousMonthStart = $previousMonth['monthStart'];
-    $previousMonthEnd = $previousMonth['monthEnd'];
-    
-    foreach ($allTicketsMap as $ticket) {
-        // Проверка фильтра product=1C
-        $product = $ticket['UF_CRM_7_TYPE_PRODUCT'] ?? $ticket['ufCrm7TypeProduct'] ?? null;
-        if ($product !== '1C') {
-            continue;
+try {
+    if ($previousMonth && isset($previousMonth['monthStart']) && isset($previousMonth['monthEnd'])) {
+        $previousMonthStart = $previousMonth['monthStart'];
+        $previousMonthEnd = $previousMonth['monthEnd'];
+        
+        // Проверка валидности дат
+        if (!($previousMonthStart instanceof DateTimeImmutable) || 
+            !($previousMonthEnd instanceof DateTimeImmutable)) {
+            throw new Exception('Invalid date objects for previous month');
         }
         
-        // Новые тикеты 4-го месяца
-        if (isset($ticket['createdTime'])) {
-            $createdTime = new DateTimeImmutable($ticket['createdTime'], new DateTimeZone('UTC'));
-            if ($createdTime >= $previousMonthStart && $createdTime <= $previousMonthEnd) {
-                $previousPeriodData['newTickets']++;
-            }
-        }
+        error_log("[MONTHS] Calculating previous period data for month: {$previousMonth['monthName']} {$previousMonth['year']}");
+        error_log("[MONTHS] Previous month period: {$previousMonthStart->format('Y-m-d H:i:s')} to {$previousMonthEnd->format('Y-m-d H:i:s')}");
         
-        // Закрытые тикеты 4-го месяца
-        if (isset($ticket['movedTime']) && isset($ticket['stageId'])) {
-            $movedTime = new DateTimeImmutable($ticket['movedTime'], new DateTimeZone('UTC'));
-            if ($movedTime >= $previousMonthStart && 
-                $movedTime <= $previousMonthEnd &&
-                in_array($ticket['stageId'], $closingStages)) {
-                $previousPeriodData['closedTickets']++;
+        // Проверка наличия массива тикетов
+        if (!is_array($tickets)) {
+            error_log("[MONTHS] Warning: Tickets is not an array");
+        } elseif (empty($tickets)) {
+            error_log("[MONTHS] Warning: Tickets array is empty, cannot calculate previous period data");
+        } else {
+            // Подсчет новых тикетов 4-го месяца
+            // Используем ту же логику, что и для 3 месяцев (строки 788-793)
+            foreach ($tickets as $ticket) {
+                $createdTime = $ticket['createdTime'] ?? null;
+                if (isInRange($createdTime, $previousMonthStart, $previousMonthEnd)) {
+                    $previousPeriodData['newTickets']++;
+                }
             }
-        }
-        
-        // Переходящие тикеты на начало 4-го месяца
-        if (isset($ticket['createdTime']) && isset($ticket['stageId'])) {
-            $createdTime = new DateTimeImmutable($ticket['createdTime'], new DateTimeZone('UTC'));
-            if ($createdTime < $previousMonthStart &&
-                in_array($ticket['stageId'], $targetStages)) {
-                $previousPeriodData['carryoverTickets']++;
+            
+            // Подсчет закрытых тикетов 4-го месяца
+            // Используем ту же логику, что и для 3 месяцев (строки 796-815)
+            foreach ($tickets as $ticket) {
+                $movedTime = $ticket['movedTime'] ?? $ticket['updatedTime'] ?? null;
+                $stageId = $ticket['stageId'] ?? null;
+                $stageId = $stageId ? strtoupper($stageId) : null;
+                
+                if ($stageId && in_array($stageId, $closingStages, true)) {
+                    if (isInRange($movedTime, $previousMonthStart, $previousMonthEnd)) {
+                        $previousPeriodData['closedTickets']++;
+                    }
+                }
             }
+            
+            // Подсчет переходящих тикетов на начало 4-го месяца
+            // Переходящие = тикеты, созданные до начала 4-го месяца, но находящиеся в рабочих стадиях на начало 4-го месяца
+            // Используем ту же логику, что и для 3 месяцев (строки 818-831)
+            foreach ($tickets as $ticket) {
+                if (isCarryoverTicket($ticket, $previousMonthStart, $previousMonthStart, $targetStages, $closingStages)) {
+                    $previousPeriodData['carryoverTickets']++;
+                }
+            }
+            
+            error_log("[MONTHS] Previous period data (4th month): " . json_encode($previousPeriodData));
         }
+    } else {
+        error_log("[MONTHS] Warning: Previous month (4th) not found or invalid, previousPeriodData will be empty");
     }
-    
-    error_log("[MONTHS] Previous period data (4th month): " . json_encode($previousPeriodData));
+} catch (Exception $e) {
+    error_log("[MONTHS] Error calculating previous period data: " . $e->getMessage());
+    error_log("[MONTHS] Stack trace: " . $e->getTraceAsString());
+    // Продолжаем работу с нулевыми значениями
+    $previousPeriodData = [
+        'newTickets' => 0,
+        'closedTickets' => 0,
+        'carryoverTickets' => 0
+    ];
 }
+
+// Далее в формировании ответа (строка ~905) добавить:
+// 'previousPeriodData' => $previousPeriodData
 ```
+
+**Важные замечания:**
+
+1. **Использование существующих функций:**
+   - `isInRange($date, $start, $end)` — уже определена в файле, обрабатывает null и различные форматы дат
+   - `isCarryoverTicket($ticket, $periodStart, $periodEnd, $targetStages, $closingStages)` — уже определена в файле
+   - Не нужно создавать новые объекты DateTimeImmutable вручную
+
+2. **Массив `$tickets`:**
+   - Уже отфильтрован по product=1C (строка 720)
+   - Не нужно дополнительно проверять `UF_CRM_7_TYPE_PRODUCT`
+   - Использовать именно `$tickets`, а не `$allTicketsMap`
+
+3. **Консистентность логики:**
+   - Использовать ту же логику, что и для расчета данных за 3 месяца
+   - Это гарантирует одинаковые результаты и упрощает поддержку кода
 
 ---
 
@@ -494,4 +624,100 @@ if ($previousMonth) {
 - **Важно:** Данные 4-го месяца не должны влиять на существующие массивы `*ByMonth`
 - **Производительность:** Увеличение периода запросов может замедлить API, но это необходимо для расчета процентов
 - **Тестирование:** Обязательно протестировать с реальными данными за 4 месяца
+
+## 📋 Пошаговая инструкция реализации
+
+### Шаг 1: Создание функции calculateLastFourMonths()
+
+1. Открыть файл `api/graph-1c-admission-closure.php`
+2. Найти функцию `calculateLastThreeMonths()` (строка 106)
+3. Создать новую функцию `calculateLastFourMonths()` после неё (после строки 145)
+4. Скопировать логику из `calculateLastThreeMonths()`
+5. Изменить цикл с `for ($i = 0; $i < 3; $i++)` на `for ($i = 0; $i < 4; $i++)`
+6. Изменить `$twoMonthsAgo` на `$threeMonthsAgo`
+7. Протестировать функцию с помощью `var_dump(calculateLastFourMonths())`
+
+### Шаг 2: Модификация обработки режима months
+
+1. Найти блок `if ($periodMode === 'months')` (строка ~510)
+2. Заменить `$months = calculateLastThreeMonths();` на:
+   ```php
+   $allMonths = calculateLastFourMonths();
+   $months = array_slice($allMonths, 0, 3);
+   $previousMonth = $allMonths[3] ?? null;
+   ```
+3. Обновить `$periodStartUtc` и `$periodEndUtc` для включения 4-го месяца:
+   ```php
+   $periodStartUtc = $allMonths[0]['monthStartUtc']; // Самый старый месяц (4-й)
+   $periodEndUtc = $months[2]['monthEndUtc']; // Последний месяц из 3-х
+   ```
+4. Протестировать, что запросы к Bitrix24 включают 4-й месяц
+
+### Шаг 3: Расчет previousPeriodData
+
+1. Найти место после расчета данных за 3 месяца (после строки 891)
+2. Добавить код расчета `previousPeriodData` (см. Пример 2)
+3. Использовать существующие функции `isInRange()` и `isCarryoverTicket()`
+4. Использовать уже отфильтрованный массив `$tickets` (не `$allTicketsMap`)
+5. Добавить обработку ошибок с try-catch
+6. Добавить логирование для отладки
+
+### Шаг 4: Добавление previousPeriodData в ответ
+
+1. Найти блок `jsonResponse([...])` для режима months (строка ~905)
+2. Добавить `'previousPeriodData' => $previousPeriodData` в массив `data`
+3. Убедиться, что поле добавляется только в режиме `months`
+4. Протестировать ответ API
+
+### Шаг 5: Тестирование
+
+1. Отправить запрос к API с `periodMode: 'months'`
+2. Проверить, что в ответе есть поле `previousPeriodData`
+3. Проверить, что значения в `previousPeriodData` корректны
+4. Проверить, что массивы `*ByMonth` содержат только 3 месяца
+5. Проверить логи на наличие ошибок
+
+## 🔍 Дополнительные проверки
+
+### Проверка 1: Корректность расчета месяцев
+
+```php
+// Добавить в код для отладки
+$allMonths = calculateLastFourMonths();
+error_log("[MONTHS] All 4 months: " . json_encode(array_map(function($m) {
+    return $m['monthName'] . ' ' . $m['year'];
+}, $allMonths)));
+
+// Проверить, что:
+// - Первый месяц (индекс 0) = 3 месяца назад
+// - Последний месяц (индекс 3) = текущий месяц
+// - Всего 4 месяца
+```
+
+### Проверка 2: Корректность периода запросов
+
+```php
+// Добавить в код для отладки
+error_log("[MONTHS] Period for Bitrix24 queries:");
+error_log("[MONTHS] Start: {$periodStartUtc} (4th month start)");
+error_log("[MONTHS] End: {$periodEndUtc} (3rd month end)");
+error_log("[MONTHS] Previous month: " . ($previousMonth ? $previousMonth['monthName'] . ' ' . $previousMonth['year'] : 'NOT FOUND'));
+```
+
+### Проверка 3: Корректность расчета previousPeriodData
+
+```php
+// Добавить проверку после расчета
+if ($previousPeriodData['newTickets'] < 0 || 
+    $previousPeriodData['closedTickets'] < 0 || 
+    $previousPeriodData['carryoverTickets'] < 0) {
+    error_log("[MONTHS] ERROR: Negative values in previousPeriodData!");
+}
+
+// Проверить, что значения логичны
+if ($previousPeriodData['newTickets'] > 10000 || 
+    $previousPeriodData['closedTickets'] > 10000) {
+    error_log("[MONTHS] WARNING: Unusually high values in previousPeriodData!");
+}
+```
 
