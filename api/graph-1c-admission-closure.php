@@ -145,6 +145,54 @@ function calculateLastThreeMonths(): array
 }
 
 /**
+ * Вычисляет последние 4 месяца от текущей даты
+ * TASK-058-01: Функция для расчета периода 4-месячного режима (3 для отображения + 1 для процентов)
+ * 
+ * @return array Массив месяцев с границами и неделями (4 месяца)
+ * @throws Exception При ошибке работы с датами
+ */
+function calculateLastFourMonths(): array
+{
+    try {
+        $tz = new DateTimeZone('UTC');
+        $now = new DateTimeImmutable('now', $tz);
+        $months = [];
+        
+        // Текущий месяц
+        $currentMonth = $now->modify('first day of this month');
+        // 3 месяца назад (начало периода)
+        $threeMonthsAgo = $currentMonth->modify('-3 months');
+        
+        $monthNames = [
+            1 => 'Январь', 2 => 'Февраль', 3 => 'Март', 4 => 'Апрель',
+            5 => 'Май', 6 => 'Июнь', 7 => 'Июль', 8 => 'Август',
+            9 => 'Сентябрь', 10 => 'Октябрь', 11 => 'Ноябрь', 12 => 'Декабрь'
+        ];
+        
+        for ($i = 0; $i < 4; $i++) {
+            $monthStart = $threeMonthsAgo->modify("+{$i} months");
+            $monthEnd = $monthStart->modify('last day of this month')->setTime(23, 59, 59);
+            
+            $months[] = [
+                'monthNumber' => (int)$monthStart->format('n'),
+                'monthName' => $monthNames[(int)$monthStart->format('n')],
+                'year' => (int)$monthStart->format('Y'),
+                'monthStartUtc' => $monthStart->setTime(0, 0, 0)->format('Y-m-d\TH:i:s\Z'),
+                'monthEndUtc' => $monthEnd->format('Y-m-d\TH:i:s\Z'),
+                'monthStart' => $monthStart->setTime(0, 0, 0),
+                'monthEnd' => $monthEnd,
+                'weeks' => calculateWeeksInMonth($monthStart->setTime(0, 0, 0), $monthEnd)
+            ];
+        }
+        
+        return $months;
+    } catch (Exception $e) {
+        error_log('[calculateLastFourMonths] Error: ' . $e->getMessage());
+        throw new Exception('Failed to calculate last four months: ' . $e->getMessage());
+    }
+}
+
+/**
  * Вычисляет все недели, которые пересекаются с месяцем
  * TASK-053-03: Функция для расчета недель внутри месяца (ISO-8601)
  * 
@@ -508,10 +556,18 @@ try {
 
     // TASK-053-03: Обработка режима периода
     if ($periodMode === 'months') {
-        // Логика для 3-месячного режима
-        $months = calculateLastThreeMonths();
-        $periodStartUtc = $months[0]['monthStartUtc'];
-        $periodEndUtc = $months[2]['monthEndUtc'];
+        // TASK-058-01: Получаем 4 месяца (3 для отображения + 1 для процентов)
+        $allMonths = calculateLastFourMonths();
+        
+        // Первые 3 месяца для отображения
+        $months = array_slice($allMonths, 0, 3);
+        
+        // 4-й месяц для расчета процентов
+        $previousMonth = $allMonths[3] ?? null;
+        
+        // Период для запросов к Bitrix24 (включая 4-й месяц)
+        $periodStartUtc = $allMonths[0]['monthStartUtc']; // Самый старый месяц (4-й)
+        $periodEndUtc = $months[2]['monthEndUtc']; // Последний месяц из 3-х для отображения
         $periodStart = new DateTimeImmutable($periodStartUtc, new DateTimeZone('UTC'));
         $periodEnd = new DateTimeImmutable($periodEndUtc, new DateTimeZone('UTC'));
         
@@ -793,25 +849,46 @@ try {
             }
             
             // Подсчёт закрытых тикетов за месяц (закрытых в этом месяце)
+            // TASK-058-03: Логика расчета "этой неделей" и "другой неделей"
+            // ВАЖНО: Названия "этой неделей" и "другой неделей" — исторические (из недельного режима),
+            // но в месячном режиме логика работает с месяцами, а не неделями.
+            // 
+            // Логика:
+            // - "Этой неделей" (monthClosedCreatedThisWeek) = закрытые тикеты месяца, которые были созданы в этом же месяце
+            // - "Другой неделей" (monthClosedCreatedOtherWeek) = закрытые тикеты месяца, которые были созданы в предыдущих месяцах
+            // 
+            // Пример для октября:
+            // - Тикет создан 2025-10-05, закрыт 2025-10-15 → "этой неделей" (создан в октябре)
+            // - Тикет создан 2025-09-20, закрыт 2025-10-10 → "другой неделей" (создан в сентябре)
             $monthClosedCount = 0;
-            $monthClosedCreatedThisWeek = 0;
-            $monthClosedCreatedOtherWeek = 0;
+            $monthClosedCreatedThisWeek = 0;  // "Этой неделей" = создан в этом же месяце
+            $monthClosedCreatedOtherWeek = 0;  // "Другой неделей" = создан в другом месяце
             foreach ($tickets as $ticket) {
                 $movedTime = $ticket['movedTime'] ?? $ticket['updatedTime'] ?? null;
                 $createdTime = $ticket['createdTime'] ?? null;
                 $stageId = $ticket['stageId'] ?? null;
                 $stageId = $stageId ? strtoupper($stageId) : null;
                 
+                // Тикет закрыт в этом месяце?
                 if ($stageId && in_array($stageId, $closingStages, true)) {
                     if (isInRange($movedTime, $monthStart, $monthEnd)) {
                         $monthClosedCount++;
+                        
+                        // TASK-058-03: Определение "этой неделей" vs "другой неделей"
+                        // "Этой неделей" = создан в этом же месяце (название историческое, но логика месячная)
                         if (isInRange($createdTime, $monthStart, $monthEnd)) {
-                            $monthClosedCreatedThisWeek++;
+                            $monthClosedCreatedThisWeek++;  // Создан в этом же месяце
                         } else {
-                            $monthClosedCreatedOtherWeek++;
+                            $monthClosedCreatedOtherWeek++; // Создан в другом месяце
                         }
                     }
                 }
+            }
+            
+            // TASK-058-03: Проверка корректности расчета
+            // Общее число закрытых тикетов должно равняться сумме "этой неделей" + "другой неделей"
+            if ($monthClosedCount !== ($monthClosedCreatedThisWeek + $monthClosedCreatedOtherWeek)) {
+                error_log("[MONTHS] Warning: Total closed tickets ({$monthClosedCount}) != thisWeek ({$monthClosedCreatedThisWeek}) + otherWeek ({$monthClosedCreatedOtherWeek}) for month: {$month['monthName']} {$month['year']}");
             }
             
             // Подсчёт переходящих тикетов на конец месяца
@@ -890,6 +967,81 @@ try {
             $totalCarryoverTickets += $monthCarryoverCount;
         }
         
+        // TASK-058-01: Расчет данных 4-го месяца для процентов
+        $previousPeriodData = [
+            'newTickets' => 0,
+            'closedTickets' => 0,
+            'carryoverTickets' => 0
+        ];
+        
+        try {
+            if ($previousMonth && isset($previousMonth['monthStart']) && isset($previousMonth['monthEnd'])) {
+                $previousMonthStart = $previousMonth['monthStart'];
+                $previousMonthEnd = $previousMonth['monthEnd'];
+                
+                // Проверка валидности дат
+                if (!($previousMonthStart instanceof DateTimeImmutable) || 
+                    !($previousMonthEnd instanceof DateTimeImmutable)) {
+                    throw new Exception('Invalid date objects for previous month');
+                }
+                
+                error_log("[MONTHS] Calculating previous period data for month: {$previousMonth['monthName']} {$previousMonth['year']}");
+                error_log("[MONTHS] Previous month period: {$previousMonthStart->format('Y-m-d H:i:s')} to {$previousMonthEnd->format('Y-m-d H:i:s')}");
+                
+                // Проверка наличия массива тикетов
+                if (!is_array($tickets)) {
+                    error_log("[MONTHS] Warning: Tickets is not an array");
+                } elseif (empty($tickets)) {
+                    error_log("[MONTHS] Warning: Tickets array is empty, cannot calculate previous period data");
+                } else {
+                    // Подсчет новых тикетов 4-го месяца
+                    // Используем ту же логику, что и для 3 месяцев (строки 788-793)
+                    foreach ($tickets as $ticket) {
+                        $createdTime = $ticket['createdTime'] ?? null;
+                        if (isInRange($createdTime, $previousMonthStart, $previousMonthEnd)) {
+                            $previousPeriodData['newTickets']++;
+                        }
+                    }
+                    
+                    // Подсчет закрытых тикетов 4-го месяца
+                    // Используем ту же логику, что и для 3 месяцев (строки 796-815)
+                    foreach ($tickets as $ticket) {
+                        $movedTime = $ticket['movedTime'] ?? $ticket['updatedTime'] ?? null;
+                        $stageId = $ticket['stageId'] ?? null;
+                        $stageId = $stageId ? strtoupper($stageId) : null;
+                        
+                        if ($stageId && in_array($stageId, $closingStages, true)) {
+                            if (isInRange($movedTime, $previousMonthStart, $previousMonthEnd)) {
+                                $previousPeriodData['closedTickets']++;
+                            }
+                        }
+                    }
+                    
+                    // Подсчет переходящих тикетов на начало 4-го месяца
+                    // Переходящие = тикеты, созданные до начала 4-го месяца, но находящиеся в рабочих стадиях на начало 4-го месяца
+                    // Используем ту же логику, что и для 3 месяцев (строки 818-831)
+                    foreach ($tickets as $ticket) {
+                        if (isCarryoverTicket($ticket, $previousMonthStart, $previousMonthStart, $targetStages, $closingStages)) {
+                            $previousPeriodData['carryoverTickets']++;
+                        }
+                    }
+                    
+                    error_log("[MONTHS] Previous period data (4th month): " . json_encode($previousPeriodData));
+                }
+            } else {
+                error_log("[MONTHS] Warning: Previous month (4th) not found or invalid, previousPeriodData will be empty");
+            }
+        } catch (Exception $e) {
+            error_log("[MONTHS] Error calculating previous period data: " . $e->getMessage());
+            error_log("[MONTHS] Stack trace: " . $e->getTraceAsString());
+            // Продолжаем работу с нулевыми значениями
+            $previousPeriodData = [
+                'newTickets' => 0,
+                'closedTickets' => 0,
+                'carryoverTickets' => 0
+            ];
+        }
+        
         // Формирование массива стадий
         $stages = [];
         foreach ($stageAgg as $stageId => $count) {
@@ -933,7 +1085,9 @@ try {
                 'carryoverTickets' => $totalCarryoverTickets,
                 'carryoverTicketsByMonth' => $carryoverTicketsByMonth,
                 'stages' => $stages,
-                'responsible' => [] // TODO: Реализовать агрегацию по сотрудникам при необходимости
+                'responsible' => [], // TODO: Реализовать агрегацию по сотрудникам при необходимости
+                // TASK-058-01: Данные 4-го месяца для расчета процентов
+                'previousPeriodData' => $previousPeriodData
             ]
         ]);
     }

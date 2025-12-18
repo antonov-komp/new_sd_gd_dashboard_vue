@@ -6,6 +6,13 @@
       <div class="card-content">
         <div class="card-main-value">
           {{ formattedTotalNewTickets }}
+          <span 
+            v-if="newTicketsPercentage !== null"
+            :class="['percentage-badge', newTicketsPercentage >= 0 ? 'positive' : 'negative']"
+            :title="`Изменение относительно предыдущего периода: ${formatPercentage(newTicketsPercentage)}`"
+          >
+            {{ formatPercentage(newTicketsPercentage) }}
+          </span>
         </div>
         <div class="card-month-breakdown">
           <div
@@ -29,6 +36,13 @@
       <div class="card-content">
         <div class="card-main-value">
           {{ formatNumber(data.closedTickets || 0) }}
+          <span 
+            v-if="closedTicketsPercentage !== null"
+            :class="['percentage-badge', closedTicketsPercentage >= 0 ? 'positive' : 'negative']"
+            :title="`Изменение относительно предыдущего периода: ${formatPercentage(closedTicketsPercentage)}`"
+          >
+            {{ formatPercentage(closedTicketsPercentage) }}
+          </span>
         </div>
         <div class="card-month-breakdown-hierarchical">
           <div
@@ -66,6 +80,13 @@
       <div class="card-content">
         <div class="card-main-value">
           {{ formatNumber(data.carryoverTickets || 0) }}
+          <span 
+            v-if="carryoverTicketsPercentage !== null"
+            :class="['percentage-badge', carryoverTicketsPercentage >= 0 ? 'positive' : 'negative']"
+            :title="`Изменение относительно предыдущего периода: ${formatPercentage(carryoverTicketsPercentage)}`"
+          >
+            {{ formatPercentage(carryoverTicketsPercentage) }}
+          </span>
         </div>
         <div class="card-month-breakdown">
           <div
@@ -145,6 +166,65 @@ function formatNumber(num) {
   return num.toString();
 }
 
+/**
+ * Форматирует процент для отображения
+ * TASK-058-02: Функция для форматирования процентов
+ * 
+ * @param {number|null} value - Процент изменения
+ * @returns {string} Отформатированный процент или пустая строка
+ */
+function formatPercentage(value) {
+  if (value === null || value === undefined || isNaN(value)) {
+    return '';
+  }
+  
+  const sign = value >= 0 ? '+' : '';
+  return `${sign}${value.toFixed(1)}%`;
+}
+
+/**
+ * Вычисляет процент изменения
+ * TASK-058-02: Функция для расчета процентов с обработкой граничных случаев
+ * 
+ * @param {number} current - Текущее значение
+ * @param {number|null|undefined} previous - Предыдущее значение
+ * @returns {number|null} Процент изменения или null, если нельзя рассчитать
+ */
+function calculatePercentage(current, previous) {
+  // Валидация входных данных
+  if (typeof current !== 'number' || isNaN(current)) {
+    return null;
+  }
+  
+  if (previous === null || previous === undefined) {
+    return null;
+  }
+  
+  if (typeof previous !== 'number' || isNaN(previous)) {
+    return null;
+  }
+  
+  // Деление на ноль
+  if (previous === 0) {
+    return null;
+  }
+  
+  // Нет изменения
+  if (current === previous) {
+    return 0;
+  }
+  
+  // Расчет процента
+  const percentage = ((current - previous) / previous) * 100;
+  
+  // Проверка на бесконечность или NaN
+  if (!isFinite(percentage) || isNaN(percentage)) {
+    return null;
+  }
+  
+  return percentage;
+}
+
 const totalNewTickets = computed(() => {
   return props.data?.newTickets || 0;
 });
@@ -163,6 +243,39 @@ const closedTicketsByMonth = computed(() => {
 
 const carryoverTicketsByMonth = computed(() => {
   return props.data?.carryoverTicketsByMonth || [];
+});
+
+// TASK-058-02: Computed-свойства для расчета процентов
+const newTicketsPercentage = computed(() => {
+  // Безопасное получение текущего значения
+  const current = typeof props.data?.newTickets === 'number' 
+    ? props.data.newTickets 
+    : (parseInt(props.data?.newTickets) || 0);
+  
+  // Безопасное получение предыдущего значения
+  const previous = props.data?.previousPeriodData?.newTickets;
+  
+  return calculatePercentage(current, previous);
+});
+
+const closedTicketsPercentage = computed(() => {
+  const current = typeof props.data?.closedTickets === 'number' 
+    ? props.data.closedTickets 
+    : (parseInt(props.data?.closedTickets) || 0);
+  
+  const previous = props.data?.previousPeriodData?.closedTickets;
+  
+  return calculatePercentage(current, previous);
+});
+
+const carryoverTicketsPercentage = computed(() => {
+  const current = typeof props.data?.carryoverTickets === 'number' 
+    ? props.data.carryoverTickets 
+    : (parseInt(props.data?.carryoverTickets) || 0);
+  
+  const previous = props.data?.previousPeriodData?.carryoverTickets;
+  
+  return calculatePercentage(current, previous);
 });
 
 /**
@@ -246,6 +359,35 @@ function getStageIcon(stageId) {
   font-weight: 700;
   color: var(--b24-primary, #007bff);
   line-height: 1;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* TASK-058-02: Стили для процентных бейджей */
+.percentage-badge {
+  font-size: 16px;
+  font-weight: 600;
+  margin-left: 8px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background-color: rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+  cursor: help;
+}
+
+.percentage-badge:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+  transform: scale(1.05);
+}
+
+.percentage-badge.positive {
+  color: var(--b24-success, #28a745);
+}
+
+.percentage-badge.negative {
+  color: var(--b24-danger, #dc3545);
 }
 
 .card-month-breakdown {
@@ -388,6 +530,13 @@ function getStageIcon(stageId) {
   
   .card-main-value {
     font-size: 28px;
+    flex-wrap: wrap;
+  }
+  
+  .percentage-badge {
+    font-size: 14px;
+    margin-left: 4px;
+    padding: 1px 4px;
   }
   
   .month-item-hierarchical {

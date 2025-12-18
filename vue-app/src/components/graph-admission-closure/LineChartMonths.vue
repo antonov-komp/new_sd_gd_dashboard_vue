@@ -2,17 +2,51 @@
   <div class="line-chart-months">
     <!-- График "Новые и Закрытые тикеты" -->
     <div class="chart-section">
-      <h3 class="chart-title">Новые и Закрытые тикеты</h3>
+      <h3 class="chart-title">
+        Новые и Закрытые тикеты
+        <span v-if="chartPeriod" class="chart-period">({{ chartPeriod }})</span>
+      </h3>
       <div class="chart-container">
         <Line :data="newClosedChartData" :options="chartOptions" />
+      </div>
+      <!-- TASK-058-04: Сводный итог под графиком -->
+      <div class="chart-summary">
+        <h4 class="summary-title">Сводный итог</h4>
+        <div class="summary-numbers">
+          <div class="summary-row">
+            <span class="summary-label">Новые:</span>
+            <span class="summary-values">{{ summaryNumbers.new }}</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Закрытые:</span>
+            <span class="summary-values">{{ summaryNumbers.closed }}</span>
+          </div>
+        </div>
+        <div class="summary-analysis">
+          <p v-for="(analysis, index) in summaryAnalysis" :key="index">
+            {{ analysis }}
+          </p>
+        </div>
       </div>
     </div>
     
     <!-- График "Переходящие тикеты" -->
     <div class="chart-section">
-      <h3 class="chart-title">Переходящие тикеты</h3>
+      <h3 class="chart-title">
+        Переходящие тикеты
+        <span v-if="carryoverChartPeriod" class="chart-period">({{ carryoverChartPeriod }})</span>
+      </h3>
       <div class="chart-container">
         <Line :data="carryoverChartData" :options="chartOptions" />
+      </div>
+      <!-- TASK-058-05: Словесный отчет под графиком -->
+      <div class="chart-analysis">
+        <h4 class="analysis-title">Анализ</h4>
+        <div class="analysis-content">
+          <p v-for="(analysis, index) in carryoverAnalysis" :key="index">
+            {{ analysis }}
+          </p>
+        </div>
       </div>
     </div>
     
@@ -77,7 +111,12 @@
 <script setup>
 import { computed } from 'vue';
 import { Line } from 'vue-chartjs';
+import { Chart as ChartJS } from 'chart.js';
+import ChartDataLabels from 'chartjs-plugin-datalabels';
 import { chartColors } from '@/utils/chart-config.js';
+
+// TASK-058-04: Регистрация плагина для отображения цифр на точках графика
+ChartJS.register(ChartDataLabels);
 
 const props = defineProps({
   data: {
@@ -171,7 +210,14 @@ const newClosedChartData = computed(() => {
         borderColor: chartColors.primary,
         backgroundColor: 'rgba(0, 123, 255, 0.1)',
         tension: 0.4,
-        fill: false
+        fill: false,
+        // TASK-058-04: Настройка datalabels для новых тикетов (справа от точки)
+        datalabels: {
+          anchor: 'end',
+          align: 'top',
+          offset: 4,
+          color: chartColors.primary
+        }
       },
       {
         label: 'Закрытые тикеты',
@@ -179,7 +225,14 @@ const newClosedChartData = computed(() => {
         borderColor: chartColors.success,
         backgroundColor: 'rgba(40, 167, 69, 0.1)',
         tension: 0.4,
-        fill: false
+        fill: false,
+        // TASK-058-04: Настройка datalabels для закрытых тикетов (слева от точки, чтобы не перекрывались)
+        datalabels: {
+          anchor: 'start',
+          align: 'top',
+          offset: 4,
+          color: chartColors.success
+        }
       }
     ]
   };
@@ -203,7 +256,14 @@ const carryoverChartData = computed(() => {
         borderColor: chartColors.carryover,
         backgroundColor: 'rgba(255, 152, 0, 0.1)',
         tension: 0.4,
-        fill: false
+        fill: false,
+        // TASK-058-05: Настройка datalabels для переходящих тикетов
+        datalabels: {
+          anchor: 'end',
+          align: 'top',
+          offset: 4,
+          color: chartColors.carryover || '#ff9800'
+        }
       }
     ]
   };
@@ -211,6 +271,7 @@ const carryoverChartData = computed(() => {
 
 /**
  * Настройки графика
+ * TASK-058-04: Добавлена конфигурация datalabels для отображения цифр на точках
  */
 const chartOptions = {
   responsive: true,
@@ -238,6 +299,41 @@ const chartOptions = {
         size: 13
       },
       padding: 12
+    },
+    // TASK-058-04: Конфигурация для отображения цифр на точках графика
+    datalabels: {
+      anchor: 'end',
+      align: 'top',
+      formatter: (value, context) => {
+        // Форматирование значения
+        if (value === null || value === undefined || isNaN(value)) {
+          return '';
+        }
+        return value.toString();
+      },
+      color: '#333',
+      font: {
+        size: 12,
+        weight: 'bold'
+      },
+      padding: {
+        top: 4,
+        bottom: 4
+      },
+      display: function(context) {
+        // Показывать только если значение не null/undefined
+        const value = context.dataset.data[context.dataIndex];
+        return value !== null && 
+               value !== undefined && 
+               !isNaN(value) && 
+               isFinite(value);
+      },
+      // Дополнительные настройки для лучшей читаемости
+      backgroundColor: 'rgba(255, 255, 255, 0.8)',
+      borderColor: '#333',
+      borderWidth: 1,
+      borderRadius: 4,
+      padding: 4
     }
   },
   scales: {
@@ -269,6 +365,298 @@ const chartOptions = {
     }
   }
 };
+
+/**
+ * Получить период для заголовка графика
+ * TASK-058-05: Общая функция для переиспользования
+ * 
+ * @param {Array} months - Массив месяцев
+ * @returns {string|null} Период в формате "Месяц1 — Месяц2 Год" или null
+ */
+function getChartPeriod(months) {
+  if (!months || months.length === 0) {
+    return null;
+  }
+  
+  const firstMonth = months[0];
+  const lastMonth = months[months.length - 1];
+  
+  if (!firstMonth || !lastMonth) {
+    return null;
+  }
+  
+  const firstMonthName = firstMonth.monthName || `Месяц ${firstMonth.month}`;
+  const lastMonthName = lastMonth.monthName || `Месяц ${lastMonth.month}`;
+  const year = firstMonth.year || new Date().getFullYear();
+  
+  return `${firstMonthName} — ${lastMonthName} ${year}`;
+}
+
+/**
+ * Период для графика "Новые и Закрытые тикеты"
+ * TASK-058-04: Computed-свойство для динамичного заголовка
+ */
+const chartPeriod = computed(() => {
+  return getChartPeriod(props.data?.newTicketsByMonth || []);
+});
+
+/**
+ * Период для графика "Переходящие тикеты"
+ * TASK-058-05: Computed-свойство для динамичного заголовка
+ */
+const carryoverChartPeriod = computed(() => {
+  return getChartPeriod(props.data?.carryoverTicketsByMonth || []);
+});
+
+/**
+ * Сводный итог с цифрами по месяцам
+ * TASK-058-04: Computed-свойство для сводного итога
+ */
+const summaryNumbers = computed(() => {
+  const months = props.data?.newTicketsByMonth || [];
+  const closedMonths = props.data?.closedTicketsByMonth || [];
+  
+  if (months.length === 0) {
+    return { new: '—', closed: '—' };
+  }
+  
+  const newValues = months.map(m => 
+    `${formatNumber(m.count || 0)} (${m.monthName || m.month})`
+  ).join(' → ');
+  
+  const closedValues = closedMonths.map(m => 
+    `${formatNumber(m.count || 0)} (${m.monthName || m.month})`
+  ).join(' → ');
+  
+  return {
+    new: newValues,
+    closed: closedValues
+  };
+});
+
+/**
+ * Словесный анализ динамики
+ * TASK-058-04: Computed-свойство для словесного анализа
+ */
+const summaryAnalysis = computed(() => {
+  const months = props.data?.newTicketsByMonth || [];
+  const closedMonths = props.data?.closedTicketsByMonth || [];
+  
+  if (months.length < 2) {
+    return ['Недостаточно данных для анализа'];
+  }
+  
+  const analysis = [];
+  
+  // Анализ новых тикетов
+  if (months.length >= 2) {
+    const month1 = months[0];
+    const month2 = months[1];
+    const month3 = months[2];
+    
+    // Изменение между первым и вторым месяцем
+    if (month2 && month1 && typeof month1.count === 'number' && typeof month2.count === 'number') {
+      if (month1.count > 0) {
+        const change1 = ((month2.count - month1.count) / month1.count) * 100;
+        if (isFinite(change1) && !isNaN(change1)) {
+          const trend = change1 >= 0 ? 'рост' : 'снижение';
+          const absChange = Math.abs(change1);
+          analysis.push(
+            `Новые тикеты: ${trend} на ${absChange.toFixed(1)}% в ${month2.monthName || month2.month}`
+          );
+        }
+      } else if (month1.count === 0 && month2.count > 0) {
+        analysis.push(
+          `Новые тикеты: появление тикетов (${month2.count}) в ${month2.monthName || month2.month}`
+        );
+      }
+    }
+    
+    // Изменение между вторым и третьим месяцем
+    if (month3 && month2 && typeof month2.count === 'number' && typeof month3.count === 'number') {
+      if (month2.count > 0) {
+        const change2 = ((month3.count - month2.count) / month2.count) * 100;
+        if (isFinite(change2) && !isNaN(change2)) {
+          const trend = change2 >= 0 ? 'рост' : 'снижение';
+          const absChange = Math.abs(change2);
+          analysis.push(
+            `Новые тикеты: ${trend} на ${absChange.toFixed(1)}% в ${month3.monthName || month3.month}`
+          );
+        }
+      } else if (month2.count === 0 && month3.count > 0) {
+        analysis.push(
+          `Новые тикеты: появление тикетов (${month3.count}) в ${month3.monthName || month3.month}`
+        );
+      }
+    }
+  }
+  
+  // Анализ закрытых тикетов
+  if (closedMonths.length >= 2) {
+    const month1 = closedMonths[0];
+    const month2 = closedMonths[1];
+    const month3 = closedMonths[2];
+    
+    // Изменение между первым и вторым месяцем
+    if (month2 && month1 && typeof month1.count === 'number' && typeof month2.count === 'number') {
+      if (month1.count > 0) {
+        const change1 = ((month2.count - month1.count) / month1.count) * 100;
+        if (isFinite(change1) && !isNaN(change1)) {
+          const trend = change1 >= 0 ? 'рост' : 'снижение';
+          const absChange = Math.abs(change1);
+          analysis.push(
+            `Закрытые тикеты: ${trend} на ${absChange.toFixed(1)}% в ${month2.monthName || month2.month}`
+          );
+        }
+      } else if (month1.count === 0 && month2.count > 0) {
+        analysis.push(
+          `Закрытые тикеты: появление закрытий (${month2.count}) в ${month2.monthName || month2.month}`
+        );
+      }
+    }
+    
+    // Изменение между вторым и третьим месяцем
+    if (month3 && month2 && typeof month2.count === 'number' && typeof month3.count === 'number') {
+      if (month2.count > 0) {
+        const change2 = ((month3.count - month2.count) / month2.count) * 100;
+        if (isFinite(change2) && !isNaN(change2)) {
+          const trend = change2 >= 0 ? 'рост' : 'снижение';
+          const absChange = Math.abs(change2);
+          analysis.push(
+            `Закрытые тикеты: ${trend} на ${absChange.toFixed(1)}% в ${month3.monthName || month3.month}`
+          );
+        }
+      } else if (month2.count === 0 && month3.count > 0) {
+        analysis.push(
+          `Закрытые тикеты: появление закрытий (${month3.count}) в ${month3.monthName || month3.month}`
+        );
+      }
+    }
+  }
+  
+  // Общая тенденция за период (если есть данные за все 3 месяца)
+  if (months.length >= 3 && closedMonths.length >= 3) {
+    const firstNew = months[0].count || 0;
+    const lastNew = months[months.length - 1].count || 0;
+    const firstClosed = closedMonths[0].count || 0;
+    const lastClosed = closedMonths[closedMonths.length - 1].count || 0;
+    
+    if (firstNew > 0 && firstClosed > 0) {
+      const newChange = ((lastNew - firstNew) / firstNew) * 100;
+      const closedChange = ((lastClosed - firstClosed) / firstClosed) * 100;
+      
+      if (isFinite(newChange) && isFinite(closedChange)) {
+        analysis.push(
+          `Общая динамика за период: новые тикеты ${newChange >= 0 ? 'выросли' : 'снизились'} на ${Math.abs(newChange).toFixed(1)}%, закрытые тикеты ${closedChange >= 0 ? 'выросли' : 'снизились'} на ${Math.abs(closedChange).toFixed(1)}%`
+        );
+      }
+    }
+  }
+  
+  return analysis.length > 0 ? analysis : ['Недостаточно данных для анализа'];
+});
+
+/**
+ * Словесный анализ для переходящих тикетов
+ * TASK-058-05: Computed-свойство для словесного анализа переходящих тикетов
+ */
+const carryoverAnalysis = computed(() => {
+  const months = props.data?.carryoverTicketsByMonth || [];
+  
+  if (months.length === 0) {
+    return ['Нет данных для анализа'];
+  }
+  
+  const analysis = [];
+  
+  // Формирование строки с цифрами
+  const values = months
+    .filter(m => m && typeof m.count === 'number')
+    .map(m => `${formatNumber(m.count || 0)} (${m.monthName || m.month || 'Неизвестно'})`)
+    .join(' → ');
+  
+  if (values) {
+    analysis.push(`Переходящие тикеты: ${values}`);
+  }
+  
+  // Анализ динамики
+  if (months.length >= 2) {
+    const month1 = months[0];
+    const month2 = months[1];
+    const month3 = months[2];
+    
+    // Изменение между первым и вторым месяцем
+    if (month2 && month1 && typeof month1.count === 'number' && typeof month2.count === 'number') {
+      if (month1.count > 0) {
+        const change1 = ((month2.count - month1.count) / month1.count) * 100;
+        if (isFinite(change1) && !isNaN(change1)) {
+          const trend = change1 >= 0 ? 'рост' : 'снижение';
+          const absChange = Math.abs(change1);
+          analysis.push(
+            `Динамика: ${trend} на ${absChange.toFixed(1)}% в ${month2.monthName || month2.month}`
+          );
+        }
+      } else if (month1.count === 0 && month2.count > 0) {
+        analysis.push(
+          `Динамика: появление переходящих тикетов (${month2.count}) в ${month2.monthName || month2.month}`
+        );
+      }
+    }
+    
+    // Изменение между вторым и третьим месяцем
+    if (month3 && month2 && typeof month2.count === 'number' && typeof month3.count === 'number') {
+      if (month2.count > 0) {
+        const change2 = ((month3.count - month2.count) / month2.count) * 100;
+        if (isFinite(change2) && !isNaN(change2)) {
+          const trend = change2 >= 0 ? 'рост' : 'снижение';
+          const absChange = Math.abs(change2);
+          analysis.push(
+            `${trend} на ${absChange.toFixed(1)}% в ${month3.monthName || month3.month}`
+          );
+        }
+      } else if (month2.count === 0 && month3.count > 0) {
+        analysis.push(
+          `появление переходящих тикетов (${month3.count}) в ${month3.monthName || month3.month}`
+        );
+      }
+    }
+  }
+  
+  // Общая тенденция за период
+  if (months.length >= 3) {
+    const first = months[0];
+    const last = months[months.length - 1];
+    
+    if (first && last && 
+        typeof first.count === 'number' && 
+        typeof last.count === 'number') {
+      const firstCount = first.count || 0;
+      const lastCount = last.count || 0;
+      
+      if (firstCount > 0) {
+        const totalChange = ((lastCount - firstCount) / firstCount) * 100;
+        if (isFinite(totalChange) && !isNaN(totalChange)) {
+          if (Math.abs(totalChange) < 1) {
+            // Изменение менее 1% считается стабильным
+            analysis.push(`Тенденция: стабильное количество переходящих тикетов (изменение менее 1%)`);
+          } else if (totalChange > 5) {
+            analysis.push(`Тенденция: рост переходящих тикетов за период на ${totalChange.toFixed(1)}%`);
+          } else if (totalChange < -5) {
+            analysis.push(`Тенденция: снижение переходящих тикетов за период на ${Math.abs(totalChange).toFixed(1)}%`);
+          } else {
+            analysis.push(`Тенденция: незначительное изменение переходящих тикетов (${totalChange >= 0 ? '+' : ''}${totalChange.toFixed(1)}%)`);
+          }
+        }
+      } else if (firstCount === 0 && lastCount > 0) {
+        analysis.push(`Тенденция: появление переходящих тикетов в конце периода (${lastCount})`);
+      } else if (firstCount > 0 && lastCount === 0) {
+        analysis.push(`Тенденция: полное отсутствие переходящих тикетов в конце периода`);
+      }
+    }
+  }
+  
+  return analysis.length > 0 ? analysis : ['Недостаточно данных для анализа'];
+});
 
 /**
  * Получить данные для недели в таблице
@@ -339,12 +727,110 @@ function getWeekData(type, weekNumber) {
   font-size: var(--font-size-lg, 16px);
   font-weight: 600;
   color: var(--b24-text-primary, #111827);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm, 8px);
+  flex-wrap: wrap;
+}
+
+/* TASK-058-04: Стили для динамичного периода в заголовке */
+.chart-period {
+  font-size: var(--font-size-base, 14px);
+  font-weight: 400;
+  color: var(--b24-text-secondary, #6b7280);
 }
 
 .chart-container {
   width: 100%;
   height: 400px;
   position: relative;
+}
+
+/* TASK-058-04: Стили для сводного итога */
+.chart-summary {
+  margin-top: 24px;
+  padding: 20px;
+  background-color: var(--b24-bg-light, #f9fafb);
+  border-radius: 8px;
+  border: 1px solid var(--b24-border-light, #e5e7eb);
+}
+
+.summary-title {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--b24-text-primary, #111827);
+}
+
+.summary-numbers {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.summary-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.summary-label {
+  font-weight: 600;
+  color: var(--b24-text-primary, #111827);
+  min-width: 100px;
+}
+
+.summary-values {
+  color: var(--b24-text-secondary, #6b7280);
+  font-family: 'Courier New', monospace;
+}
+
+.summary-analysis {
+  padding-top: 16px;
+  border-top: 1px solid var(--b24-border-light, #e5e7eb);
+}
+
+.summary-analysis p {
+  margin: 8px 0;
+  font-size: 14px;
+  color: var(--b24-text-primary, #111827);
+  line-height: 1.5;
+}
+
+/* TASK-058-05: Стили для блока анализа переходящих тикетов */
+.chart-analysis {
+  margin-top: 24px;
+  padding: 20px;
+  background-color: var(--b24-bg-light, #f9fafb);
+  border-radius: 8px;
+  border: 1px solid var(--b24-border-light, #e5e7eb);
+}
+
+.analysis-title {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--b24-text-primary, #111827);
+}
+
+.analysis-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.analysis-content p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--b24-text-primary, #111827);
+  line-height: 1.5;
+}
+
+.analysis-content p:first-child {
+  font-weight: 600;
+  color: var(--b24-text-secondary, #6b7280);
 }
 
 .chart-table-section {
@@ -430,6 +916,28 @@ function getWeekData(type, weekNumber) {
 @media (max-width: 768px) {
   .chart-container {
     height: 300px;
+  }
+  
+  .chart-summary {
+    padding: 16px;
+  }
+  
+  .chart-analysis {
+    padding: 16px;
+  }
+  
+  .summary-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  
+  .summary-label {
+    min-width: auto;
+  }
+  
+  .analysis-content p {
+    font-size: 13px;
   }
   
   .data-table {
