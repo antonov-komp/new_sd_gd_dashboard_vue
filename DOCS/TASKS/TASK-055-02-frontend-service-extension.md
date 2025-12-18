@@ -323,3 +323,4 @@ console.assert(response.pagination.totalTasks === 0, 'Total tasks should be 0');
 
 После завершения этого этапа переходим к **TASK-055-03: Модификация компонента попапа (Frontend)**.
 
+

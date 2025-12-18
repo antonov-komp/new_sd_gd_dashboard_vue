@@ -116,3 +116,4 @@ foreach ($variants as $variant) {
     break; // Если успешно получили задачу, прекращаем
 }
 
+
