@@ -50,8 +50,11 @@ export class AccessControlService {
       // Автоматически использует правильный метод (BX24 или прокси)
       const user = await Bitrix24BxApi.getCurrentUser();
       
+      console.log('AccessControlService.checkAccess - user data:', user);
+      
       // Проверка, что пользователь определён
       if (!user || !user.ID) {
+        console.warn('AccessControlService.checkAccess - user not determined:', user);
         return new AccessCheckResult(
           false,
           AccessErrorCodes.USER_NOT_DETERMINED,
@@ -89,56 +92,23 @@ export class AccessControlService {
       console.error('AccessControlService.checkAccess error:', error);
       
       // Обработка CORS ошибок
+      // ВАЖНО: Не используем прокси как fallback, так как он вернёт владельца токена,
+      // а не пользователя интерфейса. Это нарушит логику проверки доступа.
       if (error.message && (
         error.message.includes('CORS') || 
         error.message.includes('blocked') ||
         error.message.includes('ERR_FAILED') ||
-        error.message.includes('unknown address space')
+        error.message.includes('unknown address space') ||
+        error.message.includes('интерфейса')
       )) {
-        // Пытаемся использовать прокси как fallback
-        try {
-          const { Bitrix24ApiService } = await import('./bitrix24-api.js');
-          const result = await Bitrix24ApiService.call('user.current', {});
-          const user = result.result || result;
-          
-          if (!user || !user.ID) {
-            return new AccessCheckResult(
-              false,
-              AccessErrorCodes.USER_NOT_DETERMINED,
-              'Не удалось определить пользователя. Обратитесь в Поддержку приложения в ИТ отдел.'
-            );
-          }
-          
-          // Продолжаем проверку доступа с полученным пользователем
-          const departmentIds = user.UF_DEPARTMENT || [];
-          
-          if (!Array.isArray(departmentIds) || departmentIds.length === 0) {
-            return new AccessCheckResult(
-              false,
-              AccessErrorCodes.ACCESS_DENIED,
-              'Доступ запрещён. Пользователь не привязан к отделу.'
-            );
-          }
-          
-          const hasAccess = departmentIds.some(deptId => isDepartmentAllowed(deptId));
-          
-          if (!hasAccess) {
-            return new AccessCheckResult(
-              false,
-              AccessErrorCodes.ACCESS_DENIED,
-              'Доступ запрещён'
-            );
-          }
-          
-          return new AccessCheckResult(true, null, null, user);
-        } catch (fallbackError) {
-          console.error('Fallback to proxy also failed:', fallbackError);
-          return new AccessCheckResult(
-            false,
-            AccessErrorCodes.API_ERROR,
-            'Ошибка при проверке доступа. Обратитесь в Поддержку приложения в ИТ отдел.'
-          );
-        }
+        // CORS блокирует доступ к BX24 API
+        // НЕ используем прокси, так как он вернёт владельца токена, а не пользователя интерфейса
+        console.error('CORS error: Cannot determine interface user. Proxy would return token owner, not interface user.');
+        return new AccessCheckResult(
+          false,
+          AccessErrorCodes.API_ERROR,
+          'Ошибка CORS: не удалось определить пользователя интерфейса. Обратитесь в Поддержку приложения в ИТ отдел.'
+        );
       }
       
       // Обработка других ошибок API
@@ -165,7 +135,10 @@ export class AccessControlService {
    */
   static async getCurrentUser() {
     try {
-      await Bitrix24BxApi.init();
+      // Инициализация Bitrix24 API (только если внутри Bitrix24)
+      if (isInsideBitrix24()) {
+        await Bitrix24BxApi.init();
+      }
       return await Bitrix24BxApi.getCurrentUser();
     } catch (error) {
       console.error('AccessControlService.getCurrentUser error:', error);

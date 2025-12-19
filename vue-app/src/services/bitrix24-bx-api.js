@@ -108,25 +108,55 @@ export class Bitrix24BxApi {
    * @returns {Promise<object>} Информация о пользователе
    */
   static async getCurrentUser() {
+    // ВАЖНО: Приоритет BX24 API для определения пользователя интерфейса
+    // BX24 API определяет пользователя, который открыл приложение в интерфейсе
+    // Прокси через CRest определяет владельца токена установки приложения
+    
     // Проверяем, можем ли использовать BX24 API
     if (isInsideBitrix24() && isBX24Available()) {
+      // Сначала пытаемся использовать BX24.getUser() - это синхронный метод,
+      // который получает данные из контекста Bitrix24, не делая HTTP запросы
+      // Поэтому он может работать даже при CORS ошибках
       try {
-        // Используем BX24 API (работает внутри Bitrix24)
-        return await this.callMethod('user.current', {});
-      } catch (error) {
-        console.warn('BX24.callMethod failed, falling back to proxy:', error);
-        // Fallback на прокси
-        const result = await Bitrix24ApiService.call('user.current', {});
-        // Bitrix24ApiService.call возвращает объект от CRest
-        // Для user.current данные находятся в result.result
-        return result.result || result;
+        const user = await this.getUser();
+        if (user && user.ID) {
+          console.log('Got user from BX24.getUser() (interface user):', user);
+          return user;
+        }
+      } catch (getUserError) {
+        console.warn('BX24.getUser() failed:', getUserError);
+      }
+      
+      // Если getUser() не сработал, пытаемся использовать getAuth()
+      // getAuth() тоже синхронный и может работать при CORS
+      try {
+        const auth = await this.getAuth();
+        if (auth && auth.user_id) {
+          // Если getAuth() вернул user_id, можем использовать его для получения полной информации
+          // Но для этого нужен callMethod, который может не работать из-за CORS
+          console.log('Got auth from BX24.getAuth():', auth);
+          // Пока просто логируем, что получили auth
+        }
+      } catch (getAuthError) {
+        console.warn('BX24.getAuth() failed:', getAuthError);
+      }
+      
+      // Пытаемся использовать callMethod (может не работать из-за CORS в Chrome)
+      try {
+        const user = await this.callMethod('user.current', {});
+        console.log('Got user from BX24.callMethod() (interface user):', user);
+        return user;
+      } catch (callMethodError) {
+        // Если callMethod не работает из-за CORS, это проблема
+        // НЕ используем прокси, так как он вернёт владельца токена, а не пользователя интерфейса
+        console.error('BX24.callMethod() failed (CORS error in Chrome):', callMethodError);
+        throw new Error('Не удалось определить пользователя интерфейса. CORS блокирует доступ к Bitrix24 API в Chrome.');
       }
     } else {
-      // Используем прокси через Laravel backend
-      const result = await Bitrix24ApiService.call('user.current', {});
-      // Bitrix24ApiService.call возвращает объект от CRest
-      // Для user.current данные находятся в result.result
-      return result.result || result;
+      // Если мы не внутри Bitrix24 (standalone режим), 
+      // то прокси - единственный способ, но он вернёт владельца токена
+      console.warn('Not inside Bitrix24, using proxy API (will return token owner, not interface user)');
+      return await Bitrix24ApiService.getCurrentUser();
     }
   }
 

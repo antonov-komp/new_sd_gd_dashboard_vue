@@ -66,6 +66,26 @@ export class Bitrix24ApiService {
   }
 
   /**
+   * Получение информации о текущем пользователе
+   * 
+   * Метод: user.current
+   * Документация: https://context7.com/bitrix24/rest/user.current
+   * 
+   * @returns {Promise<object>} Информация о пользователе
+   */
+  static async getCurrentUser() {
+    const result = await this.call('user.current', {});
+    // CRest возвращает объект с полем result для успешных ответов
+    // Для user.current данные находятся в result.result
+    if (result && result.result) {
+      return result.result;
+    }
+    // Если структура другая, возвращаем весь объект
+    return result;
+  }
+
+
+  /**
    * Получение списка лидов
    * 
    * Метод: crm.lead.list
