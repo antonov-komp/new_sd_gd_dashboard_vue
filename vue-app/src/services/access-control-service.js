@@ -10,6 +10,7 @@
 
 import { isDepartmentAllowed } from '@/config/access-config.js';
 import { Bitrix24BxApi } from './bitrix24-bx-api.js';
+import { isInsideBitrix24 } from '@/utils/bitrix24-context.js';
 
 /**
  * Коды ошибок доступа
@@ -40,10 +41,13 @@ export class AccessControlService {
    */
   static async checkAccess() {
     try {
-      // Инициализация Bitrix24 API
-      await Bitrix24BxApi.init();
+      // Инициализация Bitrix24 API (только если внутри Bitrix24)
+      if (isInsideBitrix24()) {
+        await Bitrix24BxApi.init();
+      }
       
       // Получение информации о текущем пользователе
+      // Автоматически использует правильный метод (BX24 или прокси)
       const user = await Bitrix24BxApi.getCurrentUser();
       
       // Проверка, что пользователь определён
@@ -84,7 +88,60 @@ export class AccessControlService {
     } catch (error) {
       console.error('AccessControlService.checkAccess error:', error);
       
-      // Обработка ошибок API
+      // Обработка CORS ошибок
+      if (error.message && (
+        error.message.includes('CORS') || 
+        error.message.includes('blocked') ||
+        error.message.includes('ERR_FAILED') ||
+        error.message.includes('unknown address space')
+      )) {
+        // Пытаемся использовать прокси как fallback
+        try {
+          const { Bitrix24ApiService } = await import('./bitrix24-api.js');
+          const result = await Bitrix24ApiService.call('user.current', {});
+          const user = result.result || result;
+          
+          if (!user || !user.ID) {
+            return new AccessCheckResult(
+              false,
+              AccessErrorCodes.USER_NOT_DETERMINED,
+              'Не удалось определить пользователя. Обратитесь в Поддержку приложения в ИТ отдел.'
+            );
+          }
+          
+          // Продолжаем проверку доступа с полученным пользователем
+          const departmentIds = user.UF_DEPARTMENT || [];
+          
+          if (!Array.isArray(departmentIds) || departmentIds.length === 0) {
+            return new AccessCheckResult(
+              false,
+              AccessErrorCodes.ACCESS_DENIED,
+              'Доступ запрещён. Пользователь не привязан к отделу.'
+            );
+          }
+          
+          const hasAccess = departmentIds.some(deptId => isDepartmentAllowed(deptId));
+          
+          if (!hasAccess) {
+            return new AccessCheckResult(
+              false,
+              AccessErrorCodes.ACCESS_DENIED,
+              'Доступ запрещён'
+            );
+          }
+          
+          return new AccessCheckResult(true, null, null, user);
+        } catch (fallbackError) {
+          console.error('Fallback to proxy also failed:', fallbackError);
+          return new AccessCheckResult(
+            false,
+            AccessErrorCodes.API_ERROR,
+            'Ошибка при проверке доступа. Обратитесь в Поддержку приложения в ИТ отдел.'
+          );
+        }
+      }
+      
+      // Обработка других ошибок API
       if (error.message && error.message.includes('not loaded')) {
         return new AccessCheckResult(
           false,
