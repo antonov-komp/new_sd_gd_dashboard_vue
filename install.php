@@ -35,13 +35,24 @@ $result = CRest::installApp();
         }
         preg_match('/<link[^>]+href="([^"]+)"[^>]*>/i', $distHtml, $styleMatch);
         
+        // Базовый путь для ресурсов (относительно корня сайта)
+        $basePath = '/rest_api_aps/sd_it_gen_plan';
+        
         if (!empty($scriptMatch[1])) {
+            // Исправляем путь: если начинается с /dist, заменяем на правильный путь
             $scriptPath = $scriptMatch[1];
+            if (strpos($scriptPath, '/dist/') === 0) {
+                $scriptPath = $basePath . $scriptPath;
+            }
             echo '<script type="module" crossorigin src="' . htmlspecialchars($scriptPath) . '"></script>' . "\n";
         }
         
         if (!empty($styleMatch[1])) {
+            // Исправляем путь: если начинается с /dist, заменяем на правильный путь
             $stylePath = $styleMatch[1];
+            if (strpos($stylePath, '/dist/') === 0) {
+                $stylePath = $basePath . $stylePath;
+            }
             echo '<link rel="stylesheet" crossorigin href="' . htmlspecialchars($stylePath) . '">' . "\n";
         }
     } else { ?>

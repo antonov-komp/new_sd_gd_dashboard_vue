@@ -38,12 +38,23 @@ export class Bitrix24BxApi {
         return;
       }
 
-      BX24.init(() => {
-        if (callback) {
-          callback();
-        }
-        resolve();
-      });
+      // Таймаут для инициализации (5 секунд)
+      const timeout = setTimeout(() => {
+        reject(new Error('BX24.init() timeout: инициализация Bitrix24 API превысила 5 секунд'));
+      }, 5000);
+
+      try {
+        BX24.init(() => {
+          clearTimeout(timeout);
+          if (callback) {
+            callback();
+          }
+          resolve();
+        });
+      } catch (error) {
+        clearTimeout(timeout);
+        reject(error);
+      }
     });
   }
 
@@ -86,14 +97,25 @@ export class Bitrix24BxApi {
         return;
       }
 
-      BX24.callMethod(method, params, (result) => {
-        if (result.error()) {
-          const error = result.error();
-          reject(new Error(error.error_description || error.error || 'Unknown error'));
-        } else {
-          resolve(result.data());
-        }
-      });
+      // Таймаут для вызова метода (10 секунд)
+      const timeout = setTimeout(() => {
+        reject(new Error(`BX24.callMethod(${method}) timeout: запрос превысил 10 секунд`));
+      }, 10000);
+
+      try {
+        BX24.callMethod(method, params, (result) => {
+          clearTimeout(timeout);
+          if (result.error()) {
+            const error = result.error();
+            reject(new Error(error.error_description || error.error || 'Unknown error'));
+          } else {
+            resolve(result.data());
+          }
+        });
+      } catch (error) {
+        clearTimeout(timeout);
+        reject(error);
+      }
     });
   }
 
@@ -143,13 +165,21 @@ export class Bitrix24BxApi {
       
       // Пытаемся использовать callMethod (может не работать из-за CORS в Chrome)
       try {
-        const user = await this.callMethod('user.current', {});
+        const user = await Promise.race([
+          this.callMethod('user.current', {}),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Timeout')), 10000)
+          )
+        ]);
         console.log('Got user from BX24.callMethod() (interface user):', user);
         return user;
       } catch (callMethodError) {
-        // Если callMethod не работает из-за CORS, это проблема
+        // Если callMethod не работает из-за CORS или таймаута, это проблема
         // НЕ используем прокси, так как он вернёт владельца токена, а не пользователя интерфейса
-        console.error('BX24.callMethod() failed (CORS error in Chrome):', callMethodError);
+        console.error('BX24.callMethod() failed:', callMethodError);
+        if (callMethodError.message && callMethodError.message.includes('timeout')) {
+          throw new Error('Таймаут при определении пользователя. Bitrix24 API не отвечает.');
+        }
         throw new Error('Не удалось определить пользователя интерфейса. CORS блокирует доступ к Bitrix24 API в Chrome.');
       }
     } else {

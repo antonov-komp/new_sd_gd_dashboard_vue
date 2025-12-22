@@ -42,13 +42,25 @@ export class AccessControlService {
   static async checkAccess() {
     try {
       // Инициализация Bitrix24 API (только если внутри Bitrix24)
+      // Добавляем таймаут для инициализации
       if (isInsideBitrix24()) {
-        await Bitrix24BxApi.init();
+        await Promise.race([
+          Bitrix24BxApi.init(),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Инициализация Bitrix24 API превысила 5 секунд')), 5000)
+          )
+        ]);
       }
       
       // Получение информации о текущем пользователе
       // Автоматически использует правильный метод (BX24 или прокси)
-      const user = await Bitrix24BxApi.getCurrentUser();
+      // Добавляем таймаут для получения пользователя
+      const user = await Promise.race([
+        Bitrix24BxApi.getCurrentUser(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Получение информации о пользователе превысило 15 секунд')), 15000)
+        )
+      ]);
       
       console.log('AccessControlService.checkAccess - user data:', user);
       
