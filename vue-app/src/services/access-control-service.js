@@ -42,27 +42,53 @@ export class AccessControlService {
   static async checkAccess() {
     try {
       // Инициализация Bitrix24 API (только если внутри Bitrix24)
-      // Добавляем таймаут для инициализации
+      // Добавляем таймаут для инициализации, но не прерываем при ошибке
       if (isInsideBitrix24()) {
-        await Promise.race([
-          Bitrix24BxApi.init(),
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Инициализация Bitrix24 API превысила 5 секунд')), 5000)
-          )
-        ]);
+        try {
+          await Promise.race([
+            Bitrix24BxApi.init(),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Инициализация Bitrix24 API превысила 5 секунд')), 5000)
+            )
+          ]);
+        } catch (initError) {
+          // Если инициализация не удалась, продолжаем - getCurrentUser() сам попробует прокси
+          console.warn('BX24.init() failed, will try proxy API:', initError);
+        }
       }
       
       // Получение информации о текущем пользователе
       // Автоматически использует правильный метод (BX24 или прокси)
-      // Добавляем таймаут для получения пользователя
-      const user = await Promise.race([
-        Bitrix24BxApi.getCurrentUser(),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Получение информации о пользователе превысило 15 секунд')), 15000)
-        )
-      ]);
+      // Добавляем таймаут для получения пользователя (10 секунд общий)
+      let user;
+      try {
+        user = await Promise.race([
+          Bitrix24BxApi.getCurrentUser(),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Получение информации о пользователе превысило 10 секунд')), 10000)
+          )
+        ]);
+      } catch (getUserError) {
+        // Если BX24 API не работает, пробуем прокси API как fallback
+        console.warn('Bitrix24BxApi.getCurrentUser() failed, trying proxy API:', getUserError);
+        const { Bitrix24ApiService } = await import('./bitrix24-api.js');
+        try {
+          user = await Promise.race([
+            Bitrix24ApiService.getCurrentUser(),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Прокси API превысило 5 секунд')), 5000)
+            )
+          ]);
+          console.log('Got user from proxy API (fallback):', user);
+        } catch (proxyError) {
+          // Если и прокси не работает, выбрасываем ошибку
+          console.error('Both BX24 API and proxy API failed:', proxyError);
+          throw new Error('Не удалось определить пользователя. Обратитесь в Поддержку приложения в ИТ отдел.');
+        }
+      }
       
-      console.log('AccessControlService.checkAccess - user data:', user);
+      // Логируем только ID пользователя для уменьшения шума в консоли
+      console.log('AccessControlService.checkAccess - user ID:', user?.ID || 'unknown');
       
       // Проверка, что пользователь определён
       if (!user || !user.ID) {

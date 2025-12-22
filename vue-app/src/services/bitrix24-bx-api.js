@@ -136,51 +136,35 @@ export class Bitrix24BxApi {
     
     // Проверяем, можем ли использовать BX24 API
     if (isInsideBitrix24() && isBX24Available()) {
-      // Сначала пытаемся использовать BX24.getUser() - это синхронный метод,
-      // который получает данные из контекста Bitrix24, не делая HTTP запросы
-      // Поэтому он может работать даже при CORS ошибках
-      try {
-        const user = await this.getUser();
-        if (user && user.ID) {
-          console.log('Got user from BX24.getUser() (interface user):', user);
-          return user;
-        }
-      } catch (getUserError) {
-        console.warn('BX24.getUser() failed:', getUserError);
-      }
-      
-      // Если getUser() не сработал, пытаемся использовать getAuth()
-      // getAuth() тоже синхронный и может работать при CORS
-      try {
-        const auth = await this.getAuth();
-        if (auth && auth.user_id) {
-          // Если getAuth() вернул user_id, можем использовать его для получения полной информации
-          // Но для этого нужен callMethod, который может не работать из-за CORS
-          console.log('Got auth from BX24.getAuth():', auth);
-          // Пока просто логируем, что получили auth
-        }
-      } catch (getAuthError) {
-        console.warn('BX24.getAuth() failed:', getAuthError);
-      }
-      
-      // Пытаемся использовать callMethod (может не работать из-за CORS в Chrome)
+      // Сразу пытаемся использовать callMethod с коротким таймаутом (5 секунд)
+      // Если не работает, быстро переключаемся на прокси API
       try {
         const user = await Promise.race([
           this.callMethod('user.current', {}),
           new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Timeout')), 10000)
+            setTimeout(() => reject(new Error('Timeout')), 5000)
           )
         ]);
-        console.log('Got user from BX24.callMethod() (interface user):', user);
+        // Логируем только ID пользователя для уменьшения шума в консоли
+        console.log('Got user from BX24.callMethod() (interface user):', user?.ID || 'unknown');
         return user;
       } catch (callMethodError) {
-        // Если callMethod не работает из-за CORS или таймаута, это проблема
-        // НЕ используем прокси, так как он вернёт владельца токена, а не пользователя интерфейса
-        console.error('BX24.callMethod() failed:', callMethodError);
-        if (callMethodError.message && callMethodError.message.includes('timeout')) {
-          throw new Error('Таймаут при определении пользователя. Bitrix24 API не отвечает.');
+        // Если callMethod не работает из-за CORS или таймаута, используем прокси как fallback
+        console.warn('BX24.callMethod() failed, using proxy API as fallback:', callMethodError);
+        // Используем прокси API как fallback, даже если он вернёт владельца токена
+        // Это лучше, чем показывать ошибку пользователю
+        try {
+          const proxyUser = await Bitrix24ApiService.getCurrentUser();
+          console.log('Got user from proxy API (token owner, fallback):', proxyUser);
+          return proxyUser;
+        } catch (proxyError) {
+          // Если и прокси не работает, выбрасываем ошибку
+          console.error('Both BX24 API and proxy API failed:', proxyError);
+          if (callMethodError.message && callMethodError.message.includes('timeout')) {
+            throw new Error('Таймаут при определении пользователя. Bitrix24 API не отвечает.');
+          }
+          throw new Error('Не удалось определить пользователя. Обратитесь в Поддержку приложения в ИТ отдел.');
         }
-        throw new Error('Не удалось определить пользователя интерфейса. CORS блокирует доступ к Bitrix24 API в Chrome.');
       }
     } else {
       // Если мы не внутри Bitrix24 (standalone режим), 

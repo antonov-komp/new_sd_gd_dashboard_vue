@@ -25,11 +25,27 @@ const { get, set, getCacheKey, invalidate } = useCache({
 
 export class WebhookLogsApiService {
   /**
-   * Базовый URL API
+   * Получить базовый URL API
+   * Определяется автоматически на основе текущего пути
+   * 
+   * @returns {string} Базовый URL для API запросов
+   */
+  static getBaseUrl() {
+    // Определяем базовый путь автоматически
+    const path = window.location.pathname;
+    const basePath = path.substring(0, path.lastIndexOf('/'));
+    return basePath + '/api/webhook-logs.php';
+  }
+  
+  /**
+   * Базовый URL API (для обратной совместимости)
    * 
    * @type {string}
+   * @deprecated Используйте getBaseUrl() вместо этого
    */
-  static BASE_URL = '/api/webhook-logs.php';
+  static get BASE_URL() {
+    return this.getBaseUrl();
+  }
   
   /**
    * Получение списка логов с кешированием и валидацией
@@ -62,7 +78,8 @@ export class WebhookLogsApiService {
       status: filters.status || null
     };
     
-    const cacheKey = getCacheKey(this.BASE_URL, { 
+    const baseUrl = this.getBaseUrl();
+    const cacheKey = getCacheKey(baseUrl, { 
       filters: simpleFilters, 
       page, 
       limit 
@@ -112,7 +129,8 @@ export class WebhookLogsApiService {
     }
     
     try {
-      const response = await fetch(`${this.BASE_URL}?${params.toString()}`);
+      const baseUrl = this.getBaseUrl();
+      const response = await fetch(`${baseUrl}?${params.toString()}`);
       
       if (!response.ok) {
         // Обработка HTTP ошибок
