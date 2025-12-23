@@ -13,8 +13,11 @@ export default {
 <style>
 #app {
   min-height: 100vh;
-  background: #f5f5f5;
+  width: 100%;
+  position: relative;
 }
+
+/* Убираем дублирование фона - компоненты сами управляют своим фоном */
 </style>
 
 

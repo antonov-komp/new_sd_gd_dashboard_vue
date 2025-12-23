@@ -5,6 +5,7 @@ import './styles/bitrix24-ui-variables.css';
 import './styles/main.css';
 // Импорт конфигурации Chart.js для глобальной регистрации
 import '@/utils/chart-config.js';
+import { getApiUrl } from '@/utils/path-utils.js';
 
 const app = createApp(App);
 
@@ -39,7 +40,7 @@ app.config.errorHandler = (err, instance, info) => {
   if (typeof BX !== 'undefined' && BX.ajax) {
     try {
       BX.ajax({
-        url: '/api/log-error.php',
+        url: getApiUrl('/api/log-error.php'),
         method: 'POST',
         data: {
           error: err?.message || String(err),

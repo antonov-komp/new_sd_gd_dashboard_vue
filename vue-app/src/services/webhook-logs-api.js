@@ -23,6 +23,8 @@ const { get, set, getCacheKey, invalidate } = useCache({
   maxSize: 50
 });
 
+import { getApiUrl } from '@/utils/path-utils.js';
+
 export class WebhookLogsApiService {
   /**
    * Получить базовый URL API
@@ -31,10 +33,7 @@ export class WebhookLogsApiService {
    * @returns {string} Базовый URL для API запросов
    */
   static getBaseUrl() {
-    // Определяем базовый путь автоматически
-    const path = window.location.pathname;
-    const basePath = path.substring(0, path.lastIndexOf('/'));
-    return basePath + '/api/webhook-logs.php';
+    return getApiUrl('/api/webhook-logs.php');
   }
   
   /**

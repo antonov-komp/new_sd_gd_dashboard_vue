@@ -9,6 +9,8 @@
  * - data { newTickets, closedTickets, carryoverTickets, series { new[], closed[], carryover[] }, stages[], responsible[], carryoverTicketsByDuration[] }
  */
 
+import { getApiUrl } from '@/utils/path-utils.js';
+
 const DEFAULT_ENDPOINT = '/api/graph-1c-admission-closure.php';
 
 /**
@@ -163,7 +165,9 @@ export async function fetchAdmissionClosureStats(params = {}) {
     includeCarryoverTicketsByDuration
   };
 
-  const response = await fetch(endpoint, {
+  // Получаем полный путь к endpoint с учетом базового пути приложения
+  const fullEndpoint = getApiUrl(endpoint);
+  const response = await fetch(fullEndpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

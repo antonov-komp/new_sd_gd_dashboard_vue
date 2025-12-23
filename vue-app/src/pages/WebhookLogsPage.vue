@@ -207,6 +207,7 @@ import RealtimeControls from '@/components/webhooks/RealtimeControls.vue';
 import NewLogsIndicator from '@/components/webhooks/NewLogsIndicator.vue';
 import { useNotifications } from '@/composables/useNotifications.js';
 import { useRealtime } from '@/composables/useRealtime.js';
+import { getApiUrl } from '@/utils/path-utils.js';
 
 export default {
   name: 'WebhookLogsPage',
@@ -319,7 +320,7 @@ export default {
       disconnect,
       applyNewLogs: applyRealtimeLogs,
       clearNewLogs
-    } = useRealtime('/api/webhook-realtime.php', {
+    } = useRealtime(getApiUrl('/api/webhook-realtime.php'), {
       autoConnect: false, // Ручное управление
       enableSound: true,
       validateLogs: true, // Включить валидацию новых логов

@@ -8,7 +8,7 @@
         :message="errorMessage"
       >
         <div v-if="showInstallLink" class="install-link">
-          <a href="/install.php">Установить приложение</a>
+          <a :href="installPageUrl">Установить приложение</a>
         </div>
       </StatusMessage>
 
@@ -117,6 +117,7 @@ import { AccessControlService, AccessErrorCodes } from '@/services/access-contro
 import { getReports } from '@/config/reports-config.js';
 import { isAdmin } from '@/config/access-config.js';
 import { getAdminInterfaces } from '@/config/admin-config.js';
+import { getPageUrl } from '@/utils/path-utils.js';
 
 export default {
   name: 'IndexPage',
@@ -220,6 +221,11 @@ export default {
       return error.value && error.value.includes('no_install_app');
     });
 
+    // URL для страницы установки
+    const installPageUrl = computed(() => {
+      return getPageUrl('/install.php');
+    });
+
     onMounted(async () => {
       try {
         // Проверка доступа
@@ -315,6 +321,7 @@ export default {
       errorTitle,
       errorMessage,
       showInstallLink,
+      installPageUrl,
       reportsButtons,
       navigateToReport,
       isAdmin: isAdminComputed,

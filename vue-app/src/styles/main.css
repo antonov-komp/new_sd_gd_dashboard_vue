@@ -2,8 +2,18 @@
 @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&display=swap');
 
 /* Сброс стилей */
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
+}
+
+/* Сброс margin и padding только для основных элементов, не для всех */
+body,
+h1, h2, h3, h4, h5, h6,
+p, ul, ol, li,
+figure, figcaption,
+blockquote, dl, dd {
   margin: 0;
   padding: 0;
 }

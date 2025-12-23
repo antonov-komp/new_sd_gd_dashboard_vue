@@ -8,6 +8,7 @@
  */
 
 import snapshotConfig from '@/config/snapshot-config.js';
+import { getBasePath } from '@/utils/path-utils.js';
 
 /**
  * Сервис для работы со слепками состояния сектора
@@ -25,10 +26,8 @@ class SnapshotService {
       return snapshotConfig.apiBaseUrl;
     }
     
-    // Определяем базовый путь автоматически
-    const path = window.location.pathname;
-    const basePath = path.substring(0, path.lastIndexOf('/'));
-    return basePath;
+    // Используем общую утилиту для определения базового пути
+    return getBasePath();
   }
 
   /**

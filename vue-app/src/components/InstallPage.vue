@@ -25,6 +25,7 @@ import { ref, onMounted } from 'vue';
 import StatusMessage from './common/StatusMessage.vue';
 import LoadingSpinner from './common/LoadingSpinner.vue';
 import { Bitrix24BxApi } from '@/services/bitrix24-bx-api.js';
+import { getPageUrl } from '@/utils/path-utils.js';
 
 export default {
   name: 'InstallPage',
@@ -46,7 +47,8 @@ export default {
           result = window.INSTALL_RESULT;
         } else {
           // Fallback: пытаемся получить через API
-          const response = await fetch('/install.php?get_result=1');
+          const installUrl = getPageUrl('/install.php');
+          const response = await fetch(`${installUrl}?get_result=1`);
           if (response.ok) {
             result = await response.json();
           }

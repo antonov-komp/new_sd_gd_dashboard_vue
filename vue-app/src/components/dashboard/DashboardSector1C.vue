@@ -349,6 +349,9 @@ export default {
   padding: 20px;
   background: #f5f5f5;
   min-height: 100vh;
+  width: 100%;
+  position: relative;
+  overflow-x: auto; /* Предотвращаем горизонтальный скролл при переполнении */
 }
 
 .dashboard-sector-1c.is-dragging {
@@ -372,12 +375,16 @@ export default {
   background: white;
   border-radius: 4px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  flex-wrap: wrap; /* Позволяет кнопкам переноситься на новую строку на маленьких экранах */
+  width: 100%;
 }
 
 .header-actions {
   display: flex;
   gap: 10px;
   align-items: center;
+  flex-wrap: wrap; /* Позволяет кнопкам переноситься на новую строку */
+  flex-shrink: 0; /* Предотвращает сжатие */
 }
 
 .btn-navigate-graph-state {
@@ -477,7 +484,9 @@ export default {
   color: #333;
   font-size: 24px;
   margin: 0;
+  padding: 0;
   font-weight: 600;
+  min-width: 200px; /* Минимальная ширина для заголовка */
 }
 
 .dashboard-content {
@@ -488,6 +497,13 @@ export default {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 20px;
+  width: 100%;
+  min-width: 0; /* Предотвращает переполнение grid */
+}
+
+/* Исправление для предотвращения переполнения grid элементов */
+.stages-container > * {
+  min-width: 0; /* Позволяет элементам сжиматься */
 }
 
 /* Стили для загрузки и ошибок теперь в компоненте LoadingPreloader */
@@ -537,6 +553,30 @@ export default {
   
   .dashboard-sector-1c {
     padding: 10px;
+  }
+  
+  .dashboard-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .dashboard-header h1 {
+    width: 100%;
+    margin-bottom: 10px;
+  }
+  
+  .header-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  
+  .btn-navigate-graph-state,
+  .btn-navigate-admission-closure,
+  .btn-navigate-time-tracking,
+  .btn-enable-diagnostics,
+  .btn-clear-cache {
+    flex: 1 1 auto;
+    min-width: 120px;
   }
 }
 

@@ -9,6 +9,8 @@
  * - data { totalElapsedTime, totalElapsedTimeUnit, totalRecordsCount, weeks[], employeesSummary[] }
  */
 
+import { getApiUrl } from '@/utils/path-utils.js';
+
 const DEFAULT_ENDPOINT = '/api/tickets-time-tracking-sector-1c.php';
 
 /**
@@ -69,7 +71,8 @@ export async function getTimeTrackingData(params = {}) {
   } = params;
 
   try {
-    const response = await fetch(DEFAULT_ENDPOINT, {
+    const endpoint = getApiUrl(DEFAULT_ENDPOINT);
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -162,7 +165,8 @@ export async function getTasksDetails({
   }
   
   try {
-    const response = await fetch(DEFAULT_ENDPOINT, {
+    const endpoint = getApiUrl(DEFAULT_ENDPOINT);
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'

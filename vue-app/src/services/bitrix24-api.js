@@ -4,15 +4,14 @@
  * Используется для вызова методов Bitrix24 REST API через PHP endpoint
  * Документация: https://context7.com/bitrix24/rest/
  */
+import { getApiUrl as getApiUrlUtil } from '@/utils/path-utils.js';
+
 export class Bitrix24ApiService {
   /**
    * Базовый URL для API запросов
    */
   static getApiUrl() {
-    // Определяем базовый путь автоматически
-    const path = window.location.pathname;
-    const basePath = path.substring(0, path.lastIndexOf('/'));
-    return basePath + '/api/bitrix24.php';
+    return getApiUrlUtil('/api/bitrix24.php');
   }
 
   /**
