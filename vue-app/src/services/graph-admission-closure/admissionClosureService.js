@@ -30,7 +30,10 @@ function normalizeResponse(raw) {
           closedTicketsCreatedOtherWeek: 0,
           carryoverTickets: 0,
           carryoverTicketsCreatedThisWeek: 0,
-          carryoverTicketsCreatedOtherWeek: 0
+          carryoverTicketsCreatedOtherWeek: 0,
+          // TASK-063: Новые поля
+          carryoverTicketsCreatedPreviousWeek: 0,
+          carryoverTicketsCreatedOlder: 0
         },
         newTickets: 0,
         closedTickets: 0,
@@ -43,7 +46,10 @@ function normalizeResponse(raw) {
           closedCreatedOtherWeek: [0], // TASK-048
           carryover: [0],
           carryoverCreatedThisWeek: [0], // TASK-048
-          carryoverCreatedOtherWeek: [0] // TASK-048
+          carryoverCreatedOtherWeek: [0], // TASK-048
+          // TASK-063: Новые поля
+          carryoverCreatedPreviousWeek: [0],
+          carryoverCreatedOlder: [0]
         },
         weeksData: [], // TASK-048
         stages: [],
@@ -77,7 +83,10 @@ function normalizeResponse(raw) {
         closedTicketsCreatedOtherWeek: payload.data.closedTicketsCreatedOtherWeek ?? 0,
         carryoverTickets: payload.data.carryoverTickets ?? 0,
         carryoverTicketsCreatedThisWeek: payload.data.carryoverTicketsCreatedThisWeek ?? 0,
-        carryoverTicketsCreatedOtherWeek: payload.data.carryoverTicketsCreatedOtherWeek ?? 0
+        carryoverTicketsCreatedOtherWeek: payload.data.carryoverTicketsCreatedOtherWeek ?? 0,
+        // TASK-063: Новые поля
+        carryoverTicketsCreatedPreviousWeek: payload.data.carryoverTicketsCreatedPreviousWeek ?? 0,
+        carryoverTicketsCreatedOlder: payload.data.carryoverTicketsCreatedOlder ?? 0
       } : {
         newTickets: 0,
         closedTickets: 0,
@@ -85,7 +94,10 @@ function normalizeResponse(raw) {
         closedTicketsCreatedOtherWeek: 0,
         carryoverTickets: 0,
         carryoverTicketsCreatedThisWeek: 0,
-        carryoverTicketsCreatedOtherWeek: 0
+        carryoverTicketsCreatedOtherWeek: 0,
+        // TASK-063: Новые поля
+        carryoverTicketsCreatedPreviousWeek: 0,
+        carryoverTicketsCreatedOlder: 0
       }),
       // Для обратной совместимости
       newTickets: payload.data?.currentWeek?.newTickets ?? payload.data?.newTickets ?? payload.newTickets ?? 0,
@@ -95,6 +107,15 @@ function normalizeResponse(raw) {
       carryoverTickets: payload.data?.currentWeek?.carryoverTickets ?? payload.data?.carryoverTickets ?? payload.carryoverTickets ?? 0,
       carryoverTicketsCreatedThisWeek: payload.data?.currentWeek?.carryoverTicketsCreatedThisWeek ?? payload.data?.carryoverTicketsCreatedThisWeek ?? payload.carryoverTicketsCreatedThisWeek ?? 0, // TASK-047
       carryoverTicketsCreatedOtherWeek: payload.data?.currentWeek?.carryoverTicketsCreatedOtherWeek ?? payload.data?.carryoverTicketsCreatedOtherWeek ?? payload.carryoverTicketsCreatedOtherWeek ?? 0, // TASK-047
+      // TASK-063: Новые поля
+      carryoverTicketsCreatedPreviousWeek: payload.data?.currentWeek?.carryoverTicketsCreatedPreviousWeek
+        ?? payload.data?.carryoverTicketsCreatedPreviousWeek
+        ?? payload.carryoverTicketsCreatedPreviousWeek
+        ?? 0,
+      carryoverTicketsCreatedOlder: payload.data?.currentWeek?.carryoverTicketsCreatedOlder
+        ?? payload.data?.carryoverTicketsCreatedOlder
+        ?? payload.carryoverTicketsCreatedOlder
+        ?? 0,
       // TASK-048: Обновляем series для поддержки 4 недель и разбивок
       series: {
         new: payload.data?.series?.new ?? payload.series?.new ?? [0],
@@ -103,7 +124,10 @@ function normalizeResponse(raw) {
         closedCreatedOtherWeek: payload.data?.series?.closedCreatedOtherWeek ?? payload.series?.closedCreatedOtherWeek ?? [0], // TASK-048
         carryover: payload.data?.series?.carryover ?? payload.series?.carryover ?? [0],
         carryoverCreatedThisWeek: payload.data?.series?.carryoverCreatedThisWeek ?? payload.series?.carryoverCreatedThisWeek ?? [0], // TASK-048
-        carryoverCreatedOtherWeek: payload.data?.series?.carryoverCreatedOtherWeek ?? payload.series?.carryoverCreatedOtherWeek ?? [0] // TASK-048
+        carryoverCreatedOtherWeek: payload.data?.series?.carryoverCreatedOtherWeek ?? payload.series?.carryoverCreatedOtherWeek ?? [0], // TASK-048
+        // TASK-063: Новые поля
+        carryoverCreatedPreviousWeek: payload.data?.series?.carryoverCreatedPreviousWeek ?? payload.series?.carryoverCreatedPreviousWeek ?? [0],
+        carryoverCreatedOlder: payload.data?.series?.carryoverCreatedOlder ?? payload.series?.carryoverCreatedOlder ?? [0]
       },
       // TASK-048: Добавляем weeksData
       weeksData: payload.data?.weeksData ?? payload.weeksData ?? [],

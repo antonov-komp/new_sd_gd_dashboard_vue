@@ -105,10 +105,15 @@
                 <span class="breakdown-item__value">{{ currentWeekData?.carryoverTicketsCreatedThisWeek ?? 0 }}</span>
                 <span class="breakdown-item__label">этой недели</span>
               </div>
-              <div class="breakdown-item breakdown-item--other-week">
+              <div class="breakdown-item breakdown-item--previous-week">
                 <span class="breakdown-item__icon">↻</span>
-                <span class="breakdown-item__value">{{ currentWeekData?.carryoverTicketsCreatedOtherWeek ?? 0 }}</span>
-                <span class="breakdown-item__label">предыдущих</span>
+                <span class="breakdown-item__value">{{ currentWeekData?.carryoverTicketsCreatedPreviousWeek ?? 0 }}</span>
+                <span class="breakdown-item__label">предыдущей недели</span>
+              </div>
+              <div class="breakdown-item breakdown-item--older">
+                <span class="breakdown-item__icon">↻</span>
+                <span class="breakdown-item__value">{{ currentWeekData?.carryoverTicketsCreatedOlder ?? 0 }}</span>
+                <span class="breakdown-item__label">остальные</span>
               </div>
             </div>
           </div>
@@ -248,10 +253,15 @@
                 <span class="breakdown-item__value">{{ previousWeekData?.carryoverTicketsCreatedThisWeek ?? 0 }}</span>
                 <span class="breakdown-item__label">этой недели</span>
               </div>
-              <div class="breakdown-item breakdown-item--other-week">
+              <div class="breakdown-item breakdown-item--previous-week">
                 <span class="breakdown-item__icon">↻</span>
-                <span class="breakdown-item__value">{{ previousWeekData?.carryoverTicketsCreatedOtherWeek ?? 0 }}</span>
-                <span class="breakdown-item__label">предыдущих</span>
+                <span class="breakdown-item__value">{{ previousWeekData?.carryoverTicketsCreatedPreviousWeek ?? 0 }}</span>
+                <span class="breakdown-item__label">предыдущей недели</span>
+              </div>
+              <div class="breakdown-item breakdown-item--older">
+                <span class="breakdown-item__icon">↻</span>
+                <span class="breakdown-item__value">{{ previousWeekData?.carryoverTicketsCreatedOlder ?? 0 }}</span>
+                <span class="breakdown-item__label">остальные</span>
               </div>
             </div>
           </div>
@@ -330,7 +340,9 @@ const props = defineProps({
       closedTicketsCreatedOtherWeek: 0, // TASK-047
       carryoverTickets: 0,
       carryoverTicketsCreatedThisWeek: 0, // TASK-047
-      carryoverTicketsCreatedOtherWeek: 0, // TASK-047
+      carryoverTicketsCreatedPreviousWeek: 0, // TASK-063: НОВОЕ
+      carryoverTicketsCreatedOlder: 0, // TASK-063: НОВОЕ
+      carryoverTicketsCreatedOtherWeek: 0, // TASK-063: DEPRECATED (для обратной совместимости)
       series: { // TASK-049: массивы с одним элементом для выбранной недели
         new: [0],
         closed: [0],
@@ -338,7 +350,9 @@ const props = defineProps({
         closedCreatedOtherWeek: [0],
         carryover: [0],
         carryoverCreatedThisWeek: [0],
-        carryoverCreatedOtherWeek: [0]
+        carryoverCreatedPreviousWeek: [0], // TASK-063: НОВОЕ
+        carryoverCreatedOlder: [0], // TASK-063: НОВОЕ
+        carryoverCreatedOtherWeek: [0] // TASK-063: DEPRECATED
       },
       stages: [],
       responsible: []
@@ -521,6 +535,15 @@ const carryoverChartData = computed(() => {
     ? props.data.series.carryoverCreatedThisWeek
     : [props.data.carryoverTicketsCreatedThisWeek ?? 0];
   
+  const carryoverCreatedPreviousWeekSeries = Array.isArray(props.data.series?.carryoverCreatedPreviousWeek) && props.data.series.carryoverCreatedPreviousWeek.length > 0
+    ? props.data.series.carryoverCreatedPreviousWeek
+    : [props.data.carryoverTicketsCreatedPreviousWeek ?? 0]; // TASK-063: НОВОЕ
+
+  const carryoverCreatedOlderSeries = Array.isArray(props.data.series?.carryoverCreatedOlder) && props.data.series.carryoverCreatedOlder.length > 0
+    ? props.data.series.carryoverCreatedOlder
+    : [props.data.carryoverTicketsCreatedOlder ?? 0]; // TASK-063: НОВОЕ
+
+  // TASK-063: DEPRECATED - для обратной совместимости
   const carryoverCreatedOtherWeekSeries = Array.isArray(props.data.series?.carryoverCreatedOtherWeek) && props.data.series.carryoverCreatedOtherWeek.length > 0
     ? props.data.series.carryoverCreatedOtherWeek
     : [props.data.carryoverTicketsCreatedOtherWeek ?? 0];
@@ -564,9 +587,25 @@ const carryoverChartData = computed(() => {
         pointBackgroundColor: chartColors.carryoverLight
       },
       {
-        // TASK-056-01: Вспомогательная линия - Переходящие (созданы другой неделей)
-        label: 'Переходящие (созданы другой неделей)',
-        data: carryoverCreatedOtherWeekSeries,
+        // TASK-063: Вспомогательная линия - Переходящие (созданы предыдущей неделей)
+        label: 'Переходящие (созданы предыдущей неделей)',
+        data: carryoverCreatedPreviousWeekSeries,
+        backgroundColor: chartColors.warning,
+        borderColor: chartColors.warning,
+        borderWidth: 2, // TASK-056-01: Уменьшена толщина для вспомогательных линий
+        tension: 0.4, // TASK-056-01: Увеличено скругление
+        borderDash: [8, 4], // TASK-056-01: Обновлён стиль пунктира
+        fill: false, // TASK-056-01: Без градиента для вспомогательных линий
+        pointRadius: 0, // TASK-056-01: Скрыты точки по умолчанию
+        pointHoverRadius: 4, // TASK-056-01: Показывать точки при hover (меньший радиус)
+        pointHoverBorderWidth: 2, // TASK-056-01: Обводка точек
+        pointHoverBorderColor: '#ffffff', // TASK-056-01: Белая обводка
+        pointBackgroundColor: chartColors.warning
+      },
+      {
+        // TASK-063: Вспомогательная линия - Переходящие (созданы остальными неделями)
+        label: 'Переходящие (созданы остальными неделями)',
+        data: carryoverCreatedOlderSeries,
         backgroundColor: chartColors.carryoverDark,
         borderColor: chartColors.carryoverDark,
         borderWidth: 2, // TASK-056-01: Уменьшена толщина для вспомогательных линий
@@ -617,6 +656,15 @@ const lineBarData = computed(() => {
     ? props.data.series.carryoverCreatedThisWeek
     : [props.data.carryoverTicketsCreatedThisWeek ?? 0];
   
+  const carryoverCreatedPreviousWeekSeries = Array.isArray(props.data.series?.carryoverCreatedPreviousWeek) && props.data.series.carryoverCreatedPreviousWeek.length > 0
+    ? props.data.series.carryoverCreatedPreviousWeek
+    : [props.data.carryoverTicketsCreatedPreviousWeek ?? 0]; // TASK-063: НОВОЕ
+
+  const carryoverCreatedOlderSeries = Array.isArray(props.data.series?.carryoverCreatedOlder) && props.data.series.carryoverCreatedOlder.length > 0
+    ? props.data.series.carryoverCreatedOlder
+    : [props.data.carryoverTicketsCreatedOlder ?? 0]; // TASK-063: НОВОЕ
+
+  // TASK-063: DEPRECATED - для обратной совместимости
   const carryoverCreatedOtherWeekSeries = Array.isArray(props.data.series?.carryoverCreatedOtherWeek) && props.data.series.carryoverCreatedOtherWeek.length > 0
     ? props.data.series.carryoverCreatedOtherWeek
     : [props.data.carryoverTicketsCreatedOtherWeek ?? 0];
@@ -676,8 +724,19 @@ const lineBarData = computed(() => {
         borderDash: [5, 5] // Пунктирная линия
       },
       {
-        label: 'Переходящие (созданы другой неделей)',
-        data: carryoverCreatedOtherWeekSeries,
+        // TASK-063: Вспомогательная линия - Переходящие (созданы предыдущей неделей)
+        label: 'Переходящие (созданы предыдущей неделей)',
+        data: carryoverCreatedPreviousWeekSeries,
+        backgroundColor: chartColors.warning,
+        borderColor: chartColors.warning,
+        tension: 0.3,
+        fill: false,
+        borderDash: [5, 5] // Пунктирная линия
+      },
+      {
+        // TASK-063: Вспомогательная линия - Переходящие (созданы остальными неделями)
+        label: 'Переходящие (созданы остальными неделями)',
+        data: carryoverCreatedOlderSeries,
         backgroundColor: chartColors.carryoverDark,
         borderColor: chartColors.carryoverDark,
         tension: 0.3,
@@ -1050,7 +1109,13 @@ const currentWeekData = computed(() => {
     const lastIndex = Math.max(
       (Array.isArray(series.new) ? series.new.length : 0) - 1,
       (Array.isArray(series.closed) ? series.closed.length : 0) - 1,
+      (Array.isArray(series.closedCreatedThisWeek) ? series.closedCreatedThisWeek.length : 0) - 1,
+      (Array.isArray(series.closedCreatedOtherWeek) ? series.closedCreatedOtherWeek.length : 0) - 1,
       (Array.isArray(series.carryover) ? series.carryover.length : 0) - 1,
+      (Array.isArray(series.carryoverCreatedThisWeek) ? series.carryoverCreatedThisWeek.length : 0) - 1,
+      (Array.isArray(series.carryoverCreatedPreviousWeek) ? series.carryoverCreatedPreviousWeek.length : 0) - 1, // TASK-063: НОВОЕ
+      (Array.isArray(series.carryoverCreatedOlder) ? series.carryoverCreatedOlder.length : 0) - 1, // TASK-063: НОВОЕ
+      (Array.isArray(series.carryoverCreatedOtherWeek) ? series.carryoverCreatedOtherWeek.length : 0) - 1,
       -1
     );
     
@@ -1062,8 +1127,36 @@ const currentWeekData = computed(() => {
         closedTicketsCreatedOtherWeek: (Array.isArray(series.closedCreatedOtherWeek) && series.closedCreatedOtherWeek[lastIndex] !== undefined) ? series.closedCreatedOtherWeek[lastIndex] : 0,
         carryoverTickets: (Array.isArray(series.carryover) && series.carryover[lastIndex] !== undefined) ? series.carryover[lastIndex] : 0,
         carryoverTicketsCreatedThisWeek: (Array.isArray(series.carryoverCreatedThisWeek) && series.carryoverCreatedThisWeek[lastIndex] !== undefined) ? series.carryoverCreatedThisWeek[lastIndex] : 0,
-        carryoverTicketsCreatedOtherWeek: (Array.isArray(series.carryoverCreatedOtherWeek) && series.carryoverCreatedOtherWeek[lastIndex] !== undefined) ? series.carryoverCreatedOtherWeek[lastIndex] : 0
+        carryoverTicketsCreatedPreviousWeek: (Array.isArray(series.carryoverCreatedPreviousWeek) && series.carryoverCreatedPreviousWeek[lastIndex] !== undefined) ? series.carryoverCreatedPreviousWeek[lastIndex] : 0, // TASK-063: НОВОЕ
+        carryoverTicketsCreatedOlder: (Array.isArray(series.carryoverCreatedOlder) && series.carryoverCreatedOlder[lastIndex] !== undefined) ? series.carryoverCreatedOlder[lastIndex] : 0, // TASK-063: НОВОЕ
+        carryoverTicketsCreatedOtherWeek: (Array.isArray(series.carryoverCreatedOtherWeek) && series.carryoverCreatedOtherWeek[lastIndex] !== undefined) ? series.carryoverCreatedOtherWeek[lastIndex] : 0 // TASK-063: DEPRECATED
       };
+      
+      // TASK-063: Временное логирование для диагностики
+      if (fromSeries.carryoverTickets > 0) {
+        console.log('[DEBUG currentWeekData]', {
+          total: fromSeries.carryoverTickets,
+          thisWeek: fromSeries.carryoverTicketsCreatedThisWeek,
+          previousWeek: fromSeries.carryoverTicketsCreatedPreviousWeek,
+          older: fromSeries.carryoverTicketsCreatedOlder,
+          otherWeek: fromSeries.carryoverTicketsCreatedOtherWeek,
+          sum: fromSeries.carryoverTicketsCreatedThisWeek + fromSeries.carryoverTicketsCreatedPreviousWeek + fromSeries.carryoverTicketsCreatedOlder,
+          lastIndex,
+          series: {
+            carryoverCreatedPreviousWeek: series.carryoverCreatedPreviousWeek,
+            carryoverCreatedOlder: series.carryoverCreatedOlder,
+            carryoverCreatedPreviousWeekLength: series.carryoverCreatedPreviousWeek?.length,
+            carryoverCreatedOlderLength: series.carryoverCreatedOlder?.length,
+            carryoverCreatedPreviousWeekLast: series.carryoverCreatedPreviousWeek?.[lastIndex],
+            carryoverCreatedOlderLast: series.carryoverCreatedOlder?.[lastIndex]
+          },
+          currentWeek: props.data.currentWeek,
+          data: {
+            carryoverTicketsCreatedPreviousWeek: props.data.carryoverTicketsCreatedPreviousWeek,
+            carryoverTicketsCreatedOlder: props.data.carryoverTicketsCreatedOlder
+          }
+        });
+      }
       
       // Если в series есть хотя бы одно ненулевое значение, используем эти данные
       if (fromSeries.newTickets > 0 || fromSeries.closedTickets > 0 || fromSeries.carryoverTickets > 0) {
@@ -1106,7 +1199,9 @@ const currentWeekData = computed(() => {
         closedTicketsCreatedOtherWeek: (Array.isArray(series.closedCreatedOtherWeek) && series.closedCreatedOtherWeek[lastIndex] !== undefined) ? series.closedCreatedOtherWeek[lastIndex] : 0,
         carryoverTickets: (Array.isArray(series.carryover) && series.carryover[lastIndex] !== undefined) ? series.carryover[lastIndex] : 0,
         carryoverTicketsCreatedThisWeek: (Array.isArray(series.carryoverCreatedThisWeek) && series.carryoverCreatedThisWeek[lastIndex] !== undefined) ? series.carryoverCreatedThisWeek[lastIndex] : 0,
-        carryoverTicketsCreatedOtherWeek: (Array.isArray(series.carryoverCreatedOtherWeek) && series.carryoverCreatedOtherWeek[lastIndex] !== undefined) ? series.carryoverCreatedOtherWeek[lastIndex] : 0
+        carryoverTicketsCreatedPreviousWeek: (Array.isArray(series.carryoverCreatedPreviousWeek) && series.carryoverCreatedPreviousWeek[lastIndex] !== undefined) ? series.carryoverCreatedPreviousWeek[lastIndex] : 0, // TASK-063: НОВОЕ
+        carryoverTicketsCreatedOlder: (Array.isArray(series.carryoverCreatedOlder) && series.carryoverCreatedOlder[lastIndex] !== undefined) ? series.carryoverCreatedOlder[lastIndex] : 0, // TASK-063: НОВОЕ
+        carryoverTicketsCreatedOtherWeek: (Array.isArray(series.carryoverCreatedOtherWeek) && series.carryoverCreatedOtherWeek[lastIndex] !== undefined) ? series.carryoverCreatedOtherWeek[lastIndex] : 0 // TASK-063: DEPRECATED
       };
     }
   }
@@ -1144,6 +1239,8 @@ const previousWeekData = computed(() => {
       (Array.isArray(series.closedCreatedOtherWeek) ? series.closedCreatedOtherWeek.length : 0) - 1,
       (Array.isArray(series.carryover) ? series.carryover.length : 0) - 1,
       (Array.isArray(series.carryoverCreatedThisWeek) ? series.carryoverCreatedThisWeek.length : 0) - 1,
+      (Array.isArray(series.carryoverCreatedPreviousWeek) ? series.carryoverCreatedPreviousWeek.length : 0) - 1, // TASK-063: НОВОЕ
+      (Array.isArray(series.carryoverCreatedOlder) ? series.carryoverCreatedOlder.length : 0) - 1, // TASK-063: НОВОЕ
       (Array.isArray(series.carryoverCreatedOtherWeek) ? series.carryoverCreatedOtherWeek.length : 0) - 1,
       -1
     );
@@ -1178,9 +1275,15 @@ const previousWeekData = computed(() => {
         carryoverTicketsCreatedThisWeek: (Array.isArray(series.carryoverCreatedThisWeek) && series.carryoverCreatedThisWeek[prevIndex] !== undefined) 
           ? series.carryoverCreatedThisWeek[prevIndex] 
           : 0,
+        carryoverTicketsCreatedPreviousWeek: (Array.isArray(series.carryoverCreatedPreviousWeek) && series.carryoverCreatedPreviousWeek[prevIndex] !== undefined) 
+          ? series.carryoverCreatedPreviousWeek[prevIndex] 
+          : 0, // TASK-063: НОВОЕ
+        carryoverTicketsCreatedOlder: (Array.isArray(series.carryoverCreatedOlder) && series.carryoverCreatedOlder[prevIndex] !== undefined) 
+          ? series.carryoverCreatedOlder[prevIndex] 
+          : 0, // TASK-063: НОВОЕ
         carryoverTicketsCreatedOtherWeek: (Array.isArray(series.carryoverCreatedOtherWeek) && series.carryoverCreatedOtherWeek[prevIndex] !== undefined) 
           ? series.carryoverCreatedOtherWeek[prevIndex] 
-          : 0
+          : 0 // TASK-063: DEPRECATED
       };
       
       // Если в series есть хотя бы одно ненулевое значение, используем эти данные
@@ -1241,7 +1344,9 @@ const previousWeekData = computed(() => {
         closedTicketsCreatedOtherWeek: (Array.isArray(series.closedCreatedOtherWeek) && series.closedCreatedOtherWeek[prevIndex] !== undefined) ? series.closedCreatedOtherWeek[prevIndex] : 0,
         carryoverTickets: (Array.isArray(series.carryover) && series.carryover[prevIndex] !== undefined) ? series.carryover[prevIndex] : 0,
         carryoverTicketsCreatedThisWeek: (Array.isArray(series.carryoverCreatedThisWeek) && series.carryoverCreatedThisWeek[prevIndex] !== undefined) ? series.carryoverCreatedThisWeek[prevIndex] : 0,
-        carryoverTicketsCreatedOtherWeek: (Array.isArray(series.carryoverCreatedOtherWeek) && series.carryoverCreatedOtherWeek[prevIndex] !== undefined) ? series.carryoverCreatedOtherWeek[prevIndex] : 0
+        carryoverTicketsCreatedPreviousWeek: (Array.isArray(series.carryoverCreatedPreviousWeek) && series.carryoverCreatedPreviousWeek[prevIndex] !== undefined) ? series.carryoverCreatedPreviousWeek[prevIndex] : 0, // TASK-063: НОВОЕ
+        carryoverTicketsCreatedOlder: (Array.isArray(series.carryoverCreatedOlder) && series.carryoverCreatedOlder[prevIndex] !== undefined) ? series.carryoverCreatedOlder[prevIndex] : 0, // TASK-063: НОВОЕ
+        carryoverTicketsCreatedOtherWeek: (Array.isArray(series.carryoverCreatedOtherWeek) && series.carryoverCreatedOtherWeek[prevIndex] !== undefined) ? series.carryoverCreatedOtherWeek[prevIndex] : 0 // TASK-063: DEPRECATED
       };
     }
   }

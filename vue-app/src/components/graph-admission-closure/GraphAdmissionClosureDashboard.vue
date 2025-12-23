@@ -288,10 +288,25 @@ async function loadData() {
     ]);
     
     console.log('[DEBUG] API call successful, result:', result);
-    const { meta, data } = result;
+    const { meta, data, carryoverDebug } = result;
     chartMeta.value = meta;
     chartData.value = data;
     console.log('[DEBUG] Data set, meta:', meta, 'data keys:', Object.keys(data));
+    
+    // TASK-063: Временный вывод carryover breakdown для проверки в консоли
+    if (carryoverDebug) {
+      console.log('[CARRYOVER-DEBUG] ========================================');
+      console.log('[CARRYOVER-DEBUG] Total:', carryoverDebug.total);
+      console.log('[CARRYOVER-DEBUG] ThisWeek:', carryoverDebug.thisWeek);
+      console.log('[CARRYOVER-DEBUG] PreviousWeek:', carryoverDebug.previousWeek);
+      console.log('[CARRYOVER-DEBUG] Older:', carryoverDebug.older);
+      console.log('[CARRYOVER-DEBUG] Sum:', carryoverDebug.sum, '(expected:', carryoverDebug.total, ')');
+      console.log('[CARRYOVER-DEBUG] Series:', carryoverDebug.series);
+      console.log('[CARRYOVER-DEBUG] CurrentWeekData:', carryoverDebug.currentWeekData);
+      console.log('[CARRYOVER-DEBUG] WeeksData:', carryoverDebug.weeksData);
+      console.log('[CARRYOVER-DEBUG] Full object:', carryoverDebug);
+      console.log('[CARRYOVER-DEBUG] ========================================');
+    }
   } catch (err) {
     console.error('[DEBUG] API call failed:', err);
     error.value = err instanceof Error ? err : new Error('Неизвестная ошибка загрузки');

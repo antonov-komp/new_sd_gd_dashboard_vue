@@ -325,7 +325,9 @@ function calculateWeekMetrics(
     $closedTicketsCreatedOtherWeek = 0;
     $carryoverCount = 0;
     $carryoverTicketsCreatedThisWeek = 0;
-    $carryoverTicketsCreatedOtherWeek = 0;
+    $carryoverTicketsCreatedPreviousWeek = 0; // TASK-063: НОВОЕ
+    $carryoverTicketsCreatedOlder = 0; // TASK-063: НОВОЕ
+    $carryoverTicketsCreatedOtherWeek = 0; // TASK-063: DEPRECATED (для обратной совместимости)
     
     $weekStartStr = $weekStart->format('Y-m-d H:i:s');
     $weekEndStr = $weekEnd->format('Y-m-d H:i:s');
@@ -439,13 +441,57 @@ function calculateWeekMetrics(
         if (isCarryoverTicket($ticket, $weekStart, $weekEnd, $targetStages, $closingStages)) {
             $carryoverCount++;
             
-            // Разбивка по критерию создания
+            // TASK-063: Разбивка по критерию создания на три категории
             $createdInThisWeek = isInRange($createdTime, $weekStart, $weekEnd);
             if ($createdInThisWeek) {
                 $carryoverTicketsCreatedThisWeek++;
             } else {
-                $carryoverTicketsCreatedOtherWeek++;
+                // TASK-063: Определяем, создан ли тикет в предыдущую неделю (ISO-8601)
+                // Используем простой подход: вычитаем 1 неделю от начала текущей недели
+                $previousWeekStart = (clone $weekStart)->modify('-1 week');
+                // Убеждаемся, что это начало недели (понедельник)
+                $isoYear = (int)$previousWeekStart->format('o');
+                $isoWeek = (int)$previousWeekStart->format('W');
+                $previousWeekStart = $previousWeekStart->setISODate($isoYear, $isoWeek, 1)->setTime(0, 0, 0);
+                $previousWeekEnd = (clone $previousWeekStart)->modify('+6 days')->setTime(23, 59, 59);
+                
+                $createdInPreviousWeek = isInRange($createdTime, $previousWeekStart, $previousWeekEnd);
+                if ($createdInPreviousWeek) {
+                    $carryoverTicketsCreatedPreviousWeek++;
+                } else {
+                    $carryoverTicketsCreatedOlder++;
+                }
+                
+                // TASK-063: Логирование для всех тикетов для диагностики (первые 10)
+                if ($carryoverCount <= 10 && $createdTime) {
+                    $prevStartStr = $previousWeekStart->format('Y-m-d H:i:s');
+                    $prevEndStr = $previousWeekEnd->format('Y-m-d H:i:s');
+                    
+                    // Парсим createdTime для сравнения
+                    try {
+                        $createdDt = new DateTimeImmutable($createdTime, new DateTimeZone('UTC'));
+                        $createdDtStr = $createdDt->format('Y-m-d H:i:s');
+                    } catch (Exception $e) {
+                        $createdDtStr = 'parse_error';
+                    }
+                    
+                    error_log("[CALCULATE-CARRYOVER-DEBUG] Ticket #{$carryoverCount}: createdTime={$createdTime} ({$createdDtStr}), weekStart={$weekStartStr}, previousWeek={$prevStartStr} - {$prevEndStr}, inPreviousWeek=" . ($createdInPreviousWeek ? 'YES' : 'NO') . ", category=" . ($createdInPreviousWeek ? 'previousWeek' : 'older'));
+                }
             }
+        }
+    }
+    
+    // TASK-063: Вычисляем старое поле для обратной совместимости
+    $carryoverTicketsCreatedOtherWeek = $carryoverTicketsCreatedPreviousWeek + $carryoverTicketsCreatedOlder;
+    
+    // TASK-063: Логирование для диагностики
+    if ($carryoverCount > 0) {
+        $weekNum = (int)$weekStart->format('W');
+        error_log("[CALCULATE-CARRYOVER] Week {$weekNum}: {$weekStartStr} - {$weekEndStr}");
+        error_log("[CALCULATE-CARRYOVER] Total: {$carryoverCount}, ThisWeek: {$carryoverTicketsCreatedThisWeek}, PreviousWeek: {$carryoverTicketsCreatedPreviousWeek}, Older: {$carryoverTicketsCreatedOlder}");
+        $sum = $carryoverTicketsCreatedThisWeek + $carryoverTicketsCreatedPreviousWeek + $carryoverTicketsCreatedOlder;
+        if ($sum != $carryoverCount) {
+            error_log("[CALCULATE-CARRYOVER] ERROR: Sum mismatch! {$sum} != {$carryoverCount}");
         }
     }
     
@@ -456,7 +502,9 @@ function calculateWeekMetrics(
         'closedTicketsCreatedOtherWeek' => $closedTicketsCreatedOtherWeek,
         'carryoverTickets' => $carryoverCount,
         'carryoverTicketsCreatedThisWeek' => $carryoverTicketsCreatedThisWeek,
-        'carryoverTicketsCreatedOtherWeek' => $carryoverTicketsCreatedOtherWeek
+        'carryoverTicketsCreatedPreviousWeek' => $carryoverTicketsCreatedPreviousWeek, // TASK-063: НОВОЕ
+        'carryoverTicketsCreatedOlder' => $carryoverTicketsCreatedOlder, // TASK-063: НОВОЕ
+        'carryoverTicketsCreatedOtherWeek' => $carryoverTicketsCreatedOtherWeek // TASK-063: DEPRECATED (для обратной совместимости)
     ];
 }
 
@@ -1196,7 +1244,9 @@ try {
                 'closedTicketsCreatedOtherWeek' => 0,
                 'carryoverTickets' => 0,
                 'carryoverTicketsCreatedThisWeek' => 0,
-                'carryoverTicketsCreatedOtherWeek' => 0,
+                'carryoverTicketsCreatedPreviousWeek' => 0, // TASK-063: НОВОЕ
+                'carryoverTicketsCreatedOlder' => 0, // TASK-063: НОВОЕ
+                'carryoverTicketsCreatedOtherWeek' => 0, // TASK-063: DEPRECATED
                 'weeks' => []
             ];
             
@@ -1259,7 +1309,10 @@ try {
                 if (isCarryoverTicket($ticket, $monthEnd, $monthEnd, $targetStages, $closingStages)) {
                     $monthMetrics[$monthNumber]['carryoverTickets']++;
                     
-                    // Разбивка по критерию создания
+                    // TASK-063: Разбивка по критерию создания на три категории
+                    // Для месячного режима используем логику месяца (этого месяца, предыдущего месяца, остальные)
+                    // Но для консистентности с недельным режимом, оставляем старую логику для месячной агрегации
+                    // и обновляем только недельную разбивку
                     if (isInRange($createdTime, $monthStart, $monthEnd)) {
                         $monthMetrics[$monthNumber]['carryoverTicketsCreatedThisWeek']++;
                     } else {
@@ -1309,10 +1362,44 @@ try {
                     if (isCarryoverTicket($ticket, $weekStart, $weekEnd, $targetStages, $closingStages)) {
                         $monthMetrics[$monthNumber]['weeks'][$weekNumber]['carryoverTickets']++;
                         
-                        // Разбивка по критерию создания
-                        if (isInRange($createdTime, $weekStart, $weekEnd)) {
+                        // TASK-063: Разбивка по критерию создания на три категории
+                        $createdInThisWeek = isInRange($createdTime, $weekStart, $weekEnd);
+                        if ($createdInThisWeek) {
                             $monthMetrics[$monthNumber]['weeks'][$weekNumber]['carryoverTicketsCreatedThisWeek']++;
                         } else {
+                            // TASK-063: Определяем, создан ли тикет в предыдущую неделю (ISO-8601)
+                            $tz = $weekStart->getTimezone();
+                            $isoYear = (int)$weekStart->format('o');
+                            $isoWeek = (int)$weekStart->format('W');
+                            
+                            if ($isoWeek > 1) {
+                                $previousWeekNumber = $isoWeek - 1;
+                                $previousWeekYear = $isoYear;
+                            } else {
+                                $previousWeekYear = $isoYear - 1;
+                                $lastDayOfPrevYear = (new DateTimeImmutable('now', $tz))->setISODate($previousWeekYear, 1, 1)->modify('-1 day');
+                                $previousWeekNumber = (int)$lastDayOfPrevYear->format('W');
+                            }
+                            
+                            $previousWeekStart = (new DateTimeImmutable('now', $tz))->setISODate($previousWeekYear, $previousWeekNumber, 1)->setTime(0, 0, 0);
+                            $previousWeekEnd = (clone $previousWeekStart)->modify('+6 days')->setTime(23, 59, 59);
+                            
+                            $createdInPreviousWeek = isInRange($createdTime, $previousWeekStart, $previousWeekEnd);
+                            if ($createdInPreviousWeek) {
+                                if (!isset($monthMetrics[$monthNumber]['weeks'][$weekNumber]['carryoverTicketsCreatedPreviousWeek'])) {
+                                    $monthMetrics[$monthNumber]['weeks'][$weekNumber]['carryoverTicketsCreatedPreviousWeek'] = 0;
+                                }
+                                $monthMetrics[$monthNumber]['weeks'][$weekNumber]['carryoverTicketsCreatedPreviousWeek']++;
+                            } else {
+                                if (!isset($monthMetrics[$monthNumber]['weeks'][$weekNumber]['carryoverTicketsCreatedOlder'])) {
+                                    $monthMetrics[$monthNumber]['weeks'][$weekNumber]['carryoverTicketsCreatedOlder'] = 0;
+                                }
+                                $monthMetrics[$monthNumber]['weeks'][$weekNumber]['carryoverTicketsCreatedOlder']++;
+                            }
+                            // DEPRECATED: для обратной совместимости
+                            if (!isset($monthMetrics[$monthNumber]['weeks'][$weekNumber]['carryoverTicketsCreatedOtherWeek'])) {
+                                $monthMetrics[$monthNumber]['weeks'][$weekNumber]['carryoverTicketsCreatedOtherWeek'] = 0;
+                            }
                             $monthMetrics[$monthNumber]['weeks'][$weekNumber]['carryoverTicketsCreatedOtherWeek']++;
                         }
                     }
@@ -1357,7 +1444,9 @@ try {
                     'closedTicketsCreatedOtherWeek' => 0,
                     'carryoverTickets' => 0,
                     'carryoverTicketsCreatedThisWeek' => 0,
-                    'carryoverTicketsCreatedOtherWeek' => 0
+                    'carryoverTicketsCreatedPreviousWeek' => 0, // TASK-063: НОВОЕ
+                    'carryoverTicketsCreatedOlder' => 0, // TASK-063: НОВОЕ
+                    'carryoverTicketsCreatedOtherWeek' => 0 // TASK-063: DEPRECATED
                 ];
                 
                 $weeksData[] = [
@@ -1368,7 +1457,9 @@ try {
                     'closedCreatedOtherWeek' => $weekMetrics['closedTicketsCreatedOtherWeek'],
                     'carryoverCount' => $weekMetrics['carryoverTickets'],
                     'carryoverCreatedThisWeek' => $weekMetrics['carryoverTicketsCreatedThisWeek'],
-                    'carryoverCreatedOtherWeek' => $weekMetrics['carryoverTicketsCreatedOtherWeek']
+                    'carryoverCreatedPreviousWeek' => $weekMetrics['carryoverTicketsCreatedPreviousWeek'] ?? 0, // TASK-063: НОВОЕ
+                    'carryoverCreatedOlder' => $weekMetrics['carryoverTicketsCreatedOlder'] ?? 0, // TASK-063: НОВОЕ
+                    'carryoverCreatedOtherWeek' => $weekMetrics['carryoverTicketsCreatedOtherWeek'] ?? 0 // TASK-063: DEPRECATED
                 ];
             }
             
@@ -2041,7 +2132,9 @@ try {
     $carryoverCount = 0;
     // TASK-047: Разбивка переходящих тикетов по критерию создания
     $carryoverTicketsCreatedThisWeek = 0;
-    $carryoverTicketsCreatedOtherWeek = 0;
+    $carryoverTicketsCreatedPreviousWeek = 0; // TASK-063: НОВОЕ
+    $carryoverTicketsCreatedOlder = 0; // TASK-063: НОВОЕ
+    $carryoverTicketsCreatedOtherWeek = 0; // TASK-063: DEPRECATED (для обратной совместимости)
     $carryoverTickets = []; // Для будущего использования
     $stageAgg = [];
     $responsibleAgg = [];
@@ -2200,12 +2293,36 @@ try {
         if ($includeCarryoverTickets && isCarryoverTicket($ticket, $weekStart, $weekEnd, $targetStages, $closingStages)) {
             $carryoverCount++;
             
-            // TASK-047: Разбивка по критерию создания
+            // TASK-063: Разбивка по критерию создания на три категории
             $createdInThisWeek = isInRange($createdTime, $weekStart, $weekEnd);
             
             if ($createdInThisWeek) {
                 $carryoverTicketsCreatedThisWeek++;
             } else {
+                // TASK-063: Определяем, создан ли тикет в предыдущую неделю (ISO-8601)
+                $tz = $weekStart->getTimezone();
+                $isoYear = (int)$weekStart->format('o');
+                $isoWeek = (int)$weekStart->format('W');
+                
+                if ($isoWeek > 1) {
+                    $previousWeekNumber = $isoWeek - 1;
+                    $previousWeekYear = $isoYear;
+                } else {
+                    $previousWeekYear = $isoYear - 1;
+                    $lastDayOfPrevYear = (new DateTimeImmutable('now', $tz))->setISODate($previousWeekYear, 1, 1)->modify('-1 day');
+                    $previousWeekNumber = (int)$lastDayOfPrevYear->format('W');
+                }
+                
+                $previousWeekStart = (new DateTimeImmutable('now', $tz))->setISODate($previousWeekYear, $previousWeekNumber, 1)->setTime(0, 0, 0);
+                $previousWeekEnd = (clone $previousWeekStart)->modify('+6 days')->setTime(23, 59, 59);
+                
+                $createdInPreviousWeek = isInRange($createdTime, $previousWeekStart, $previousWeekEnd);
+                if ($createdInPreviousWeek) {
+                    $carryoverTicketsCreatedPreviousWeek++;
+                } else {
+                    $carryoverTicketsCreatedOlder++;
+                }
+                // DEPRECATED: для обратной совместимости
                 $carryoverTicketsCreatedOtherWeek++;
             }
             
@@ -2262,7 +2379,9 @@ try {
         'closedCreatedOtherWeek' => [],
         'carryover' => [],
         'carryoverCreatedThisWeek' => [],
-        'carryoverCreatedOtherWeek' => []
+        'carryoverCreatedPreviousWeek' => [], // TASK-063: НОВОЕ
+        'carryoverCreatedOlder' => [], // TASK-063: НОВОЕ
+        'carryoverCreatedOtherWeek' => [] // TASK-063: DEPRECATED
     ];
     
     $weeksData = [];
@@ -2280,6 +2399,21 @@ try {
             $debug
         );
         
+        // TASK-063: Детальное логирование для диагностики
+        $weekNum = $week['weekNumber'] ?? 'unknown';
+        $weekStartStr = $week['weekStart']->format('Y-m-d H:i:s');
+        $weekEndStr = $week['weekEnd']->format('Y-m-d H:i:s');
+        error_log("[SERIES] ========================================");
+        error_log("[SERIES] Week {$weekNum}: {$weekStartStr} - {$weekEndStr}");
+        error_log("[SERIES] Total carryover: {$weekMetrics['carryoverTickets']}");
+        error_log("[SERIES] ThisWeek: {$weekMetrics['carryoverTicketsCreatedThisWeek']}, PreviousWeek: {$weekMetrics['carryoverTicketsCreatedPreviousWeek']}, Older: {$weekMetrics['carryoverTicketsCreatedOlder']}");
+        $sum = $weekMetrics['carryoverTicketsCreatedThisWeek'] + $weekMetrics['carryoverTicketsCreatedPreviousWeek'] + $weekMetrics['carryoverTicketsCreatedOlder'];
+        error_log("[SERIES] Sum: {$sum} (expected: {$weekMetrics['carryoverTickets']})");
+        if ($sum != $weekMetrics['carryoverTickets']) {
+            error_log("[SERIES] ERROR Week {$weekNum}: Sum mismatch! Difference: " . abs($sum - $weekMetrics['carryoverTickets']));
+        }
+        error_log("[SERIES] ========================================");
+        
         // Добавляем в series (от старых к новым)
         $series['new'][] = $weekMetrics['newTickets'];
         $series['closed'][] = $weekMetrics['closedTickets'];
@@ -2287,6 +2421,9 @@ try {
         $series['closedCreatedOtherWeek'][] = $weekMetrics['closedTicketsCreatedOtherWeek'];
         $series['carryover'][] = $weekMetrics['carryoverTickets'];
         $series['carryoverCreatedThisWeek'][] = $weekMetrics['carryoverTicketsCreatedThisWeek'];
+        $series['carryoverCreatedPreviousWeek'][] = $weekMetrics['carryoverTicketsCreatedPreviousWeek']; // TASK-063: НОВОЕ
+        $series['carryoverCreatedOlder'][] = $weekMetrics['carryoverTicketsCreatedOlder']; // TASK-063: НОВОЕ
+        // TASK-063: Оставляем старое поле для обратной совместимости (deprecated)
         $series['carryoverCreatedOtherWeek'][] = $weekMetrics['carryoverTicketsCreatedOtherWeek'];
         
         // Сохраняем данные недели
@@ -2298,7 +2435,9 @@ try {
             'closedTicketsCreatedOtherWeek' => $weekMetrics['closedTicketsCreatedOtherWeek'],
             'carryoverTickets' => $weekMetrics['carryoverTickets'],
             'carryoverTicketsCreatedThisWeek' => $weekMetrics['carryoverTicketsCreatedThisWeek'],
-            'carryoverTicketsCreatedOtherWeek' => $weekMetrics['carryoverTicketsCreatedOtherWeek']
+            'carryoverTicketsCreatedPreviousWeek' => $weekMetrics['carryoverTicketsCreatedPreviousWeek'], // TASK-063: НОВОЕ
+            'carryoverTicketsCreatedOlder' => $weekMetrics['carryoverTicketsCreatedOlder'], // TASK-063: НОВОЕ
+            'carryoverTicketsCreatedOtherWeek' => $weekMetrics['carryoverTicketsCreatedOtherWeek'] // TASK-063: DEPRECATED (для обратной совместимости)
         ];
         $weeksData[] = $weekData;
     }
@@ -2307,6 +2446,10 @@ try {
     // (массив weeksData уже отсортирован от старых к новым, последний элемент - текущая неделя)
     if (count($weeksData) > 0) {
         $currentWeekData = $weeksData[count($weeksData) - 1];
+        // TASK-063: Логирование для диагностики
+        if (isset($currentWeekData['carryoverTickets']) && $currentWeekData['carryoverTickets'] > 0) {
+            error_log("[CURRENT-WEEK-DATA] carryover={$currentWeekData['carryoverTickets']}, thisWeek={$currentWeekData['carryoverTicketsCreatedThisWeek']}, previousWeek={$currentWeekData['carryoverTicketsCreatedPreviousWeek']}, older={$currentWeekData['carryoverTicketsCreatedOlder']}");
+        }
     } else {
         // Fallback: если weeksData пуст, формируем из series (последний элемент)
         $lastIndex = count($series['new']) > 0 ? count($series['new']) - 1 : 0;
@@ -2318,7 +2461,9 @@ try {
             'closedTicketsCreatedOtherWeek' => $series['closedCreatedOtherWeek'][$lastIndex] ?? 0,
             'carryoverTickets' => $series['carryover'][$lastIndex] ?? 0,
             'carryoverTicketsCreatedThisWeek' => $series['carryoverCreatedThisWeek'][$lastIndex] ?? 0,
-            'carryoverTicketsCreatedOtherWeek' => $series['carryoverCreatedOtherWeek'][$lastIndex] ?? 0
+            'carryoverTicketsCreatedPreviousWeek' => $series['carryoverCreatedPreviousWeek'][$lastIndex] ?? 0, // TASK-063: НОВОЕ
+            'carryoverTicketsCreatedOlder' => $series['carryoverCreatedOlder'][$lastIndex] ?? 0, // TASK-063: НОВОЕ
+            'carryoverTicketsCreatedOtherWeek' => $series['carryoverCreatedOtherWeek'][$lastIndex] ?? 0 // TASK-063: DEPRECATED
         ];
     }
     
@@ -2335,7 +2480,9 @@ try {
             'closedTicketsCreatedOtherWeek' => $series['closedCreatedOtherWeek'][$lastIndex] ?? 0,
             'carryoverTickets' => $series['carryover'][$lastIndex] ?? 0,
             'carryoverTicketsCreatedThisWeek' => $series['carryoverCreatedThisWeek'][$lastIndex] ?? 0,
-            'carryoverTicketsCreatedOtherWeek' => $series['carryoverCreatedOtherWeek'][$lastIndex] ?? 0
+            'carryoverTicketsCreatedPreviousWeek' => $series['carryoverCreatedPreviousWeek'][$lastIndex] ?? 0, // TASK-063: НОВОЕ
+            'carryoverTicketsCreatedOlder' => $series['carryoverCreatedOlder'][$lastIndex] ?? 0, // TASK-063: НОВОЕ
+            'carryoverTicketsCreatedOtherWeek' => $series['carryoverCreatedOtherWeek'][$lastIndex] ?? 0 // TASK-063: DEPRECATED
         ];
     }
     
@@ -2345,7 +2492,9 @@ try {
     $closedTicketsCreatedOtherWeek = $currentWeekData['closedTicketsCreatedOtherWeek'] ?? 0;
     $carryoverCount = $currentWeekData['carryoverTickets'] ?? 0;
     $carryoverTicketsCreatedThisWeek = $currentWeekData['carryoverTicketsCreatedThisWeek'] ?? 0;
-    $carryoverTicketsCreatedOtherWeek = $currentWeekData['carryoverTicketsCreatedOtherWeek'] ?? 0;
+    $carryoverTicketsCreatedPreviousWeek = $currentWeekData['carryoverTicketsCreatedPreviousWeek'] ?? 0; // TASK-063: НОВОЕ
+    $carryoverTicketsCreatedOlder = $currentWeekData['carryoverTicketsCreatedOlder'] ?? 0; // TASK-063: НОВОЕ
+    $carryoverTicketsCreatedOtherWeek = $currentWeekData['carryoverTicketsCreatedOtherWeek'] ?? 0; // TASK-063: DEPRECATED
 
     // Формирование ответа
     $responseData = [
@@ -2430,16 +2579,57 @@ try {
         $responseData['carryoverTickets'] = $carryoverCount;
         // TASK-047: Разбивка переходящих тикетов по критерию создания
         $responseData['carryoverTicketsCreatedThisWeek'] = $carryoverTicketsCreatedThisWeek;
+        // TASK-063: Разбивка на три категории
+        $responseData['carryoverTicketsCreatedPreviousWeek'] = $carryoverTicketsCreatedPreviousWeek; // НОВОЕ
+        $responseData['carryoverTicketsCreatedOlder'] = $carryoverTicketsCreatedOlder; // НОВОЕ
+        // TASK-063: Оставляем старое поле для обратной совместимости (deprecated)
         $responseData['carryoverTicketsCreatedOtherWeek'] = $carryoverTicketsCreatedOtherWeek;
         // TASK-049: series['carryover'] уже заполнен выше для одной недели
         
         error_log("[CARRYOVER] ИТОГО переходящих тикетов после всех фильтров: {$carryoverCount}");
-        error_log("[CARRYOVER] Созданных этой неделей: {$carryoverTicketsCreatedThisWeek}, созданных прошлыми неделями (жёсткий остаток): {$carryoverTicketsCreatedOtherWeek}");
+        error_log("[CARRYOVER] Созданных этой неделей: {$carryoverTicketsCreatedThisWeek}, предыдущей неделей: {$carryoverTicketsCreatedPreviousWeek}, остальные: {$carryoverTicketsCreatedOlder}");
+        error_log("[CARRYOVER] DEPRECATED: созданных прошлыми неделями (жёсткий остаток): {$carryoverTicketsCreatedOtherWeek}");
+        $sum = $carryoverTicketsCreatedThisWeek + $carryoverTicketsCreatedPreviousWeek + $carryoverTicketsCreatedOlder;
+        error_log("[CARRYOVER] Проверка суммы: {$carryoverTicketsCreatedThisWeek} + {$carryoverTicketsCreatedPreviousWeek} + {$carryoverTicketsCreatedOlder} = {$sum} (ожидается: {$carryoverCount})");
+        if ($sum != $carryoverCount) {
+            error_log("[CARRYOVER] ERROR: Sum mismatch! Difference: " . abs($sum - $carryoverCount));
+        }
+        
+        // TASK-063: Детальное логирование series для диагностики
+        error_log("[CARRYOVER-SERIES] ========================================");
+        error_log("[CARRYOVER-SERIES] Series arrays length:");
+        error_log("[CARRYOVER-SERIES]   carryover: " . (is_array($series['carryover']) ? count($series['carryover']) : 'not array'));
+        error_log("[CARRYOVER-SERIES]   carryoverCreatedThisWeek: " . (is_array($series['carryoverCreatedThisWeek']) ? count($series['carryoverCreatedThisWeek']) : 'not array'));
+        error_log("[CARRYOVER-SERIES]   carryoverCreatedPreviousWeek: " . (is_array($series['carryoverCreatedPreviousWeek']) ? count($series['carryoverCreatedPreviousWeek']) : 'not array'));
+        error_log("[CARRYOVER-SERIES]   carryoverCreatedOlder: " . (is_array($series['carryoverCreatedOlder']) ? count($series['carryoverCreatedOlder']) : 'not array'));
+        
+        if (isset($series['carryoverCreatedPreviousWeek']) && is_array($series['carryoverCreatedPreviousWeek']) && count($series['carryoverCreatedPreviousWeek']) > 0) {
+            $lastIndex = count($series['carryoverCreatedPreviousWeek']) - 1;
+            error_log("[CARRYOVER-SERIES] Last index: {$lastIndex}");
+            error_log("[CARRYOVER-SERIES] Values at last index:");
+            error_log("[CARRYOVER-SERIES]   carryover[{$lastIndex}]=" . ($series['carryover'][$lastIndex] ?? 'undefined'));
+            error_log("[CARRYOVER-SERIES]   carryoverCreatedThisWeek[{$lastIndex}]=" . ($series['carryoverCreatedThisWeek'][$lastIndex] ?? 'undefined'));
+            error_log("[CARRYOVER-SERIES]   carryoverCreatedPreviousWeek[{$lastIndex}]=" . ($series['carryoverCreatedPreviousWeek'][$lastIndex] ?? 'undefined'));
+            error_log("[CARRYOVER-SERIES]   carryoverCreatedOlder[{$lastIndex}]=" . ($series['carryoverCreatedOlder'][$lastIndex] ?? 'undefined'));
+            
+            // Выводим все значения для проверки
+            error_log("[CARRYOVER-SERIES] All values:");
+            error_log("[CARRYOVER-SERIES]   carryover: " . json_encode($series['carryover']));
+            error_log("[CARRYOVER-SERIES]   carryoverCreatedThisWeek: " . json_encode($series['carryoverCreatedThisWeek']));
+            error_log("[CARRYOVER-SERIES]   carryoverCreatedPreviousWeek: " . json_encode($series['carryoverCreatedPreviousWeek']));
+            error_log("[CARRYOVER-SERIES]   carryoverCreatedOlder: " . json_encode($series['carryoverCreatedOlder']));
+        } else {
+            error_log("[CARRYOVER-SERIES] WARNING: series['carryoverCreatedPreviousWeek'] is empty or not set!");
+        }
+        error_log("[CARRYOVER-SERIES] ========================================");
+        
         error_log("[CARRYOVER] ========================================");
     } else {
         // Если переходящие тикеты не запрошены, заполняем series пустыми массивами с одним элементом
         $series['carryover'] = [0];
         $series['carryoverCreatedThisWeek'] = [0];
+        $series['carryoverCreatedPreviousWeek'] = [0]; // TASK-063: НОВОЕ
+        $series['carryoverCreatedOlder'] = [0]; // TASK-063: НОВОЕ
         $series['carryoverCreatedOtherWeek'] = [0];
     }
     
@@ -2483,10 +2673,64 @@ try {
             }, $weeks)
         ],
         'data' => $responseData,
+        // TASK-063: Временный debug для проверки carryover breakdown (всегда включён)
+        'carryoverDebug' => [
+            'total' => $carryoverCount ?? 0,
+            'thisWeek' => $carryoverTicketsCreatedThisWeek ?? 0,
+            'previousWeek' => $carryoverTicketsCreatedPreviousWeek ?? 0,
+            'older' => $carryoverTicketsCreatedOlder ?? 0,
+            'sum' => ($carryoverTicketsCreatedThisWeek ?? 0) + ($carryoverTicketsCreatedPreviousWeek ?? 0) + ($carryoverTicketsCreatedOlder ?? 0),
+            'series' => [
+                'carryover' => $series['carryover'] ?? [],
+                'carryoverCreatedThisWeek' => $series['carryoverCreatedThisWeek'] ?? [],
+                'carryoverCreatedPreviousWeek' => $series['carryoverCreatedPreviousWeek'] ?? [],
+                'carryoverCreatedOlder' => $series['carryoverCreatedOlder'] ?? [],
+            ],
+            'currentWeekData' => $currentWeekData ? [
+                'weekNumber' => $currentWeekData['weekNumber'] ?? null,
+                'carryoverTickets' => $currentWeekData['carryoverTickets'] ?? 0,
+                'carryoverTicketsCreatedThisWeek' => $currentWeekData['carryoverTicketsCreatedThisWeek'] ?? 0,
+                'carryoverTicketsCreatedPreviousWeek' => $currentWeekData['carryoverTicketsCreatedPreviousWeek'] ?? 0,
+                'carryoverTicketsCreatedOlder' => $currentWeekData['carryoverTicketsCreatedOlder'] ?? 0,
+            ] : null,
+            'weeksData' => array_map(function($week) {
+                return [
+                    'weekNumber' => $week['weekNumber'] ?? null,
+                    'carryoverTickets' => $week['carryoverTickets'] ?? 0,
+                    'carryoverTicketsCreatedThisWeek' => $week['carryoverTicketsCreatedThisWeek'] ?? 0,
+                    'carryoverTicketsCreatedPreviousWeek' => $week['carryoverTicketsCreatedPreviousWeek'] ?? 0,
+                    'carryoverTicketsCreatedOlder' => $week['carryoverTicketsCreatedOlder'] ?? 0,
+                ];
+            }, $weeksData ?? [])
+        ],
         'debug' => $debug ? [
             'fetchedTotal' => count($tickets),
             'sample' => array_slice($debugRaw, 0, 5),
             'stageCounts' => $stageAgg,
+            // TASK-063: Временный debug для проверки carryover breakdown
+            'carryoverBreakdown' => [
+                'total' => $carryoverCount ?? 0,
+                'thisWeek' => $carryoverTicketsCreatedThisWeek ?? 0,
+                'previousWeek' => $carryoverTicketsCreatedPreviousWeek ?? 0,
+                'older' => $carryoverTicketsCreatedOlder ?? 0,
+                'sum' => ($carryoverTicketsCreatedThisWeek ?? 0) + ($carryoverTicketsCreatedPreviousWeek ?? 0) + ($carryoverTicketsCreatedOlder ?? 0),
+                'series' => [
+                    'carryover' => $series['carryover'] ?? [],
+                    'carryoverCreatedThisWeek' => $series['carryoverCreatedThisWeek'] ?? [],
+                    'carryoverCreatedPreviousWeek' => $series['carryoverCreatedPreviousWeek'] ?? [],
+                    'carryoverCreatedOlder' => $series['carryoverCreatedOlder'] ?? [],
+                ],
+                'currentWeekData' => $currentWeekData ?? null,
+                'weeksData' => array_map(function($week) {
+                    return [
+                        'weekNumber' => $week['weekNumber'] ?? null,
+                        'carryoverTickets' => $week['carryoverTickets'] ?? 0,
+                        'carryoverTicketsCreatedThisWeek' => $week['carryoverTicketsCreatedThisWeek'] ?? 0,
+                        'carryoverTicketsCreatedPreviousWeek' => $week['carryoverTicketsCreatedPreviousWeek'] ?? 0,
+                        'carryoverTicketsCreatedOlder' => $week['carryoverTicketsCreatedOlder'] ?? 0,
+                    ];
+                }, $weeksData ?? [])
+            ],
             'carryoverCount' => $includeCarryoverTickets ? $carryoverCount : null,
             'params' => [
                 'product' => $product,
