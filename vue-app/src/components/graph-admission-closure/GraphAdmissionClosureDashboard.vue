@@ -322,6 +322,32 @@ async function loadData() {
     chartData.value = data;
     console.log('[DEBUG] Data set, meta:', meta, 'data keys:', Object.keys(data));
     
+    // TASK-070: Логирование данных responsible для диагностики
+    console.log('[TASK-070] responsibleCreatedThisWeek from API:', {
+      count: data.responsibleCreatedThisWeek?.length || 0,
+      data: data.responsibleCreatedThisWeek,
+      details: data.responsibleCreatedThisWeek?.map(r => ({
+        id: r.id,
+        name: r.name,
+        count: r.count,
+        hasTickets: !!(r.tickets),
+        ticketsCount: r.tickets?.length || 0
+      }))
+    });
+    console.log('[TASK-070] responsibleCreatedOtherWeek from API:', {
+      count: data.responsibleCreatedOtherWeek?.length || 0,
+      data: data.responsibleCreatedOtherWeek,
+      details: data.responsibleCreatedOtherWeek?.map(r => ({
+        id: r.id,
+        name: r.name,
+        count: r.count,
+        hasTickets: !!(r.tickets),
+        ticketsCount: r.tickets?.length || 0
+      }))
+    });
+    console.log('[TASK-070] closedTicketsCreatedThisWeek:', data.closedTicketsCreatedThisWeek);
+    console.log('[TASK-070] closedTicketsCreatedOtherWeek:', data.closedTicketsCreatedOtherWeek);
+    
     // TASK-070: Сохраняем предзагруженные данные для текущей недели
     if (data.newTicketsByStages) {
       preloadedPopupData.value.currentWeek.newTicketsByStages = data.newTicketsByStages;
@@ -334,9 +360,25 @@ async function loadData() {
     // TASK-070: Сохраняем данные для ResponsibleModal (уже загружены в первом запросе)
     if (data.responsibleCreatedThisWeek) {
       preloadedPopupData.value.currentWeek.responsibleCreatedThisWeek = data.responsibleCreatedThisWeek;
+      console.log('[TASK-070] Preloaded responsibleCreatedThisWeek for current week:', data.responsibleCreatedThisWeek.length, 'employees');
+      console.log('[TASK-070] responsibleCreatedThisWeek details:', data.responsibleCreatedThisWeek.map(r => ({
+        id: r.id,
+        name: r.name,
+        count: r.count,
+        hasTickets: !!(r.tickets),
+        ticketsCount: r.tickets?.length || 0
+      })));
     }
     if (data.responsibleCreatedOtherWeek) {
       preloadedPopupData.value.currentWeek.responsibleCreatedOtherWeek = data.responsibleCreatedOtherWeek;
+      console.log('[TASK-070] Preloaded responsibleCreatedOtherWeek for current week:', data.responsibleCreatedOtherWeek.length, 'employees');
+      console.log('[TASK-070] responsibleCreatedOtherWeek details:', data.responsibleCreatedOtherWeek.map(r => ({
+        id: r.id,
+        name: r.name,
+        count: r.count,
+        hasTickets: !!(r.tickets),
+        ticketsCount: r.tickets?.length || 0
+      })));
     }
     
     // TASK-063: Временный вывод carryover breakdown для проверки в консоли
@@ -388,9 +430,11 @@ async function loadData() {
         }
         if (result.data.responsibleCreatedThisWeek) {
           preloadedPopupData.value.previousWeek.responsibleCreatedThisWeek = result.data.responsibleCreatedThisWeek;
+          console.log('[TASK-070] Preloaded responsibleCreatedThisWeek for previous week:', result.data.responsibleCreatedThisWeek.length, 'employees');
         }
         if (result.data.responsibleCreatedOtherWeek) {
           preloadedPopupData.value.previousWeek.responsibleCreatedOtherWeek = result.data.responsibleCreatedOtherWeek;
+          console.log('[TASK-070] Preloaded responsibleCreatedOtherWeek for previous week:', result.data.responsibleCreatedOtherWeek.length, 'employees');
         }
       }).catch(err => {
         console.warn('[TASK-070] Failed to preload previous week data (non-critical):', err);

@@ -1278,6 +1278,11 @@ try {
                     ];
                 }
             }
+            
+            // TASK-070: Логирование для диагностики
+            if ($debug && $closedTicketsCreatedThisWeek + $closedTicketsCreatedOtherWeek <= 5) {
+                error_log("[TASK-070] Closed ticket #{$ticket['id']}: createdInThisWeek=" . ($createdInThisWeek ? 'true' : 'false') . ", responsibleId={$responsibleId}, responsibleKey={$responsibleKey}");
+            }
 
             // Агрегация по стадиям (общая для всех закрытых)
             if (!isset($stageAgg[$stageId])) {
@@ -1683,6 +1688,12 @@ try {
             
             return $result;
         }, array_values($carryoverTicketsByDurationAgg));
+    }
+    
+    // TASK-070: Логирование для диагностики
+    if ($debug) {
+        error_log("[TASK-070] Final data: responsibleCreatedThisWeek count=" . count($responsibleCreatedThisWeekAgg) . ", responsibleCreatedOtherWeek count=" . count($responsibleCreatedOtherWeekAgg));
+        error_log("[TASK-070] includeTickets=" . ($includeTickets ? 'true' : 'false') . ", closedTicketsCreatedThisWeek={$closedTicketsCreatedThisWeek}, closedTicketsCreatedOtherWeek={$closedTicketsCreatedOtherWeek}");
     }
     
     // TASK-048: Формирование метаданных для 4 недель

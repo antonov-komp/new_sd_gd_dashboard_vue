@@ -982,6 +982,26 @@ watch(() => props.isVisible, (newValue) => {
       closedTicketsCreatedOtherWeek: props.closedTicketsCreatedOtherWeek
     });
     
+    // Детальное логирование данных responsible
+    console.log('[TASK-070] ResponsibleModal detailed data:', {
+      responsibleCreatedThisWeek: props.responsibleCreatedThisWeek,
+      responsibleCreatedOtherWeek: props.responsibleCreatedOtherWeek,
+      responsibleCreatedThisWeekWithTickets: props.responsibleCreatedThisWeek?.map(r => ({
+        id: r.id,
+        name: r.name,
+        count: r.count,
+        hasTickets: !!(r.tickets),
+        ticketsCount: r.tickets?.length || 0
+      })),
+      responsibleCreatedOtherWeekWithTickets: props.responsibleCreatedOtherWeek?.map(r => ({
+        id: r.id,
+        name: r.name,
+        count: r.count,
+        hasTickets: !!(r.tickets),
+        ticketsCount: r.tickets?.length || 0
+      }))
+    });
+    
     // TASK-070: Проверка для предыдущей недели
     // Для текущей недели данные уже загружены, для предыдущей - могут быть предзагружены или загрузятся при открытии
     const currentWeekNumber = props.weekNumber;
