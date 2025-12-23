@@ -1,8 +1,9 @@
 # TASK-067-5: Расширение Service для обработки months режима
 
 **Дата создания:** 2025-12-23 (UTC+3, Брест)  
-**Статус:** Новая  
+**Статус:** Завершена  
 **Приоритет:** Высокий  
+**Дата завершения:** 2025-12-23 (UTC+3, Брест)  
 **Родитель:** TASK-067  
 **Цель:** Добавить обработку месячного режима в `service/GraphAdmissionClosureService.php`.
 
@@ -155,13 +156,33 @@
 - Обновлённый `api/graph-admission-closure/service/GraphAdmissionClosureService.php`
 
 ## Критерии приёмки
-- [ ] handleMonthsMode() реализован
-- [ ] Заглушка удалена из handle()
-- [ ] Интеграция в handle() выполнена
-- [ ] Кеширование работает (TTL 300 секунд)
-- [ ] Обработка ошибок реализована
-- [ ] Логирование работает
-- [ ] Формат ответа идентичен legacy
+- [x] handleMonthsMode() реализован
+- [x] Заглушка удалена из handle()
+- [x] Интеграция в handle() выполнена
+- [x] Кеширование работает (TTL 300 секунд)
+- [x] Обработка ошибок реализована
+- [x] Логирование работает
+- [x] Формат ответа идентичен legacy
+
+## Результаты реализации (2025-12-23, UTC+3, Брест)
+
+### ✅ Реализованный метод:
+
+**handleMonthsMode()** (строки 227-450)
+- Валидация параметров
+- Проверка кеша (через CacheStore, если не forceRefresh)
+- Расчёт месяцев (через DatePeriodHelper::calculateLastFourMonths())
+- Загрузка тикетов (через BitrixClient::fetchTicketsForMonths())
+- Загрузка переходящих тикетов (если includeCarryoverTickets)
+- Агрегация (через Aggregator::aggregateMonths())
+- Расчёт previousPeriodData (через Aggregator::calculatePreviousPeriodData())
+- Формирование ответа (newTicketsByMonth, closedTicketsByMonth, carryoverTicketsByMonth)
+- Сохранение в кеш (TTL 300 секунд)
+- Периодическая очистка устаревших кешей
+- Логирование: [MONTHS-PERFORMANCE], [Cache]
+
+### Вывод:
+**Service готов для месячного режима.** Метод handleMonthsMode() реализован и интегрирован в handle().
 
 ## Риски и заметки
 - Важно сохранить структуру ответа идентичной legacy (meta.months, data.*ByMonth, previousPeriodData)

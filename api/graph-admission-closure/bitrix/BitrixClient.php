@@ -418,4 +418,273 @@ class BitrixClient
         }
         return array_values($merged);
     }
+
+    /**
+     * TASK-067-3: Загрузка тикетов для месячного режима (created + closed за период 4 месяцев)
+     * 
+     * Объединяет created и closed тикеты за период с использованием параллельных запросов
+     * для первых страниц и последовательной пагинации для остальных.
+     * 
+     * @param DateTimeImmutable $start Начало периода (4 месяца назад)
+     * @param DateTimeImmutable $end Конец периода (текущий месяц)
+     * @param string $product Фильтр продукта (по умолчанию '1C')
+     * @param array $closingStages Массив закрывающих стадий
+     * @param bool $debug Флаг отладки
+     * @return array Массив тикетов (отфильтрованных по product)
+     */
+    public function fetchTicketsForMonths(
+        DateTimeImmutable $start,
+        DateTimeImmutable $end,
+        string $product = '1C',
+        array $closingStages = [],
+        bool $debug = false
+    ): array {
+        $periodStartStr = $start->format('Y-m-d H:i:s');
+        $periodEndStr = $end->format('Y-m-d H:i:s');
+        $allTicketsMap = [];
+
+        // Параметры запроса 1 (created тикеты)
+        $query1Params = [
+            'entityTypeId' => $this->entityTypeId,
+            'filter' => [
+                '>=createdTime' => $periodStartStr,
+                '<=createdTime' => $periodEndStr
+            ],
+            'select' => [
+                'id', 'title', 'stageId', 'assignedById',
+                'createdTime', 'updatedTime', 'movedTime',
+                'UF_CRM_7_TYPE_PRODUCT', 'ufCrm7TypeProduct'
+            ],
+            'start' => 0
+        ];
+
+        // Параметры запроса 2 (closed тикеты)
+        $query2Params = [
+            'entityTypeId' => $this->entityTypeId,
+            'filter' => [
+                '>=movedTime' => $periodStartStr,
+                '<=movedTime' => $periodEndStr,
+                'stageId' => $closingStages
+            ],
+            'select' => [
+                'id', 'title', 'stageId', 'assignedById',
+                'createdTime', 'updatedTime', 'movedTime',
+                'UF_CRM_7_TYPE_PRODUCT', 'ufCrm7TypeProduct'
+            ],
+            'start' => 0
+        ];
+
+        // TASK-059-03: Параллельные запросы первых страниц
+        $query1StartTime = microtime(true);
+        $parallelResults = $this->executeParallelQueries($query1Params, $query2Params);
+        $query1FirstPage = $parallelResults[0];
+        $query2FirstPage = $parallelResults[1];
+        $useParallel = !isset($query1FirstPage['error']) && !isset($query2FirstPage['error']);
+
+        if (!$useParallel && $debug) {
+            error_log("[MONTHS-PARALLEL] Parallel queries failed, falling back to sequential queries");
+            error_log("[MONTHS-PARALLEL] Query1 error: " . ($query1FirstPage['error'] ?? 'none'));
+            error_log("[MONTHS-PARALLEL] Query2 error: " . ($query2FirstPage['error'] ?? 'none'));
+        }
+
+        // Запрос 1: created тикеты
+        if ($useParallel) {
+            $result = $query1FirstPage;
+        } else {
+            $result = CRest::call('crm.item.list', $query1Params);
+        }
+
+        if (isset($result['error'])) {
+            throw new Exception($result['error_description'] ?? $result['error']);
+        }
+
+        $items = $result['result']['items'] ?? [];
+        foreach ($items as $item) {
+            $allTicketsMap[$item['id']] = $item;
+        }
+
+        // Пагинация для запроса 1
+        $nextValue = $result['result']['next'] ?? $result['next'] ?? null;
+        $hasNext = $nextValue !== null &&
+                  $nextValue !== '' &&
+                  $nextValue !== '0' &&
+                  (int)$nextValue > 0;
+        $hasMore = count($items) === $this->pageSize && $hasNext;
+
+        $start = $this->pageSize;
+        while ($hasMore) {
+            $params = array_merge($query1Params, ['start' => $start]);
+            $result = CRest::call('crm.item.list', $params);
+
+            if (isset($result['error'])) {
+                throw new Exception($result['error_description'] ?? $result['error']);
+            }
+
+            $items = $result['result']['items'] ?? [];
+            foreach ($items as $item) {
+                $allTicketsMap[$item['id']] = $item;
+            }
+
+            $nextValue = $result['result']['next'] ?? $result['next'] ?? null;
+            $hasNext = $nextValue !== null &&
+                      $nextValue !== '' &&
+                      $nextValue !== '0' &&
+                      (int)$nextValue > 0;
+            $hasMore = count($items) === $this->pageSize && $hasNext;
+
+            $start += $this->pageSize;
+        }
+
+        $query1Time = microtime(true) - $query1StartTime;
+        if ($debug) {
+            error_log("[MONTHS-QUERY1] Created tickets total count: " . count($allTicketsMap) . 
+                     " (time: " . round($query1Time, 2) . "s, parallel: " . ($useParallel ? 'yes' : 'no') . ")");
+        }
+
+        // Запрос 2: closed тикеты
+        $query2StartTime = microtime(true);
+        if ($useParallel) {
+            $result = $query2FirstPage;
+        } else {
+            $result = CRest::call('crm.item.list', $query2Params);
+        }
+
+        if (isset($result['error'])) {
+            throw new Exception($result['error_description'] ?? $result['error']);
+        }
+
+        $items = $result['result']['items'] ?? [];
+        foreach ($items as $item) {
+            $allTicketsMap[$item['id']] = $item;
+        }
+
+        // Пагинация для запроса 2
+        $nextValue = $result['result']['next'] ?? $result['next'] ?? null;
+        $hasNext = $nextValue !== null &&
+                  $nextValue !== '' &&
+                  $nextValue !== '0' &&
+                  (int)$nextValue > 0;
+        $hasMore = count($items) === $this->pageSize && $hasNext;
+
+        $start = $this->pageSize;
+        while ($hasMore) {
+            $params = array_merge($query2Params, ['start' => $start]);
+            $result = CRest::call('crm.item.list', $params);
+
+            if (isset($result['error'])) {
+                throw new Exception($result['error_description'] ?? $result['error']);
+            }
+
+            $items = $result['result']['items'] ?? [];
+            foreach ($items as $item) {
+                $allTicketsMap[$item['id']] = $item;
+            }
+
+            $nextValue = $result['result']['next'] ?? $result['next'] ?? null;
+            $hasNext = $nextValue !== null &&
+                      $nextValue !== '' &&
+                      $nextValue !== '0' &&
+                      (int)$nextValue > 0;
+            $hasMore = count($items) === $this->pageSize && $hasNext;
+
+            $start += $this->pageSize;
+        }
+
+        $query2Time = microtime(true) - $query2StartTime;
+        if ($debug) {
+            error_log("[MONTHS-QUERY2] Closed tickets total count (after merge): " . count($allTicketsMap) . 
+                     " (time: " . round($query2Time, 2) . "s, parallel: " . ($useParallel ? 'yes' : 'no') . ")");
+        }
+
+        // Фильтрация по product=1C
+        $tickets = $this->filterByProduct(array_values($allTicketsMap), $product);
+
+        if ($debug) {
+            error_log("[MONTHS] Tickets after product filter: " . count($tickets));
+        }
+
+        return $tickets;
+    }
+
+    /**
+     * TASK-067-3: Загрузка переходящих тикетов для месячного режима
+     * 
+     * Загружает тикеты, созданные до конца периода и находящиеся в рабочих стадиях.
+     * Использует фильтр по createdTime <= endDate для оптимизации (TASK-059-01).
+     * 
+     * @param array $targetStages Массив рабочих стадий
+     * @param DateTimeImmutable $endDate Конец периода (для фильтра <=createdTime)
+     * @param string $product Фильтр продукта (по умолчанию '1C')
+     * @param bool $debug Флаг отладки
+     * @return array Массив переходящих тикетов (отфильтрованных по product)
+     */
+    public function fetchCarryoverTicketsForMonths(
+        array $targetStages,
+        DateTimeImmutable $endDate,
+        string $product = '1C',
+        bool $debug = false
+    ): array {
+        $periodEndStr = $endDate->format('Y-m-d H:i:s');
+        $allTicketsMap = [];
+        $query3StartTime = microtime(true);
+        $ticketsCountBeforeQuery3 = count($allTicketsMap);
+
+        if ($debug) {
+            error_log("[MONTHS-QUERY3] Starting carryover tickets query with createdTime filter: <= {$periodEndStr}");
+        }
+
+        // TASK-059-01: Запрос по каждой стадии отдельно с фильтром по createdTime
+        foreach ($targetStages as $stageId) {
+            $start = 0;
+            $hasMore = true;
+
+            while ($hasMore) {
+                $result = CRest::call('crm.item.list', [
+                    'entityTypeId' => $this->entityTypeId,
+                    'filter' => [
+                        'stageId' => $stageId,
+                        '<=createdTime' => $periodEndStr
+                    ],
+                    'select' => [
+                        'id', 'title', 'stageId', 'assignedById',
+                        'createdTime', 'updatedTime', 'movedTime',
+                        'UF_CRM_7_TYPE_PRODUCT', 'ufCrm7TypeProduct'
+                    ],
+                    'start' => $start
+                ]);
+
+                if (isset($result['error'])) {
+                    throw new Exception($result['error_description'] ?? $result['error']);
+                }
+
+                $items = $result['result']['items'] ?? [];
+                foreach ($items as $item) {
+                    if (!isset($allTicketsMap[$item['id']])) {
+                        $allTicketsMap[$item['id']] = $item;
+                    }
+                }
+
+                $nextValue = $result['result']['next'] ?? $result['next'] ?? null;
+                $hasNext = $nextValue !== null &&
+                          $nextValue !== '' &&
+                          $nextValue !== '0' &&
+                          (int)$nextValue > 0;
+                $hasMore = count($items) === $this->pageSize && $hasNext;
+
+                $start += $this->pageSize;
+            }
+        }
+
+        $query3Time = microtime(true) - $query3StartTime;
+        $query3TicketsCount = count($allTicketsMap) - $ticketsCountBeforeQuery3;
+        if ($debug) {
+            error_log("[MONTHS-QUERY3] Carryover tickets query completed in " . round($query3Time, 2) . 
+                     " seconds, loaded {$query3TicketsCount} new tickets (total: " . count($allTicketsMap) . ")");
+        }
+
+        // Фильтрация по product=1C
+        $tickets = $this->filterByProduct(array_values($allTicketsMap), $product);
+
+        return $tickets;
+    }
 }
