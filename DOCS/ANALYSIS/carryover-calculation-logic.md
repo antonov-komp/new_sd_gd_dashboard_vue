@@ -489,3 +489,4 @@ carryoverTickets = carryoverTicketsCreatedThisWeek + carryoverTicketsCreatedOthe
    - Разбивка позволяет анализировать текущую нагрузку и накопленный долг
    - Помогает выявлять проблемы с закрытием тикетов
 
+
