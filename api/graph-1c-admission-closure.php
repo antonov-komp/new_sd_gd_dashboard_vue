@@ -660,7 +660,13 @@ try {
         ]);
     }
 
-    // TASK-053-03: Обработка режима периода
+    // TASK-065: Для недельного режима используем новый модуль
+    if ($periodMode === 'weeks') {
+        require_once __DIR__ . '/graph-admission-closure/bootstrap.php';
+        exit; // bootstrap.php уже отправит ответ и завершит выполнение
+    }
+
+    // TASK-053-03: Обработка режима периода (months - legacy)
     if ($periodMode === 'months') {
         // TASK-059: Логирование общего времени выполнения для режима "months"
         $monthsModeStartTime = microtime(true);
