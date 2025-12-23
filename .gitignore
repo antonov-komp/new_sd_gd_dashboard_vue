@@ -5,6 +5,9 @@ settings.json
 # Webhook secret (токен от Bitrix24)
 webhook-secret.php
 
+# Direct access configuration (локальная конфигурация)
+direct-access-config.php
+
 # Logs directory
 logs/
 

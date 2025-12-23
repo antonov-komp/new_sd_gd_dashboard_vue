@@ -41,9 +41,55 @@ export class AccessControlService {
    */
   static async checkAccess() {
     try {
-      // Инициализация Bitrix24 API (только если внутри Bitrix24)
+      // ШАГ 1: Проверка контекста (внутри Bitrix24 или нет)
+      const isInsideB24 = isInsideBitrix24();
+      
+      // Логируем для отладки
+      console.log('AccessControlService.checkAccess - isInsideBitrix24:', isInsideB24);
+      console.log('AccessControlService.checkAccess - window.self === window.top:', window.self === window.top);
+      console.log('AccessControlService.checkAccess - typeof BX24:', typeof BX24);
+      
+      // ШАГ 2: Если НЕ внутри Bitrix24, проверяем конфигурацию прямого доступа
+      if (!isInsideB24) {
+        console.log('AccessControlService.checkAccess - Not inside Bitrix24, checking direct access config...');
+        
+        // Динамический импорт для уменьшения размера бандла
+        const { isDirectAccessAllowed, getDenyMessage } = await import('@/utils/direct-access-config.js');
+        
+        // Проверяем, разрешён ли прямой доступ
+        const allowDirectAccess = await isDirectAccessAllowed();
+        
+        console.log('AccessControlService.checkAccess - allowDirectAccess:', allowDirectAccess);
+        
+        if (!allowDirectAccess) {
+          // Прямой доступ запрещён — возвращаем ошибку доступа
+          const denyMessage = await getDenyMessage();
+          
+          console.warn('Direct access denied: Application opened directly in browser, but direct access is disabled in config');
+          console.warn('Deny message:', denyMessage);
+          
+          return new AccessCheckResult(
+            false,
+            AccessErrorCodes.ACCESS_DENIED,
+            denyMessage,
+            null // Пользователь не определён
+          );
+        }
+        
+        // Прямой доступ разрешён — продолжаем проверку
+        // Логируем для отладки
+        console.log('Direct access allowed: Using primary administrator token from settings.php');
+        
+        // Прямой доступ разрешён — используем токен первичного администратора
+        // Это будет обработано в getCurrentUser() через прокси API
+        // Прокси API использует токен из settings.php (первичный администратор)
+      } else {
+        console.log('AccessControlService.checkAccess - Inside Bitrix24, skipping direct access check');
+      }
+      
+      // ШАГ 3: Инициализация Bitrix24 API (только если внутри Bitrix24)
       // Добавляем таймаут для инициализации, но не прерываем при ошибке
-      if (isInsideBitrix24()) {
+      if (isInsideB24) {
         try {
           await Promise.race([
             Bitrix24BxApi.init(),
@@ -57,7 +103,7 @@ export class AccessControlService {
         }
       }
       
-      // Получение информации о текущем пользователе
+      // ШАГ 4: Получение информации о текущем пользователе
       // Автоматически использует правильный метод (BX24 или прокси)
       // Добавляем таймаут для получения пользователя (10 секунд общий)
       let user;
@@ -70,6 +116,7 @@ export class AccessControlService {
         ]);
       } catch (getUserError) {
         // Если BX24 API не работает, пробуем прокси API как fallback
+        // ВАЖНО: При прямом доступе прокси API вернёт владельца токена (первичного администратора)
         console.warn('Bitrix24BxApi.getCurrentUser() failed, trying proxy API:', getUserError);
         const { Bitrix24ApiService } = await import('./bitrix24-api.js');
         try {
@@ -79,7 +126,7 @@ export class AccessControlService {
               setTimeout(() => reject(new Error('Прокси API превысило 5 секунд')), 5000)
             )
           ]);
-          console.log('Got user from proxy API (fallback):', user);
+          console.log('Got user from proxy API:', user?.ID || 'unknown');
         } catch (proxyError) {
           // Если и прокси не работает, выбрасываем ошибку
           console.error('Both BX24 API and proxy API failed:', proxyError);
@@ -87,10 +134,8 @@ export class AccessControlService {
         }
       }
       
-      // Логируем только ID пользователя для уменьшения шума в консоли
-      console.log('AccessControlService.checkAccess - user ID:', user?.ID || 'unknown');
+      // ШАГ 5: Проверка, что пользователь определён
       
-      // Проверка, что пользователь определён
       if (!user || !user.ID) {
         console.warn('AccessControlService.checkAccess - user not determined:', user);
         return new AccessCheckResult(
@@ -100,10 +145,10 @@ export class AccessControlService {
         );
       }
       
-      // Получение ID отделов пользователя
+      // ШАГ 6: Получение ID отделов пользователя
       const departmentIds = user.UF_DEPARTMENT || [];
       
-      // Проверка, что пользователь привязан к отделу
+      // ШАГ 7: Проверка, что пользователь привязан к отделу
       if (!Array.isArray(departmentIds) || departmentIds.length === 0) {
         return new AccessCheckResult(
           false,
@@ -112,7 +157,7 @@ export class AccessControlService {
         );
       }
       
-      // Проверка доступа по ID отделов
+      // ШАГ 8: Проверка доступа по ID отделов
       const hasAccess = departmentIds.some(deptId => isDepartmentAllowed(deptId));
       
       if (!hasAccess) {
@@ -123,30 +168,33 @@ export class AccessControlService {
         );
       }
       
-      // Доступ разрешён
+      // ШАГ 9: Доступ разрешён
       return new AccessCheckResult(true, null, null, user);
       
     } catch (error) {
       console.error('AccessControlService.checkAccess error:', error);
       
       // Обработка CORS ошибок
-      // ВАЖНО: Не используем прокси как fallback, так как он вернёт владельца токена,
-      // а не пользователя интерфейса. Это нарушит логику проверки доступа.
+      // ВАЖНО: При прямом доступе CORS ошибки не должны блокировать работу,
+      // так как мы используем прокси API
       if (error.message && (
         error.message.includes('CORS') || 
         error.message.includes('blocked') ||
         error.message.includes('ERR_FAILED') ||
-        error.message.includes('unknown address space') ||
-        error.message.includes('интерфейса')
+        error.message.includes('unknown address space')
       )) {
         // CORS блокирует доступ к BX24 API
-        // НЕ используем прокси, так как он вернёт владельца токена, а не пользователя интерфейса
-        console.error('CORS error: Cannot determine interface user. Proxy would return token owner, not interface user.');
-        return new AccessCheckResult(
-          false,
-          AccessErrorCodes.API_ERROR,
-          'Ошибка CORS: не удалось определить пользователя интерфейса. Обратитесь в Поддержку приложения в ИТ отдел.'
-        );
+        // При прямом доступе это нормально, используем прокси
+        // Но если мы внутри Bitrix24 и CORS блокирует - это проблема
+        if (isInsideBitrix24()) {
+          console.error('CORS error inside Bitrix24: Cannot determine interface user.');
+          return new AccessCheckResult(
+            false,
+            AccessErrorCodes.API_ERROR,
+            'Ошибка CORS: не удалось определить пользователя интерфейса. Обратитесь в Поддержку приложения в ИТ отдел.'
+          );
+        }
+        // При прямом доступе CORS ошибка не критична, продолжаем через прокси
       }
       
       // Обработка других ошибок API

@@ -21,8 +21,17 @@
         title="Доступ запрещён"
         :message="accessErrorMessage"
       >
-        <!-- Временная отладочная информация для определения ID отдела -->
-        <div v-if="debugInfo" class="debug-info" style="margin-top: 15px; padding: 10px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; font-size: 12px;">
+        <!-- Специальное сообщение для запрета прямого доступа -->
+        <div v-if="isDirectAccessDenied" class="direct-access-denied-info" style="margin-top: 15px; padding: 15px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px;">
+          <p style="margin: 0 0 10px 0; font-weight: 600; color: #856404;"><strong>Как открыть приложение:</strong></p>
+          <ol style="margin: 0; padding-left: 20px; color: #856404;">
+            <li>Войдите в Bitrix24</li>
+            <li>Откройте приложение через интерфейс Bitrix24 (placement, виджет или вкладку)</li>
+          </ol>
+        </div>
+        
+        <!-- Обычная отладочная информация -->
+        <div v-else-if="debugInfo" class="debug-info" style="margin-top: 15px; padding: 10px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; font-size: 12px;">
           <strong>Отладочная информация:</strong><br>
           ID пользователя: {{ debugInfo.userId }}<br>
           ID отделов пользователя: {{ debugInfo.departmentIds }}<br>
@@ -118,6 +127,7 @@ import { getReports } from '@/config/reports-config.js';
 import { isAdmin } from '@/config/access-config.js';
 import { getAdminInterfaces } from '@/config/admin-config.js';
 import { getPageUrl } from '@/utils/path-utils.js';
+import { isInsideBitrix24 } from '@/utils/bitrix24-context.js';
 
 export default {
   name: 'IndexPage',
@@ -134,6 +144,7 @@ export default {
     const accessErrorMessage = ref('');
     const currentUser = ref(null);
     const debugInfo = ref(null);
+    const isDirectAccessDenied = ref(false);
     
     // Кнопки отчётов
     const reportsButtons = ref(getReports());
@@ -239,23 +250,55 @@ export default {
           // Доступ запрещён
           accessDenied.value = true;
           
-          // Сохраняем информацию о пользователе для отладки
-          if (accessResult.user) {
-            const { getAllowedDepartmentIds } = await import('@/config/access-config.js');
-            debugInfo.value = {
-              userId: accessResult.user.ID,
-              departmentIds: accessResult.user.UF_DEPARTMENT || [],
-              allowedIds: getAllowedDepartmentIds()
-            };
+          // Определяем, является ли это ошибкой прямого доступа
+          // Проверяем контекст и сообщение об ошибке
+          const isInsideB24 = isInsideBitrix24();
+          const isDirectAccessDeniedCheck = !isInsideB24 && 
+            accessResult.errorCode === AccessErrorCodes.ACCESS_DENIED &&
+            accessResult.errorMessage && 
+            accessResult.errorMessage.includes('Прямой доступ');
+          
+          console.log('IndexPage - accessResult:', {
+            errorCode: accessResult.errorCode,
+            errorMessage: accessResult.errorMessage,
+            isInsideB24,
+            isDirectAccessDeniedCheck
+          });
+          
+          isDirectAccessDenied.value = isDirectAccessDeniedCheck;
+          
+          if (isDirectAccessDeniedCheck) {
+            // Специальная обработка для запрета прямого доступа
+            accessErrorMessage.value = accessResult.errorMessage;
+            console.log('IndexPage - Set direct access denied message:', accessResult.errorMessage);
           }
           
-          // Определяем сообщение об ошибке
-          if (accessResult.errorCode === AccessErrorCodes.USER_NOT_DETERMINED) {
-            accessErrorMessage.value = 'Не удалось определить пользователя. Обратитесь в Поддержку приложения в ИТ отдел.';
-          } else if (accessResult.errorCode === AccessErrorCodes.ACCESS_DENIED) {
-            accessErrorMessage.value = 'Доступ запрещён';
-          } else {
-            accessErrorMessage.value = accessResult.errorMessage || 'Ошибка при проверке доступа. Обратитесь в Поддержку приложения в ИТ отдел.';
+          console.log('IndexPage - State after check:', {
+            accessDenied: accessDenied.value,
+            isDirectAccessDenied: isDirectAccessDenied.value,
+            accessErrorMessage: accessErrorMessage.value
+          });
+          
+          if (!isDirectAccessDeniedCheck) {
+            // Обычная обработка ошибки доступа
+            // Сохраняем информацию о пользователе для отладки
+            if (accessResult.user) {
+              const { getAllowedDepartmentIds } = await import('@/config/access-config.js');
+              debugInfo.value = {
+                userId: accessResult.user.ID,
+                departmentIds: accessResult.user.UF_DEPARTMENT || [],
+                allowedIds: getAllowedDepartmentIds()
+              };
+            }
+            
+            // Определяем сообщение об ошибке
+            if (accessResult.errorCode === AccessErrorCodes.USER_NOT_DETERMINED) {
+              accessErrorMessage.value = 'Не удалось определить пользователя. Обратитесь в Поддержку приложения в ИТ отдел.';
+            } else if (accessResult.errorCode === AccessErrorCodes.ACCESS_DENIED) {
+              accessErrorMessage.value = 'Доступ запрещён';
+            } else {
+              accessErrorMessage.value = accessResult.errorMessage || 'Ошибка при проверке доступа. Обратитесь в Поддержку приложения в ИТ отдел.';
+            }
           }
         }
       } catch (err) {
@@ -318,6 +361,7 @@ export default {
       currentUser,
       userName,
       debugInfo,
+      isDirectAccessDenied,
       errorTitle,
       errorMessage,
       showInstallLink,

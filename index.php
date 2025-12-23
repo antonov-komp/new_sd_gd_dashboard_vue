@@ -8,7 +8,7 @@ require_once(__DIR__ . '/crest.php');
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bitrix24 REST Application</title>
     <?php
-    // Определяем базовый путь для тега <base>
+    // Определяем базовый путь для тега <base> (делаем это в начале)
     $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
     $basePath = dirname($scriptName);
     if ($basePath === '.') {
@@ -17,11 +17,27 @@ require_once(__DIR__ . '/crest.php');
     if ($basePath && $basePath[0] !== '/') {
         $basePath = '/' . $basePath;
     }
+    
+    // Путь к favicon относительно корня приложения
+    // Используем абсолютный путь для правильной загрузки
+    $faviconPath = $basePath . '/favicon.ico';
+    ?>
+    <link rel="icon" type="image/x-icon" href="<?= htmlspecialchars($faviconPath) ?>">
+    <link rel="shortcut icon" type="image/x-icon" href="<?= htmlspecialchars($faviconPath) ?>">
+    <?php
     // Добавляем /dist/ к базовому пути для правильного разрешения путей к ресурсам
     $baseHref = $basePath . '/dist/';
+    
+    // Определяем, загружено ли приложение внутри Bitrix24 iframe
+    // Проверяем наличие параметра DOMAIN в запросе (Bitrix24 передаёт его при открытии в iframe)
+    $isInsideBitrix24 = isset($_GET['DOMAIN']) || 
+                        (isset($_SERVER['HTTP_REFERER']) && strpos($_SERVER['HTTP_REFERER'], 'bitrix24') !== false);
     ?>
     <base href="<?= htmlspecialchars($baseHref) ?>">
+    <?php if ($isInsideBitrix24): ?>
+    <!-- Загружаем Bitrix24 API только если приложение открыто внутри Bitrix24 -->
     <script src="//api.bitrix24.com/api/v1/"></script>
+    <?php endif; ?>
     <!-- В production используйте собранные файлы из /dist -->
     <!-- Для разработки используйте Vite dev server -->
     <?php 

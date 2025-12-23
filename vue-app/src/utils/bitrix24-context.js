@@ -28,25 +28,21 @@
  */
 export function isInsideBitrix24() {
   try {
-    // Проверка 1: Наличие BX24 API - это главный индикатор того, что мы внутри Bitrix24
-    // Если BX24 доступен, значит скрипт загружен из Bitrix24, даже если CORS блокирует доступ
-    if (typeof BX24 !== 'undefined') {
-      // Если BX24 доступен, мы точно внутри Bitrix24
-      // Дополнительно проверяем, что мы в iframe (но это не критично)
-      if (window.self !== window.top) {
-        // В iframe - точно внутри Bitrix24
-        return true;
-      }
-      // Если BX24 доступен, но мы не в iframe - возможно standalone режим
-      // Но всё равно BX24 API должен работать для определения пользователя интерфейса
-      return true;
+    // ВАЖНО: При прямом открытии в браузере (не в iframe) мы НЕ внутри Bitrix24
+    // Основной индикатор - это window.self === window.top (не в iframe)
+    
+    // Проверка 1: Если мы не в iframe (window.self === window.top), то мы НЕ внутри Bitrix24
+    // Это главная проверка для определения прямого доступа
+    if (window.self === window.top) {
+      // Не в iframe - точно не внутри Bitrix24 (прямой доступ)
+      return false;
     }
     
-    // Если BX24 недоступен, проверяем другие индикаторы
-    // Проверка 2: Наличие window.parent (iframe)
-    if (window.self === window.top) {
-      // Не в iframe и BX24 недоступен - точно не внутри Bitrix24
-      return false;
+    // Если мы в iframe, проверяем дополнительные индикаторы
+    // Проверка 2: Наличие BX24 API - это индикатор того, что мы внутри Bitrix24
+    if (typeof BX24 !== 'undefined') {
+      // BX24 доступен и мы в iframe - точно внутри Bitrix24
+      return true;
     }
     
     // Проверка 3: Попытка доступа к window.parent (может быть заблокирован CORS)
@@ -57,7 +53,8 @@ export function isInsideBitrix24() {
       return parentOrigin.includes('bitrix24') || parentOrigin.includes('kompo.by');
     } catch (e) {
       // CORS блокирует доступ - не можем определить точно
-      // Но если BX24 был доступен выше, мы бы уже вернули true
+      // Но так как мы в iframe (window.self !== window.top), вероятно внутри Bitrix24
+      // Однако без BX24 API это может быть проблемой
       return false;
     }
   } catch (error) {
