@@ -25,7 +25,7 @@ class Bitrix24Client
      */
     public function call(string $method, array $params = []): array
     {
-        $result = CRest::call($method, $params);
+        $result = \CRest::call($method, $params);
         
         if (isset($result['error'])) {
             $errorMsg = sprintf(
@@ -49,7 +49,7 @@ class Bitrix24Client
      */
     public function callBatch(array $batchData): array
     {
-        $result = CRest::callBatch($batchData);
+        $result = \CRest::callBatch($batchData);
         
         if (isset($result['error'])) {
             $errorMsg = sprintf(

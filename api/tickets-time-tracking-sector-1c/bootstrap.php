@@ -8,7 +8,7 @@
  */
 
 // Подключение зависимостей
-require_once __DIR__ . '/../crest.php';
+require_once __DIR__ . '/../../crest.php';
 
 // Установка заголовков
 header('Content-Type: application/json; charset=utf-8');
