@@ -8,3 +8,6 @@ webhook-secret.php
 # Logs directory
 logs/
 
+# Cache directory
+api/cache/
+
