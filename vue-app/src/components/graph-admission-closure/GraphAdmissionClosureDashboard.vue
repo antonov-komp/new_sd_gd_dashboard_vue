@@ -103,9 +103,9 @@
                 <GraphAdmissionClosureChart
                   :meta="chartMeta"
                   :data="chartData"
-                  @open-responsible="showResponsibleModal = true"
-                  @open-stages="showStagesModal = true"
-                  @open-carryover="showCarryoverModal = true"
+                  @open-responsible="handleOpenResponsible"
+                  @open-stages="handleOpenStages"
+                  @open-carryover="handleOpenCarryover"
                 />
               </template>
             </div>
@@ -121,26 +121,26 @@
       :closed-tickets-created-other-week="chartData.closedTicketsCreatedOtherWeek ?? 0"
       :responsible-created-this-week="chartData.responsibleCreatedThisWeek || []"
       :responsible-created-other-week="chartData.responsibleCreatedOtherWeek || []"
-      :week-number="chartMeta?.weekNumber || null"
-      :week-start-utc="chartMeta?.weekStartUtc || null"
-      :week-end-utc="chartMeta?.weekEndUtc || null"
-      @close="showResponsibleModal = false"
+      :week-number="selectedWeekMeta?.weekNumber || chartMeta?.weekNumber || null"
+      :week-start-utc="selectedWeekMeta?.weekStartUtc || chartMeta?.weekStartUtc || null"
+      :week-end-utc="selectedWeekMeta?.weekEndUtc || chartMeta?.weekEndUtc || null"
+      @close="showResponsibleModal = false; selectedWeekMeta.value = null"
     />
 
     <StagesModal
       :is-visible="showStagesModal"
-      :week-number="chartMeta?.weekNumber || null"
-      :week-start-utc="chartMeta?.weekStartUtc || null"
-      :week-end-utc="chartMeta?.weekEndUtc || null"
-      @close="showStagesModal = false"
+      :week-number="selectedWeekMeta?.weekNumber || chartMeta?.weekNumber || null"
+      :week-start-utc="selectedWeekMeta?.weekStartUtc || chartMeta?.weekStartUtc || null"
+      :week-end-utc="selectedWeekMeta?.weekEndUtc || chartMeta?.weekEndUtc || null"
+      @close="showStagesModal = false; selectedWeekMeta.value = null"
     />
 
     <CarryoverDurationModal
       :is-visible="showCarryoverModal"
-      :week-number="chartMeta?.weekNumber || null"
-      :week-start-utc="chartMeta?.weekStartUtc || null"
-      :week-end-utc="chartMeta?.weekEndUtc || null"
-      @close="showCarryoverModal = false"
+      :week-number="selectedWeekMeta?.weekNumber || chartMeta?.weekNumber || null"
+      :week-start-utc="selectedWeekMeta?.weekStartUtc || chartMeta?.weekStartUtc || null"
+      :week-end-utc="selectedWeekMeta?.weekEndUtc || chartMeta?.weekEndUtc || null"
+      @close="showCarryoverModal = false; selectedWeekMeta.value = null"
     />
 
     <PeriodModeInfoModal
@@ -182,6 +182,9 @@ const showResponsibleModal = ref(false);
 const showStagesModal = ref(false);
 const showCarryoverModal = ref(false);
 const showPeriodModeInfo = ref(true); // Показываем попап сразу при инициализации
+
+// TASK-062: Метаданные выбранной недели для попапов (текущая или предыдущая)
+const selectedWeekMeta = ref(null);
 
 // Навигация "Назад"
 const isNavigatingBack = ref(false);
@@ -448,6 +451,49 @@ function handleStartLoading() {
 /**
  * Загрузка режима из localStorage при монтировании
  */
+// TASK-062: Обработчики открытия попапов с поддержкой метаданных недели (текущая/предыдущая)
+function handleOpenStages(weekMeta = null) {
+  // Если переданы метаданные недели, используем их, иначе используем текущую неделю из chartMeta
+  if (weekMeta) {
+    selectedWeekMeta.value = weekMeta;
+  } else {
+    selectedWeekMeta.value = {
+      weekNumber: chartMeta.value?.weekNumber || null,
+      weekStartUtc: chartMeta.value?.weekStartUtc || null,
+      weekEndUtc: chartMeta.value?.weekEndUtc || null
+    };
+  }
+  showStagesModal.value = true;
+}
+
+function handleOpenResponsible(weekMeta = null) {
+  // Если переданы метаданные недели, используем их, иначе используем текущую неделю из chartMeta
+  if (weekMeta) {
+    selectedWeekMeta.value = weekMeta;
+  } else {
+    selectedWeekMeta.value = {
+      weekNumber: chartMeta.value?.weekNumber || null,
+      weekStartUtc: chartMeta.value?.weekStartUtc || null,
+      weekEndUtc: chartMeta.value?.weekEndUtc || null
+    };
+  }
+  showResponsibleModal.value = true;
+}
+
+function handleOpenCarryover(weekMeta = null) {
+  // Если переданы метаданные недели, используем их, иначе используем текущую неделю из chartMeta
+  if (weekMeta) {
+    selectedWeekMeta.value = weekMeta;
+  } else {
+    selectedWeekMeta.value = {
+      weekNumber: chartMeta.value?.weekNumber || null,
+      weekStartUtc: chartMeta.value?.weekStartUtc || null,
+      weekEndUtc: chartMeta.value?.weekEndUtc || null
+    };
+  }
+  showCarryoverModal.value = true;
+}
+
 onMounted(() => {
   // Удаляем старые флаги из localStorage, если они есть (больше не используются)
   try {

@@ -25,58 +25,255 @@
     </header>
 
     <section class="ac-chart__summary">
-      <!-- TASK-048: Используем currentWeekData для summary-карточек (текущая неделя из 4) -->
-      <div class="summary-card summary-card--new" @click="handleSummaryClick('new')">
-        <div class="summary-card__label">Новые за неделю</div>
-        <div class="summary-card__value">{{ currentWeekData?.newTickets ?? 0 }}</div>
-      </div>
-      <!-- TASK-047: Три цифры для закрытых тикетов (компактный вариант) -->
-      <div class="summary-card summary-card--closed-breakdown" @click="handleSummaryClick('closed')">
-        <div class="summary-card__label">Закрытые за неделю</div>
-        <div class="summary-card__value-main">{{ currentWeekData?.closedTickets ?? 0 }}</div>
-        <div class="summary-card__breakdown">
-          <div class="breakdown-item breakdown-item--this-week">
-            <span class="breakdown-item__icon">✓</span>
-            <span class="breakdown-item__value">{{ currentWeekData?.closedTicketsCreatedThisWeek ?? 0 }}</span>
-            <span class="breakdown-item__label">этой неделей</span>
+      <!-- TASK-062: Блок текущей недели -->
+      <div class="summary-week-block summary-week-block--current">
+        <h3 class="summary-week-block__title">
+          <span class="summary-week-block__title-text">Текущая неделя</span>
+          <span class="summary-week-block__title-week">
+            Неделя {{ currentWeekMeta.weekNumber ?? '—' }}
+          </span>
+          <span class="summary-week-block__title-dates" v-if="currentWeekMeta.weekStartUtc">
+            {{ formatWeekDates(currentWeekMeta.weekStartUtc, currentWeekMeta.weekEndUtc) }}
+          </span>
+        </h3>
+        <div class="summary-week-block__cards">
+          <!-- TASK-048: Используем currentWeekData для summary-карточек (текущая неделя из 4) -->
+          <div class="summary-card summary-card--new" @click="handleSummaryClick('new')">
+            <div class="summary-card__label">Новые за неделю</div>
+            <div class="summary-card__value-wrapper">
+              <div class="summary-card__value">{{ currentWeekData?.newTickets ?? 0 }}</div>
+              <!-- TASK-062: Процент изменения относительно предыдущей недели -->
+              <div 
+                v-if="currentWeekPercentages.newTickets !== null" 
+                :class="['percentage-indicator', currentWeekPercentages.newTickets >= 0 ? 'percentage-indicator--positive' : 'percentage-indicator--negative']"
+                :title="`Изменение относительно предыдущей недели (Неделя ${previousWeekData?.weekNumber ?? '—'}): ${formatPercentage(currentWeekPercentages.newTickets)}`"
+              >
+                <span class="percentage-indicator__arrow">{{ currentWeekPercentages.newTickets >= 0 ? '↑' : '↓' }}</span>
+                <span class="percentage-indicator__value">{{ formatPercentage(currentWeekPercentages.newTickets) }}</span>
+                <span class="percentage-indicator__label">к неделе {{ previousWeekData?.weekNumber ?? '—' }}</span>
+              </div>
+            </div>
           </div>
-          <div class="breakdown-item breakdown-item--other-week">
-            <span class="breakdown-item__icon">↻</span>
-            <span class="breakdown-item__value">{{ currentWeekData?.closedTicketsCreatedOtherWeek ?? 0 }}</span>
-            <span class="breakdown-item__label">другой неделей</span>
+          <!-- TASK-047: Три цифры для закрытых тикетов (компактный вариант) -->
+          <div class="summary-card summary-card--closed-breakdown" @click="handleSummaryClick('closed')">
+            <div class="summary-card__label">Закрытые за неделю</div>
+            <div class="summary-card__value-wrapper">
+              <div class="summary-card__value-main">{{ currentWeekData?.closedTickets ?? 0 }}</div>
+              <!-- TASK-062: Процент изменения относительно предыдущей недели -->
+              <div 
+                v-if="currentWeekPercentages.closedTickets !== null" 
+                :class="['percentage-indicator', currentWeekPercentages.closedTickets >= 0 ? 'percentage-indicator--positive' : 'percentage-indicator--negative']"
+                :title="`Изменение относительно предыдущей недели (Неделя ${previousWeekData?.weekNumber ?? '—'}): ${formatPercentage(currentWeekPercentages.closedTickets)}`"
+              >
+                <span class="percentage-indicator__arrow">{{ currentWeekPercentages.closedTickets >= 0 ? '↑' : '↓' }}</span>
+                <span class="percentage-indicator__value">{{ formatPercentage(currentWeekPercentages.closedTickets) }}</span>
+                <span class="percentage-indicator__label">к неделе {{ previousWeekData?.weekNumber ?? '—' }}</span>
+              </div>
+            </div>
+            <div class="summary-card__breakdown">
+              <div class="breakdown-item breakdown-item--this-week">
+                <span class="breakdown-item__icon">✓</span>
+                <span class="breakdown-item__value">{{ currentWeekData?.closedTicketsCreatedThisWeek ?? 0 }}</span>
+                <span class="breakdown-item__label">этой неделей</span>
+              </div>
+              <div class="breakdown-item breakdown-item--other-week">
+                <span class="breakdown-item__icon">↻</span>
+                <span class="breakdown-item__value">{{ currentWeekData?.closedTicketsCreatedOtherWeek ?? 0 }}</span>
+                <span class="breakdown-item__label">другой неделей</span>
+              </div>
+            </div>
+          </div>
+          <!-- TASK-047: Три цифры для переходящих тикетов (компактный вариант) -->
+          <div class="summary-card summary-card--carryover-breakdown" @click="handleSummaryClick('carryover')">
+            <div class="summary-card__label">Переходящие</div>
+            <div class="summary-card__value-wrapper">
+              <div class="summary-card__value-main">{{ currentWeekData?.carryoverTickets ?? 0 }}</div>
+              <!-- TASK-062: Процент изменения относительно предыдущей недели -->
+              <div 
+                v-if="currentWeekPercentages.carryoverTickets !== null" 
+                :class="['percentage-indicator', currentWeekPercentages.carryoverTickets >= 0 ? 'percentage-indicator--positive' : 'percentage-indicator--negative']"
+                :title="`Изменение относительно предыдущей недели (Неделя ${previousWeekData?.weekNumber ?? '—'}): ${formatPercentage(currentWeekPercentages.carryoverTickets)}`"
+              >
+                <span class="percentage-indicator__arrow">{{ currentWeekPercentages.carryoverTickets >= 0 ? '↑' : '↓' }}</span>
+                <span class="percentage-indicator__value">{{ formatPercentage(currentWeekPercentages.carryoverTickets) }}</span>
+                <span class="percentage-indicator__label">к неделе {{ previousWeekData?.weekNumber ?? '—' }}</span>
+              </div>
+            </div>
+            <div class="summary-card__breakdown">
+              <div class="breakdown-item breakdown-item--this-week">
+                <span class="breakdown-item__icon">✓</span>
+                <span class="breakdown-item__value">{{ currentWeekData?.carryoverTicketsCreatedThisWeek ?? 0 }}</span>
+                <span class="breakdown-item__label">этой недели</span>
+              </div>
+              <div class="breakdown-item breakdown-item--other-week">
+                <span class="breakdown-item__icon">↻</span>
+                <span class="breakdown-item__value">{{ currentWeekData?.carryoverTicketsCreatedOtherWeek ?? 0 }}</span>
+                <span class="breakdown-item__label">предыдущих</span>
+              </div>
+            </div>
+          </div>
+          <div class="summary-card summary-card--stages">
+            <div class="summary-card__label">Закрытия по стадиям</div>
+            <div class="summary-card__tags">
+              <span
+                v-for="stage in data.stages || []"
+                :key="stage.stageId"
+                class="stage-tag"
+              >
+                {{ stage.stageName || stage.stageId }} — {{ stage.count }}
+              </span>
+              <span v-if="!data.stages || data.stages.length === 0" class="stage-tag stage-tag--empty">
+                Нет данных
+              </span>
+            </div>
           </div>
         </div>
       </div>
-      <!-- TASK-047: Три цифры для переходящих тикетов (компактный вариант) -->
-      <div class="summary-card summary-card--carryover-breakdown" @click="handleSummaryClick('carryover')">
-        <div class="summary-card__label">Переходящие</div>
-        <div class="summary-card__value-main">{{ currentWeekData?.carryoverTickets ?? 0 }}</div>
-        <div class="summary-card__breakdown">
-          <div class="breakdown-item breakdown-item--this-week">
-            <span class="breakdown-item__icon">✓</span>
-            <span class="breakdown-item__value">{{ currentWeekData?.carryoverTicketsCreatedThisWeek ?? 0 }}</span>
-            <span class="breakdown-item__label">этой недели</span>
-          </div>
-          <div class="breakdown-item breakdown-item--other-week">
-            <span class="breakdown-item__icon">↻</span>
-            <span class="breakdown-item__value">{{ currentWeekData?.carryoverTicketsCreatedOtherWeek ?? 0 }}</span>
-            <span class="breakdown-item__label">предыдущих</span>
-          </div>
-        </div>
+
+      <!-- TASK-062: Визуальный разделитель -->
+      <div v-if="previousWeekData" class="summary-week-divider">
+        <div class="summary-week-divider__line"></div>
+        <div class="summary-week-divider__label">Предыдущая неделя</div>
       </div>
-      <div class="summary-card summary-card--stages">
-        <div class="summary-card__label">Закрытия по стадиям</div>
-        <div class="summary-card__tags">
-          <span
-            v-for="stage in data.stages || []"
-            :key="stage.stageId"
-            class="stage-tag"
-          >
-            {{ stage.stageName || stage.stageId }} — {{ stage.count }}
+
+      <!-- TASK-062: Блок предыдущей недели -->
+      <div v-if="previousWeekData" class="summary-week-block summary-week-block--previous">
+        <h3 class="summary-week-block__title">
+          <span class="summary-week-block__title-text">Предыдущая неделя</span>
+          <span class="summary-week-block__title-week">
+            Неделя {{ previousWeekData.weekNumber ?? '—' }}
           </span>
-          <span v-if="!data.stages || data.stages.length === 0" class="stage-tag stage-tag--empty">
-            Нет данных
+          <span class="summary-week-block__title-dates" v-if="previousWeekData.weekStartUtc">
+            {{ formatWeekDates(previousWeekData.weekStartUtc, previousWeekData.weekEndUtc) }}
           </span>
+        </h3>
+        <div class="summary-week-block__cards">
+          <!-- TASK-062: Карточка 1: Новые за неделю (предыдущая) - кликабельна -->
+          <div class="summary-card summary-card--new summary-card--previous summary-card--clickable" @click="handlePreviousWeekSummaryClick('new')">
+            <div class="summary-card__label">Новые за неделю</div>
+            <div class="summary-card__value-wrapper">
+              <!-- TASK-062: Сравнение значений: слева - предыдущая неделя (51), справа - предпредыдущая неделя (50) -->
+              <div class="summary-card__values-comparison">
+                <div class="summary-card__value-comparison-item summary-card__value-comparison-item--previous">
+                  <div class="summary-card__value">{{ previousWeekData?.newTickets ?? 0 }}</div>
+                  <span class="value-label">Неделя {{ previousWeekData?.weekNumber ?? '—' }}</span>
+                </div>
+                <div class="summary-card__value-comparison-item summary-card__value-comparison-item--current">
+                  <div class="summary-card__value summary-card__value--current-week">{{ prePreviousWeekData?.newTickets ?? 0 }}</div>
+                  <span class="value-label">Неделя {{ prePreviousWeekData?.weekNumber ?? '—' }}</span>
+                </div>
+              </div>
+              <!-- TASK-062: Процент изменения относительно предпредыдущей недели -->
+              <div 
+                v-if="previousWeekPercentages.newTickets !== null" 
+                :class="['percentage-indicator', previousWeekPercentages.newTickets >= 0 ? 'percentage-indicator--positive' : 'percentage-indicator--negative']"
+                :title="`Изменение относительно предпредыдущей недели (Неделя ${prePreviousWeekData?.weekNumber ?? '—'}): ${formatPercentage(previousWeekPercentages.newTickets)}`"
+              >
+                <span class="percentage-indicator__arrow">{{ previousWeekPercentages.newTickets >= 0 ? '↑' : '↓' }}</span>
+                <span class="percentage-indicator__value">{{ formatPercentage(previousWeekPercentages.newTickets) }}</span>
+                <span class="percentage-indicator__label">к неделе {{ prePreviousWeekData?.weekNumber ?? '—' }}</span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- TASK-062: Карточка 2: Закрытые за неделю (предыдущая, с разбивкой) - кликабельна -->
+          <div class="summary-card summary-card--closed-breakdown summary-card--previous summary-card--clickable" @click="handlePreviousWeekSummaryClick('closed')">
+            <div class="summary-card__label">Закрытые за неделю</div>
+            <div class="summary-card__value-wrapper">
+              <!-- TASK-062: Сравнение значений: слева - предыдущая неделя (51), справа - предпредыдущая неделя (50) -->
+              <div class="summary-card__values-comparison">
+                <div class="summary-card__value-comparison-item summary-card__value-comparison-item--previous">
+                  <div class="summary-card__value-main">{{ previousWeekData?.closedTickets ?? 0 }}</div>
+                  <span class="value-label">Неделя {{ previousWeekData?.weekNumber ?? '—' }}</span>
+                </div>
+                <div class="summary-card__value-comparison-item summary-card__value-comparison-item--current">
+                  <div class="summary-card__value-main summary-card__value-main--current-week">{{ prePreviousWeekData?.closedTickets ?? 0 }}</div>
+                  <span class="value-label">Неделя {{ prePreviousWeekData?.weekNumber ?? '—' }}</span>
+                </div>
+              </div>
+              <!-- TASK-062: Процент изменения относительно предпредыдущей недели -->
+              <div 
+                v-if="previousWeekPercentages.closedTickets !== null" 
+                :class="['percentage-indicator', previousWeekPercentages.closedTickets >= 0 ? 'percentage-indicator--positive' : 'percentage-indicator--negative']"
+                :title="`Изменение относительно предпредыдущей недели (Неделя ${prePreviousWeekData?.weekNumber ?? '—'}): ${formatPercentage(previousWeekPercentages.closedTickets)}`"
+              >
+                <span class="percentage-indicator__arrow">{{ previousWeekPercentages.closedTickets >= 0 ? '↑' : '↓' }}</span>
+                <span class="percentage-indicator__value">{{ formatPercentage(previousWeekPercentages.closedTickets) }}</span>
+                <span class="percentage-indicator__label">к неделе {{ prePreviousWeekData?.weekNumber ?? '—' }}</span>
+              </div>
+            </div>
+            <div class="summary-card__breakdown">
+              <div class="breakdown-item breakdown-item--this-week">
+                <span class="breakdown-item__icon">✓</span>
+                <span class="breakdown-item__value">{{ previousWeekData?.closedTicketsCreatedThisWeek ?? 0 }}</span>
+                <span class="breakdown-item__label">этой неделей</span>
+              </div>
+              <div class="breakdown-item breakdown-item--other-week">
+                <span class="breakdown-item__icon">↻</span>
+                <span class="breakdown-item__value">{{ previousWeekData?.closedTicketsCreatedOtherWeek ?? 0 }}</span>
+                <span class="breakdown-item__label">другой неделей</span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- TASK-062: Карточка 3: Переходящие (предыдущая, с разбивкой) - кликабельна -->
+          <div class="summary-card summary-card--carryover-breakdown summary-card--previous summary-card--clickable" @click="handlePreviousWeekSummaryClick('carryover')">
+            <div class="summary-card__label">Переходящие</div>
+            <div class="summary-card__value-wrapper">
+              <!-- TASK-062: Сравнение значений: слева - предыдущая неделя (51), справа - предпредыдущая неделя (50) -->
+              <div class="summary-card__values-comparison">
+                <div class="summary-card__value-comparison-item summary-card__value-comparison-item--previous">
+                  <div class="summary-card__value-main">{{ previousWeekData?.carryoverTickets ?? 0 }}</div>
+                  <span class="value-label">Неделя {{ previousWeekData?.weekNumber ?? '—' }}</span>
+                </div>
+                <div class="summary-card__value-comparison-item summary-card__value-comparison-item--current">
+                  <div class="summary-card__value-main summary-card__value-main--current-week">{{ prePreviousWeekData?.carryoverTickets ?? 0 }}</div>
+                  <span class="value-label">Неделя {{ prePreviousWeekData?.weekNumber ?? '—' }}</span>
+                </div>
+              </div>
+              <!-- TASK-062: Процент изменения относительно предпредыдущей недели -->
+              <div 
+                v-if="previousWeekPercentages.carryoverTickets !== null" 
+                :class="['percentage-indicator', previousWeekPercentages.carryoverTickets >= 0 ? 'percentage-indicator--positive' : 'percentage-indicator--negative']"
+                :title="`Изменение относительно предпредыдущей недели (Неделя ${prePreviousWeekData?.weekNumber ?? '—'}): ${formatPercentage(previousWeekPercentages.carryoverTickets)}`"
+              >
+                <span class="percentage-indicator__arrow">{{ previousWeekPercentages.carryoverTickets >= 0 ? '↑' : '↓' }}</span>
+                <span class="percentage-indicator__value">{{ formatPercentage(previousWeekPercentages.carryoverTickets) }}</span>
+                <span class="percentage-indicator__label">к неделе {{ prePreviousWeekData?.weekNumber ?? '—' }}</span>
+              </div>
+            </div>
+            <div class="summary-card__breakdown">
+              <div class="breakdown-item breakdown-item--this-week">
+                <span class="breakdown-item__icon">✓</span>
+                <span class="breakdown-item__value">{{ previousWeekData?.carryoverTicketsCreatedThisWeek ?? 0 }}</span>
+                <span class="breakdown-item__label">этой недели</span>
+              </div>
+              <div class="breakdown-item breakdown-item--other-week">
+                <span class="breakdown-item__icon">↻</span>
+                <span class="breakdown-item__value">{{ previousWeekData?.carryoverTicketsCreatedOtherWeek ?? 0 }}</span>
+                <span class="breakdown-item__label">предыдущих</span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Карточка 4: Закрытия по стадиям (предыдущая) -->
+          <!-- Примечание: Стадии для предыдущей недели могут быть недоступны в текущем API -->
+          <!-- Используем общие стадии или показываем "Нет данных" -->
+          <div class="summary-card summary-card--stages summary-card--previous">
+            <div class="summary-card__label">Закрытия по стадиям</div>
+            <div class="summary-card__tags">
+              <span
+                v-for="stage in data.stages || []"
+                :key="stage.stageId"
+                class="stage-tag"
+              >
+                {{ stage.stageName || stage.stageId }} — {{ stage.count }}
+              </span>
+              <span v-if="!data.stages || data.stages.length === 0" class="stage-tag stage-tag--empty">
+                Нет данных
+              </span>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -150,6 +347,15 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['open-responsible', 'open-stages', 'open-carryover']);
+
+// TASK-062: Computed-свойство для метаданных предыдущей недели
+const previousWeekMeta = computed(() => {
+  const weeks = props.meta?.weeks || [];
+  if (weeks.length >= 2) {
+    return weeks[weeks.length - 2]; // Предпоследняя неделя
+  }
+  return null;
+});
 
 const chartTypes = [
   { value: 'line', label: 'Линейный', icon: '📈' },
@@ -909,22 +1115,373 @@ const currentWeekData = computed(() => {
   return props.data || {};
 });
 
-// Обработчик клика на summary-карточки
+// TASK-062: Получаем метаданные текущей недели (последний элемент из meta.weeks)
+const currentWeekMeta = computed(() => {
+  const weeks = props.meta?.weeks || [];
+  if (weeks.length > 0) {
+    return weeks[weeks.length - 1];
+  }
+  // Fallback для обратной совместимости
+  return {
+    weekNumber: props.meta?.currentWeek?.weekNumber ?? props.meta?.weekNumber ?? null,
+    weekStartUtc: props.meta?.currentWeek?.weekStartUtc ?? props.meta?.weekStartUtc ?? null,
+    weekEndUtc: props.meta?.currentWeek?.weekEndUtc ?? props.meta?.weekEndUtc ?? null
+  };
+});
+
+// TASK-062: Получаем данные предыдущей недели (предпоследняя неделя из series или weeksData)
+// Приоритет: series[предпоследний] (если есть данные за 2+ недели) > weeksData[предпоследний]
+const previousWeekData = computed(() => {
+  // 1. Приоритет: series[предпоследний] (если есть данные за 2+ недели)
+  if (props.data?.series) {
+    const series = props.data.series;
+    
+    // Находим максимальный индекс (длина самого длинного массива - 1)
+    const lastIndex = Math.max(
+      (Array.isArray(series.new) ? series.new.length : 0) - 1,
+      (Array.isArray(series.closed) ? series.closed.length : 0) - 1,
+      (Array.isArray(series.closedCreatedThisWeek) ? series.closedCreatedThisWeek.length : 0) - 1,
+      (Array.isArray(series.closedCreatedOtherWeek) ? series.closedCreatedOtherWeek.length : 0) - 1,
+      (Array.isArray(series.carryover) ? series.carryover.length : 0) - 1,
+      (Array.isArray(series.carryoverCreatedThisWeek) ? series.carryoverCreatedThisWeek.length : 0) - 1,
+      (Array.isArray(series.carryoverCreatedOtherWeek) ? series.carryoverCreatedOtherWeek.length : 0) - 1,
+      -1
+    );
+    
+    // Проверяем, что есть хотя бы 2 недели данных (lastIndex >= 1 означает, что есть минимум 2 элемента)
+    if (lastIndex >= 1) {
+      const prevIndex = lastIndex - 1;
+      
+      // Получаем метаданные о предыдущей неделе
+      const prevWeekMeta = props.meta?.weeks?.[prevIndex];
+      
+      // Формируем объект с данными предыдущей недели
+      const prevWeekFromSeries = {
+        weekNumber: prevWeekMeta?.weekNumber ?? null,
+        weekStartUtc: prevWeekMeta?.weekStartUtc ?? null,
+        weekEndUtc: prevWeekMeta?.weekEndUtc ?? null,
+        newTickets: (Array.isArray(series.new) && series.new[prevIndex] !== undefined) 
+          ? series.new[prevIndex] 
+          : 0,
+        closedTickets: (Array.isArray(series.closed) && series.closed[prevIndex] !== undefined) 
+          ? series.closed[prevIndex] 
+          : 0,
+        closedTicketsCreatedThisWeek: (Array.isArray(series.closedCreatedThisWeek) && series.closedCreatedThisWeek[prevIndex] !== undefined) 
+          ? series.closedCreatedThisWeek[prevIndex] 
+          : 0,
+        closedTicketsCreatedOtherWeek: (Array.isArray(series.closedCreatedOtherWeek) && series.closedCreatedOtherWeek[prevIndex] !== undefined) 
+          ? series.closedCreatedOtherWeek[prevIndex] 
+          : 0,
+        carryoverTickets: (Array.isArray(series.carryover) && series.carryover[prevIndex] !== undefined) 
+          ? series.carryover[prevIndex] 
+          : 0,
+        carryoverTicketsCreatedThisWeek: (Array.isArray(series.carryoverCreatedThisWeek) && series.carryoverCreatedThisWeek[prevIndex] !== undefined) 
+          ? series.carryoverCreatedThisWeek[prevIndex] 
+          : 0,
+        carryoverTicketsCreatedOtherWeek: (Array.isArray(series.carryoverCreatedOtherWeek) && series.carryoverCreatedOtherWeek[prevIndex] !== undefined) 
+          ? series.carryoverCreatedOtherWeek[prevIndex] 
+          : 0
+      };
+      
+      // Если в series есть хотя бы одно ненулевое значение, используем эти данные
+      if (prevWeekFromSeries.newTickets > 0 || 
+          prevWeekFromSeries.closedTickets > 0 || 
+          prevWeekFromSeries.carryoverTickets > 0) {
+        return prevWeekFromSeries;
+      }
+    }
+  }
+  
+  // 2. Пробуем weeksData[предпоследний]
+  if (props.data?.weeksData && Array.isArray(props.data.weeksData) && props.data.weeksData.length >= 2) {
+    const prevWeekIndex = props.data.weeksData.length - 2;
+    const prevWeek = props.data.weeksData[prevWeekIndex];
+    const prevWeekMeta = props.meta?.weeks?.[prevWeekIndex];
+    
+    // Проверяем, что есть хотя бы одно ненулевое значение
+    if ((prevWeek.newTickets ?? 0) > 0 || 
+        (prevWeek.closedTickets ?? 0) > 0 || 
+        (prevWeek.carryoverTickets ?? 0) > 0) {
+      return {
+        weekNumber: prevWeek.weekNumber ?? prevWeekMeta?.weekNumber ?? null,
+        weekStartUtc: prevWeekMeta?.weekStartUtc ?? null,
+        weekEndUtc: prevWeekMeta?.weekEndUtc ?? null,
+        newTickets: prevWeek.newTickets ?? 0,
+        closedTickets: prevWeek.closedTickets ?? 0,
+        closedTicketsCreatedThisWeek: prevWeek.closedTicketsCreatedThisWeek ?? 0,
+        closedTicketsCreatedOtherWeek: prevWeek.closedTicketsCreatedOtherWeek ?? 0,
+        carryoverTickets: prevWeek.carryoverTickets ?? 0,
+        carryoverTicketsCreatedThisWeek: prevWeek.carryoverTicketsCreatedThisWeek ?? 0,
+        carryoverTicketsCreatedOtherWeek: prevWeek.carryoverTicketsCreatedOtherWeek ?? 0
+      };
+    }
+  }
+  
+  // 3. Fallback: возвращаем данные из series даже если они нули (для консистентности)
+  if (props.data?.series) {
+    const series = props.data.series;
+    const lastIndex = Math.max(
+      (Array.isArray(series.new) ? series.new.length : 0) - 1,
+      (Array.isArray(series.closed) ? series.closed.length : 0) - 1,
+      (Array.isArray(series.carryover) ? series.carryover.length : 0) - 1,
+      -1
+    );
+    
+    if (lastIndex >= 1) {
+      const prevIndex = lastIndex - 1;
+      const prevWeekMeta = props.meta?.weeks?.[prevIndex];
+      
+      return {
+        weekNumber: prevWeekMeta?.weekNumber ?? null,
+        weekStartUtc: prevWeekMeta?.weekStartUtc ?? null,
+        weekEndUtc: prevWeekMeta?.weekEndUtc ?? null,
+        newTickets: (Array.isArray(series.new) && series.new[prevIndex] !== undefined) ? series.new[prevIndex] : 0,
+        closedTickets: (Array.isArray(series.closed) && series.closed[prevIndex] !== undefined) ? series.closed[prevIndex] : 0,
+        closedTicketsCreatedThisWeek: (Array.isArray(series.closedCreatedThisWeek) && series.closedCreatedThisWeek[prevIndex] !== undefined) ? series.closedCreatedThisWeek[prevIndex] : 0,
+        closedTicketsCreatedOtherWeek: (Array.isArray(series.closedCreatedOtherWeek) && series.closedCreatedOtherWeek[prevIndex] !== undefined) ? series.closedCreatedOtherWeek[prevIndex] : 0,
+        carryoverTickets: (Array.isArray(series.carryover) && series.carryover[prevIndex] !== undefined) ? series.carryover[prevIndex] : 0,
+        carryoverTicketsCreatedThisWeek: (Array.isArray(series.carryoverCreatedThisWeek) && series.carryoverCreatedThisWeek[prevIndex] !== undefined) ? series.carryoverCreatedThisWeek[prevIndex] : 0,
+        carryoverTicketsCreatedOtherWeek: (Array.isArray(series.carryoverCreatedOtherWeek) && series.carryoverCreatedOtherWeek[prevIndex] !== undefined) ? series.carryoverCreatedOtherWeek[prevIndex] : 0
+      };
+    }
+  }
+  
+  // 4. Если данных меньше 2 недель, возвращаем null (блок не отображается)
+  return null;
+});
+
+// TASK-062: Вычисляет процент изменения
+/**
+ * Вычисляет процент изменения между двумя значениями
+ * 
+ * @param {number} current - Текущее значение
+ * @param {number|null|undefined} previous - Предыдущее значение
+ * @returns {number|null} Процент изменения или null, если нельзя рассчитать
+ */
+function calculatePercentage(current, previous) {
+  // Валидация входных данных
+  if (typeof current !== 'number' || isNaN(current)) {
+    return null;
+  }
+  
+  if (previous === null || previous === undefined) {
+    return null;
+  }
+  
+  if (typeof previous !== 'number' || isNaN(previous)) {
+    return null;
+  }
+  
+  // Деление на ноль
+  if (previous === 0) {
+    return null;
+  }
+  
+  // Нет изменения
+  if (current === previous) {
+    return 0;
+  }
+  
+  // Расчет процента
+  const percentage = ((current - previous) / previous) * 100;
+  
+  // Проверка на бесконечность или NaN
+  if (!isFinite(percentage) || isNaN(percentage)) {
+    return null;
+  }
+  
+  return percentage;
+}
+
+// TASK-062: Форматирует процент для отображения
+/**
+ * Форматирует процент для отображения
+ * 
+ * @param {number|null} value - Процент изменения
+ * @returns {string} Отформатированная строка процента
+ */
+function formatPercentage(value) {
+  if (value === null || value === undefined || isNaN(value)) {
+    return '';
+  }
+  
+  const sign = value >= 0 ? '+' : '';
+  return `${sign}${value.toFixed(1)}%`;
+}
+
+// TASK-062: Получаем данные предпредыдущей недели (для расчета процентов предыдущей недели)
+const prePreviousWeekData = computed(() => {
+  if (props.data?.series) {
+    const series = props.data.series;
+    const lastIndex = Math.max(
+      (Array.isArray(series.new) ? series.new.length : 0) - 1,
+      (Array.isArray(series.closed) ? series.closed.length : 0) - 1,
+      (Array.isArray(series.carryover) ? series.carryover.length : 0) - 1,
+      -1
+    );
+    
+    // Нужно минимум 3 недели данных (lastIndex >= 2)
+    if (lastIndex >= 2) {
+      const prePrevIndex = lastIndex - 2;
+      const prePrevWeekMeta = props.meta?.weeks?.[prePrevIndex];
+      
+      return {
+        weekNumber: prePrevWeekMeta?.weekNumber ?? null,
+        newTickets: (Array.isArray(series.new) && series.new[prePrevIndex] !== undefined) ? series.new[prePrevIndex] : 0,
+        closedTickets: (Array.isArray(series.closed) && series.closed[prePrevIndex] !== undefined) ? series.closed[prePrevIndex] : 0,
+        carryoverTickets: (Array.isArray(series.carryover) && series.carryover[prePrevIndex] !== undefined) ? series.carryover[prePrevIndex] : 0
+      };
+    }
+  }
+  
+  return null;
+});
+
+// TASK-062: Проценты изменения для текущей недели (относительно предыдущей)
+const currentWeekPercentages = computed(() => {
+  const current = currentWeekData.value;
+  const previous = previousWeekData.value;
+  
+  if (!current || !previous) {
+    return {
+      newTickets: null,
+      closedTickets: null,
+      carryoverTickets: null
+    };
+  }
+  
+  return {
+    newTickets: calculatePercentage(current.newTickets ?? 0, previous.newTickets ?? 0),
+    closedTickets: calculatePercentage(current.closedTickets ?? 0, previous.closedTickets ?? 0),
+    carryoverTickets: calculatePercentage(current.carryoverTickets ?? 0, previous.carryoverTickets ?? 0)
+  };
+});
+
+// TASK-062: Проценты изменения для предыдущей недели (относительно предпредыдущей)
+const previousWeekPercentages = computed(() => {
+  const previous = previousWeekData.value;
+  const prePrevious = prePreviousWeekData.value;
+  
+  if (!previous || !prePrevious) {
+    return {
+      newTickets: null,
+      closedTickets: null,
+      carryoverTickets: null
+    };
+  }
+  
+  return {
+    newTickets: calculatePercentage(previous.newTickets ?? 0, prePrevious.newTickets ?? 0),
+    closedTickets: calculatePercentage(previous.closedTickets ?? 0, prePrevious.closedTickets ?? 0),
+    carryoverTickets: calculatePercentage(previous.carryoverTickets ?? 0, prePrevious.carryoverTickets ?? 0)
+  };
+});
+
+// TASK-062: Форматирует даты недели для отображения в заголовке
+/**
+ * Форматирует даты недели для отображения в заголовке
+ * 
+ * @param {string} startUtc - Начало недели в UTC (ISO-8601)
+ * @param {string} endUtc - Конец недели в UTC (ISO-8601)
+ * @returns {string} Отформатированная строка дат
+ */
+function formatWeekDates(startUtc, endUtc) {
+  if (!startUtc || !endUtc) {
+    return '';
+  }
+  
+  try {
+    const start = new Date(startUtc);
+    const end = new Date(endUtc);
+    
+    // Форматируем как "15 Dec — 21 Dec" или "15 Dec 2025 — 21 Dec 2025" (если разные годы)
+    const startDay = start.getUTCDate();
+    const startMonth = start.toLocaleDateString('ru-RU', { month: 'short', timeZone: 'UTC' });
+    const startYear = start.getUTCFullYear();
+    
+    const endDay = end.getUTCDate();
+    const endMonth = end.toLocaleDateString('ru-RU', { month: 'short', timeZone: 'UTC' });
+    const endYear = end.getUTCFullYear();
+    
+    if (startYear === endYear && startMonth === endMonth) {
+      return `${startDay} — ${endDay} ${startMonth}`;
+    } else if (startYear === endYear) {
+      return `${startDay} ${startMonth} — ${endDay} ${endMonth}`;
+    } else {
+      return `${startDay} ${startMonth} ${startYear} — ${endDay} ${endMonth} ${endYear}`;
+    }
+  } catch (error) {
+    console.error('[formatWeekDates] Error:', error);
+    return '';
+  }
+}
+
+// Обработчик клика на summary-карточки текущей недели
 // TASK-048: Используем currentWeekData для проверки наличия данных (текущая неделя)
+// TASK-062: Передаём метаданные текущей недели в события
 const handleSummaryClick = (type) => {
   const currentWeek = currentWeekData.value;
   const newTickets = currentWeek?.newTickets ?? 0;
   const closedTickets = currentWeek?.closedTickets ?? 0;
   const carryoverTickets = currentWeek?.carryoverTickets ?? 0;
   
+  const weekMeta = currentWeekMeta.value;
+  
   if (type === 'new' && newTickets > 0) {
-    emit('open-stages');
+    emit('open-stages', {
+      weekNumber: weekMeta.weekNumber,
+      weekStartUtc: weekMeta.weekStartUtc,
+      weekEndUtc: weekMeta.weekEndUtc
+    });
   } else if (type === 'closed' && closedTickets > 0) {
     if ((props.data?.responsible || []).length > 0) {
-      emit('open-responsible');
+      emit('open-responsible', {
+        weekNumber: weekMeta.weekNumber,
+        weekStartUtc: weekMeta.weekStartUtc,
+        weekEndUtc: weekMeta.weekEndUtc
+      });
     }
   } else if (type === 'carryover' && carryoverTickets > 0) {
-    emit('open-carryover');
+    emit('open-carryover', {
+      weekNumber: weekMeta.weekNumber,
+      weekStartUtc: weekMeta.weekStartUtc,
+      weekEndUtc: weekMeta.weekEndUtc
+    });
+  }
+};
+
+// TASK-062: Обработчик клика на summary-карточки предыдущей недели
+const handlePreviousWeekSummaryClick = (type) => {
+  const previousWeek = previousWeekData.value;
+  if (!previousWeek) return;
+  
+  const newTickets = previousWeek?.newTickets ?? 0;
+  const closedTickets = previousWeek?.closedTickets ?? 0;
+  const carryoverTickets = previousWeek?.carryoverTickets ?? 0;
+  
+  const weekMeta = previousWeekMeta.value;
+  if (!weekMeta) return;
+  
+  if (type === 'new' && newTickets > 0) {
+    emit('open-stages', {
+      weekNumber: weekMeta.weekNumber,
+      weekStartUtc: weekMeta.weekStartUtc,
+      weekEndUtc: weekMeta.weekEndUtc
+    });
+  } else if (type === 'closed' && closedTickets > 0) {
+    // Для предыдущей недели нужно проверить, есть ли данные responsible
+    // Пока передаём событие, родительский компонент должен обработать
+    emit('open-responsible', {
+      weekNumber: weekMeta.weekNumber,
+      weekStartUtc: weekMeta.weekStartUtc,
+      weekEndUtc: weekMeta.weekEndUtc
+    });
+  } else if (type === 'carryover' && carryoverTickets > 0) {
+    emit('open-carryover', {
+      weekNumber: weekMeta.weekNumber,
+      weekStartUtc: weekMeta.weekStartUtc,
+      weekEndUtc: weekMeta.weekEndUtc
+    });
   }
 };
 </script>
@@ -991,11 +1548,189 @@ const handleSummaryClick = (type) => {
   font-size: 16px;
 }
 
+/* TASK-062: Контейнер для всех summary-блоков */
 .ac-chart__summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-bottom: 16px;
+}
+
+/* TASK-062: Блок недели (базовые стили) */
+.summary-week-block {
+  margin-bottom: 0;
+  transition: all 0.3s ease;
+}
+
+/* TASK-062: Блок текущей недели - выделен */
+.summary-week-block--current {
+  background: var(--b24-bg-white, #fff);
+  padding: 20px;
+  border-radius: var(--radius-md, 8px);
+  border: 2px solid var(--b24-primary, #007bff);
+  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.1);
+  position: relative;
+}
+
+/* TASK-062: Блок текущей недели - индикатор активности */
+.summary-week-block--current::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--b24-primary, #007bff), var(--b24-success, #28a745));
+  border-radius: var(--radius-md, 8px) var(--radius-md, 8px) 0 0;
+}
+
+/* TASK-062: Блок предыдущей недели - приглушен */
+.summary-week-block--previous {
+  background: var(--b24-bg-light, #f9fafb);
+  padding: 20px;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--b24-border-light, #e5e7eb);
+  opacity: 0.85;
+  transition: opacity 0.2s ease;
+}
+
+/* TASK-062: При наведении на блок предыдущей недели - увеличиваем непрозрачность */
+.summary-week-block--previous:hover {
+  opacity: 0.95;
+  border-color: var(--b24-border-light, #d1d5db);
+}
+
+/* TASK-062: Заголовок блока недели */
+.summary-week-block__title {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 16px 0;
+  padding-bottom: 12px;
+  border-bottom: 2px solid var(--b24-border-light, #e5e7eb);
+}
+
+/* TASK-062: Текст заголовка */
+.summary-week-block__title-text {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--b24-text-primary, #111827);
+  line-height: 1.2;
+}
+
+/* TASK-062: Номер недели в заголовке */
+.summary-week-block__title-week {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--b24-primary, #007bff);
+  line-height: 1.2;
+}
+
+/* TASK-062: Даты в заголовке */
+.summary-week-block__title-dates {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--b24-text-secondary, #6b7280);
+  line-height: 1.2;
+  font-style: italic;
+}
+
+/* TASK-062: Блок предыдущей недели - приглушенные цвета заголовка */
+.summary-week-block--previous .summary-week-block__title-text {
+  color: var(--b24-text-secondary, #6b7280);
+  font-weight: 600;
+}
+
+.summary-week-block--previous .summary-week-block__title-week {
+  color: var(--b24-text-secondary, #6b7280);
+  font-weight: 500;
+}
+
+/* TASK-062: Контейнер карточек внутри блока */
+.summary-week-block__cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 12px;
-  margin-bottom: 16px;
+}
+
+/* TASK-062: Визуальный разделитель между блоками */
+.summary-week-divider {
+  margin: 28px 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* TASK-062: Линия разделителя */
+.summary-week-divider__line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--b24-border-light, #e5e7eb) 20%,
+    var(--b24-border-light, #e5e7eb) 80%,
+    transparent
+  );
+  position: relative;
+}
+
+/* TASK-062: Декоративные элементы на концах линии */
+.summary-week-divider__line::before,
+.summary-week-divider__line::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  background: var(--b24-border-light, #e5e7eb);
+  border-radius: 50%;
+  transform: translateY(-50%);
+}
+
+.summary-week-divider__line::before {
+  left: -8px;
+}
+
+.summary-week-divider__line::after {
+  right: -8px;
+}
+
+/* TASK-062: Метка разделителя (опционально) */
+.summary-week-divider__label {
+  padding: 0 12px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--b24-text-secondary, #6b7280);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: var(--b24-bg-white, #fff);
+  position: relative;
+  z-index: 1;
+}
+
+/* TASK-062: Карточки предыдущей недели - легкое затемнение */
+.summary-card--previous {
+  opacity: 0.8;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+/* TASK-062: Кликабельные карточки предыдущей недели */
+.summary-card--previous.summary-card--clickable {
+  cursor: pointer;
+}
+
+/* TASK-062: При наведении на карточку предыдущей недели */
+.summary-card--previous:hover {
+  opacity: 1;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* TASK-062: При наведении на кликабельную карточку предыдущей недели - изменение border */
+.summary-card--previous.summary-card--clickable:hover {
+  border-color: var(--b24-primary, #007bff);
 }
 
 .summary-card {
@@ -1034,6 +1769,127 @@ const handleSummaryClick = (type) => {
   font-size: 24px;
   font-weight: 700;
   color: var(--b24-text-primary, #111827);
+  line-height: 1.2;
+}
+
+/* TASK-062: Обёртка для значения и процента */
+.summary-card__value-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+/* TASK-062: Контейнер для сравнения двух значений (предыдущая и предпредыдущая неделя) */
+.summary-card__values-comparison {
+  display: flex;
+  align-items: baseline; /* Выравнивание по базовой линии для значений в одной линии */
+  justify-content: space-between;
+  width: 100%;
+  gap: 16px;
+}
+
+/* TASK-062: Элемент сравнения (одно значение с меткой) */
+.summary-card__value-comparison-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px; /* Уменьшен gap для компактности */
+  flex: 1;
+  justify-content: flex-start;
+}
+
+/* TASK-062: Выравнивание значения справа по базовой линии */
+.summary-card__value-comparison-item--current {
+  align-items: flex-end;
+  text-align: right;
+}
+
+/* TASK-062: Значение предыдущей недели (слева) - основной цвет */
+.summary-card__value-comparison-item--previous {
+  /* Используются стандартные стили .summary-card__value */
+}
+
+/* TASK-062: Значение предпредыдущей недели (справа) - другой цвет для визуального отличия */
+.summary-card__value-comparison-item--current {
+  align-items: flex-end;
+  text-align: right;
+}
+
+/* TASK-062: Значение предпредыдущей недели в карточках предыдущей недели - другой цвет, но тот же размер и стиль */
+.summary-card--previous .summary-card__value--current-week,
+.summary-card--previous .summary-card__value-main--current-week {
+  color: var(--b24-primary, #007bff) !important; /* Явно переопределяем цвет */
+  font-size: 24px !important; /* Тот же размер, что и основное значение */
+  font-weight: 700 !important; /* Та же жирность */
+  line-height: 1.2 !important; /* Та же высота строки */
+  opacity: 0.9;
+  margin-bottom: 0 !important; /* Убираем отступы */
+}
+
+/* TASK-062: Метка с номером недели под значением */
+.value-label {
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--b24-text-secondary, #6b7280);
+  opacity: 0.7;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  line-height: 1;
+  margin-top: 2px;
+}
+
+/* TASK-062: Визуальный индикатор процента изменения */
+.percentage-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background-color: rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+}
+
+/* TASK-062: Положительный процент (рост) - зелёный */
+.percentage-indicator--positive {
+  color: var(--b24-success, #28a745);
+  background-color: rgba(40, 167, 69, 0.1);
+}
+
+.percentage-indicator--positive .percentage-indicator__arrow {
+  color: var(--b24-success, #28a745);
+}
+
+/* TASK-062: Отрицательный процент (снижение) - красный */
+.percentage-indicator--negative {
+  color: var(--b24-danger, #dc3545);
+  background-color: rgba(220, 53, 69, 0.1);
+}
+
+.percentage-indicator--negative .percentage-indicator__arrow {
+  color: var(--b24-danger, #dc3545);
+}
+
+/* TASK-062: Стрелка в индикаторе */
+.percentage-indicator__arrow {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* TASK-062: Значение процента */
+.percentage-indicator__value {
+  font-weight: 700;
+}
+
+/* TASK-062: Метка с номером недели */
+.percentage-indicator__label {
+  font-size: 10px;
+  font-weight: 500;
+  opacity: 0.8;
+  margin-left: 2px;
 }
 
 .summary-card__tags {
@@ -1128,6 +1984,12 @@ const handleSummaryClick = (type) => {
   gap: 8px;
 }
 
+/* TASK-062: Обёртка значения в карточках с разбивкой */
+.summary-card--closed-breakdown .summary-card__value-wrapper,
+.summary-card--carryover-breakdown .summary-card__value-wrapper {
+  margin-bottom: 0;
+}
+
 /* TASK-047: Компактная карточка с разбивкой переходящих тикетов */
 .summary-card--carryover-breakdown {
   display: flex;
@@ -1140,7 +2002,7 @@ const handleSummaryClick = (type) => {
   font-weight: 700;
   color: var(--b24-primary, #007bff);
   line-height: 1.2;
-  margin-bottom: 4px;
+  margin-bottom: 0;
 }
 
 /* Компактный контейнер для разбивки */
@@ -1204,6 +2066,130 @@ const handleSummaryClick = (type) => {
   
   .summary-card__value-main {
     font-size: 20px;
+  }
+  
+  /* TASK-062: Адаптивность для индикаторов процентов */
+  .percentage-indicator {
+    font-size: 11px;
+    padding: 3px 6px;
+    gap: 3px;
+  }
+  
+  .percentage-indicator__arrow {
+    font-size: 12px;
+  }
+  
+  .percentage-indicator__label {
+    font-size: 9px;
+  }
+  
+  .summary-card__value-wrapper {
+    gap: 6px;
+  }
+  
+  /* TASK-062: Адаптивность для сравнения значений */
+  .summary-card__values-comparison {
+    flex-direction: column;
+    gap: 8px;
+    align-items: stretch;
+  }
+  
+  .summary-card__value-comparison-item--current {
+    align-items: flex-start;
+    text-align: left;
+  }
+  
+  .summary-card__value--current-week,
+  .summary-card__value-main--current-week {
+    font-size: 18px;
+  }
+  
+  .value-label {
+    font-size: 9px;
+  }
+}
+
+/* TASK-062: Адаптивность для планшетов (768px - 1024px) */
+@media (max-width: 1024px) and (min-width: 769px) {
+  .summary-week-block__cards {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  
+  .summary-week-block--current,
+  .summary-week-block--previous {
+    padding: 16px;
+  }
+  
+  .summary-week-divider {
+    margin: 24px 0;
+  }
+}
+
+/* TASK-062: Адаптивность для мобильных устройств (< 768px) */
+@media (max-width: 768px) {
+  .ac-chart__summary {
+    gap: 0;
+  }
+  
+  .summary-week-block--current,
+  .summary-week-block--previous {
+    padding: 12px;
+    border-radius: var(--radius-sm, 6px);
+  }
+  
+  .summary-week-block__title {
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+  }
+  
+  .summary-week-block__title-text {
+    font-size: 14px;
+  }
+  
+  .summary-week-block__title-week {
+    font-size: 12px;
+  }
+  
+  .summary-week-block__title-dates {
+    font-size: 11px;
+  }
+  
+  .summary-week-block__cards {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  
+  .summary-week-divider {
+    margin: 20px 0;
+  }
+  
+  .summary-week-divider__label {
+    font-size: 10px;
+    padding: 0 8px;
+  }
+  
+  /* На мобильных карточки предыдущей недели менее приглушены */
+  .summary-card--previous {
+    opacity: 0.9;
+  }
+}
+
+/* TASK-062: Адаптивность для очень маленьких экранов (< 480px) */
+@media (max-width: 480px) {
+  .summary-week-block--current,
+  .summary-week-block--previous {
+    padding: 10px;
+  }
+  
+  .summary-week-block__title {
+    gap: 2px;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+  }
+  
+  .summary-week-block__cards {
+    gap: 8px;
   }
 }
 </style>
