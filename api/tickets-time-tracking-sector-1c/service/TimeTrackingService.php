@@ -29,6 +29,7 @@ class TimeTrackingService
     protected TaskTicketMatcher $taskTicketMatcher;
     protected TimeAggregator $timeAggregator;
     protected EmployeeSummaryBuilder $employeeSummaryBuilder;
+    protected $cacheStore; // TASK-071-03: Кеш для результатов запросов
     
     public function __construct(
         EmployeeRepository $employeeRepository,
@@ -37,7 +38,8 @@ class TimeTrackingService
         TicketRepository $ticketRepository,
         TaskTicketMatcher $taskTicketMatcher,
         TimeAggregator $timeAggregator,
-        EmployeeSummaryBuilder $employeeSummaryBuilder
+        EmployeeSummaryBuilder $employeeSummaryBuilder,
+        $cacheStore = null // TASK-071-03: Добавлена зависимость кеша
     ) {
         $this->employeeRepository = $employeeRepository;
         $this->taskRepository = $taskRepository;
@@ -46,6 +48,7 @@ class TimeTrackingService
         $this->taskTicketMatcher = $taskTicketMatcher;
         $this->timeAggregator = $timeAggregator;
         $this->employeeSummaryBuilder = $employeeSummaryBuilder;
+        $this->cacheStore = $cacheStore; // TASK-071-03: Сохранение кеша
     }
     
     /**
@@ -65,6 +68,23 @@ class TimeTrackingService
     public function getTimeTrackingData(array $params): array
     {
         error_log("[TimeTrackingService] Starting data collection");
+        
+        // TASK-071-03: Проверка кеша перед выполнением запросов
+        $forceRefresh = $params['forceRefresh'] ?? false;
+        
+        if (!$forceRefresh && $this->cacheStore !== null) {
+            $cacheKey = $this->cacheStore->generateKey($params);
+            $cachedData = $this->cacheStore->get($cacheKey);
+            
+            if ($cachedData !== null) {
+                error_log("[TimeTrackingService] Cache hit for key: {$cacheKey}");
+                return $cachedData;
+            }
+            
+            error_log("[TimeTrackingService] Cache miss for key: {$cacheKey}");
+        } else if ($forceRefresh) {
+            error_log("[TimeTrackingService] Force refresh requested, skipping cache");
+        }
         
         // Валидация product
         $product = $params['product'] ?? '1C';
@@ -204,7 +224,8 @@ class TimeTrackingService
         
         error_log("[TimeTrackingService] Data collection completed successfully");
         
-        return [
+        // Формирование ответа
+        $response = [
             'success' => true,
             'meta' => [
                 'weekNumber' => (int)$currentWeekStart->format('W'),
@@ -215,6 +236,27 @@ class TimeTrackingService
             ],
             'data' => $responseData
         ];
+        
+        // TASK-071-03: Сохранение в кеш
+        if (!$forceRefresh && $this->cacheStore !== null) {
+            $cacheKey = $this->cacheStore->generateKey($params);
+            
+            if ($this->cacheStore->set($cacheKey, $response, 300)) {
+                error_log("[TimeTrackingService] Cache saved for key: {$cacheKey}");
+            } else {
+                error_log("[TimeTrackingService] Failed to save cache for key: {$cacheKey}");
+            }
+            
+            // Периодическая очистка устаревших кешей (каждый 10-й запрос)
+            if (rand(1, 10) === 1) {
+                $deleted = $this->cacheStore->clearExpired();
+                if ($deleted > 0) {
+                    error_log("[TimeTrackingService] Cleared {$deleted} expired cache entries");
+                }
+            }
+        }
+        
+        return $response;
     }
     
     /**

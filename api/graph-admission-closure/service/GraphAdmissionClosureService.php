@@ -102,6 +102,7 @@ class GraphAdmissionClosureService
 
         // Агрегация через Aggregator
         $allStages = $this->config->getStagesWithMeta();
+        $durationCategories = $this->config->getDurationCategories();
         $aggregated = $this->aggregator->aggregateWeeks(
             $weeks,
             $tickets,
@@ -109,7 +110,11 @@ class GraphAdmissionClosureService
             $this->config->getClosingStages(),
             $this->config->getKeeperId(),
             $debug,
-            $allStages
+            $allStages,
+            $includeNewTicketsByStages,
+            $includeTickets,
+            $includeCarryoverTicketsByDuration,
+            $durationCategories
         );
 
         $series = $aggregated['series'];
@@ -117,6 +122,10 @@ class GraphAdmissionClosureService
         $stagesByWeek = $aggregated['stagesByWeek'];
         $currentWeekData = $aggregated['currentWeekData'];
         $stageAgg = $aggregated['stageAgg'];
+        
+        // TASK-070: Получаем newTicketsByStages и carryoverTicketsByDuration для текущей недели из aggregated
+        $newTicketsByStages = $aggregated['currentWeekNewTicketsByStages'] ?? null;
+        $carryoverTicketsByDuration = $aggregated['currentWeekCarryoverTicketsByDuration'] ?? null;
 
         // Формирование ответа (контракт legacy)
         $newCount = $currentWeekData['newTickets'] ?? 0;
@@ -149,7 +158,7 @@ class GraphAdmissionClosureService
             'responsible' => [],
             'responsibleCreatedThisWeek' => [],
             'responsibleCreatedOtherWeek' => [],
-            'newTicketsByStages' => $includeNewTicketsByStages ? [] : null
+            'newTicketsByStages' => $newTicketsByStages
         ];
 
         if ($includeCarryoverTickets) {
@@ -167,7 +176,7 @@ class GraphAdmissionClosureService
         }
 
         if ($includeCarryoverTicketsByDuration) {
-            $responseData['carryoverTicketsByDuration'] = [];
+            $responseData['carryoverTicketsByDuration'] = $carryoverTicketsByDuration ?? [];
         }
 
         $response = [

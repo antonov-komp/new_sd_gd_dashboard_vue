@@ -137,6 +137,10 @@ const props = defineProps({
   weekEndUtc: {
     type: String,
     default: null
+  },
+  preloadedData: {
+    type: Array,
+    default: null
   }
 });
 
@@ -161,7 +165,14 @@ const hasData = computed(() => {
  * Загрузка стадий из API
  */
 async function loadStages() {
+  console.log('[TASK-070] StagesModal: loadStages called', {
+    weekNumber: props.weekNumber,
+    weekStartUtc: props.weekStartUtc,
+    weekEndUtc: props.weekEndUtc
+  });
+  
   if (!props.weekStartUtc || !props.weekEndUtc) {
+    console.warn('[TASK-070] StagesModal: Missing week boundaries, cannot load stages');
     stages.value = [];
     return;
   }
@@ -170,6 +181,7 @@ async function loadStages() {
   error.value = null;
 
   try {
+    console.log('[TASK-070] StagesModal: Fetching stages from API...');
     const response = await fetchAdmissionClosureStats({
       product: '1C',
       weekStartUtc: props.weekStartUtc,
@@ -177,10 +189,21 @@ async function loadStages() {
       includeNewTicketsByStages: true
     });
 
+    console.log('[TASK-070] StagesModal: API response received', {
+      hasNewTicketsByStages: !!response.data.newTicketsByStages,
+      stagesCount: response.data.newTicketsByStages?.length || 0
+    });
+
     stages.value = response.data.newTicketsByStages || [];
+    
+    if (stages.value.length === 0) {
+      console.warn('[TASK-070] StagesModal: API returned empty stages array for week', props.weekNumber);
+    } else {
+      console.log('[TASK-070] StagesModal: Stages loaded successfully', stages.value.length, 'stages');
+    }
   } catch (err) {
     error.value = err.message || 'Ошибка загрузки стадий';
-    console.error('[StagesModal] Error loading stages:', err);
+    console.error('[TASK-070] StagesModal: Error loading stages:', err);
     stages.value = [];
   } finally {
     isLoadingStages.value = false;
@@ -219,6 +242,30 @@ async function loadStageTickets(stageId) {
   error.value = null;
   
   try {
+    // TASK-070: Проверяем, есть ли тикеты в предзагруженных данных
+    const preloadedStage = stages.value.find(s => s.stageId === stageId);
+    if (preloadedStage && Array.isArray(preloadedStage.tickets) && preloadedStage.tickets.length > 0) {
+      console.log('[TASK-070] StagesModal: Using preloaded tickets for stage', stageId, 'count:', preloadedStage.tickets.length);
+      
+      // Используем предзагруженные тикеты
+      const stageTickets = preloadedStage.tickets;
+      
+      // Обогащаем данные через prepareTicketsForDisplay
+      try {
+        const { prepareTicketsForDisplay } = await import('@/utils/graph-state/ticketListUtils.js');
+        tickets.value = await prepareTicketsForDisplay(stageTickets, null, null);
+      } catch (prepareError) {
+        console.error('[TASK-070] StagesModal: Error preparing tickets:', prepareError);
+        tickets.value = stageTickets; // Fallback
+      }
+      
+      isLoadingTickets.value = false;
+      return; // Выходим, не делая запрос к API
+    }
+    
+    // Если тикеты не предзагружены, загружаем через API (существующая логика)
+    console.log('[TASK-070] StagesModal: Tickets not preloaded, loading from API for stage', stageId);
+    
     if (!props.weekStartUtc || !props.weekEndUtc) {
       throw new Error('Не указаны границы недели');
     }
@@ -296,10 +343,50 @@ function retryLoadTickets() {
   }
 }
 
-// Загрузка стадий при открытии попапа
-watch(() => props.isVisible, (newValue) => {
-  if (newValue) {
-    loadStages();
+// TASK-070: Обновлённый watch с поддержкой предзагруженных данных
+watch(() => props.isVisible, async (isVisible) => {
+  if (isVisible) {
+    // Сброс состояния
+    popupLevel.value = 1;
+    selectedStage.value = null;
+    tickets.value = [];
+    error.value = null;
+    
+    console.log('[TASK-070] StagesModal opened:', {
+      weekNumber: props.weekNumber,
+      weekStartUtc: props.weekStartUtc,
+      weekEndUtc: props.weekEndUtc,
+      preloadedData: props.preloadedData ? (Array.isArray(props.preloadedData) ? `Array(${props.preloadedData.length})` : typeof props.preloadedData) : 'null'
+    });
+    
+    // TASK-070: Проверяем, есть ли предзагруженные данные
+    if (props.preloadedData && Array.isArray(props.preloadedData) && props.preloadedData.length > 0) {
+      console.log('[TASK-070] StagesModal: Using preloaded data, stages count:', props.preloadedData.length);
+      
+      // Валидация структуры данных
+      const hasValidStages = props.preloadedData.every(stage => 
+        stage.stageId && 
+        stage.stageName && 
+        typeof stage.count === 'number'
+      );
+      
+      if (hasValidStages) {
+        // Используем предзагруженные данные
+        stages.value = props.preloadedData;
+        isLoadingStages.value = false;
+        console.log('[TASK-070] StagesModal: Preloaded data set, stages:', stages.value.length);
+      } else {
+        console.warn('[TASK-070] StagesModal: Invalid preloaded data structure, falling back to API');
+        await loadStages();
+      }
+    } else {
+      console.log('[TASK-070] StagesModal: No preloaded data, loading from API', {
+        weekStartUtc: props.weekStartUtc,
+        weekEndUtc: props.weekEndUtc
+      });
+      // Загружаем данные через API (fallback)
+      await loadStages();
+    }
   } else {
     // Сброс состояния при закрытии попапа
     popupLevel.value = 1;
@@ -308,12 +395,32 @@ watch(() => props.isVisible, (newValue) => {
     error.value = null;
     stages.value = [];
   }
-});
+}, { immediate: false });
 
-// Загрузка стадий при изменении недели
-watch([() => props.weekStartUtc, () => props.weekEndUtc], () => {
-  if (props.isVisible) {
-    loadStages();
+// TASK-070: Watch для обновления данных при изменении недели
+watch([() => props.weekNumber, () => props.preloadedData], async ([newWeekNumber, newPreloadedData]) => {
+  // Если попап открыт и изменилась неделя, обновляем данные
+  if (props.isVisible && newWeekNumber) {
+    if (newPreloadedData && Array.isArray(newPreloadedData) && newPreloadedData.length > 0) {
+      // Валидация структуры данных
+      const hasValidStages = newPreloadedData.every(stage => 
+        stage.stageId && 
+        stage.stageName && 
+        typeof stage.count === 'number'
+      );
+      
+      if (hasValidStages) {
+        console.log('[TASK-070] StagesModal: Week changed, updating with preloaded data for week', newWeekNumber);
+        stages.value = newPreloadedData;
+        isLoadingStages.value = false;
+      } else {
+        console.log('[TASK-070] StagesModal: Week changed, invalid preloaded data, loading from API for week', newWeekNumber);
+        await loadStages();
+      }
+    } else {
+      console.log('[TASK-070] StagesModal: Week changed, loading from API for week', newWeekNumber);
+      await loadStages();
+    }
   }
 });
 </script>

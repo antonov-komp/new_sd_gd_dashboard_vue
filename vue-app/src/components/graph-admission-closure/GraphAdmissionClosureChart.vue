@@ -1836,13 +1836,13 @@ const handleSummaryClick = (type) => {
       weekEndUtc: weekMeta.weekEndUtc
     });
   } else if (type === 'closed' && closedTickets > 0) {
-    if ((props.data?.responsible || []).length > 0) {
-      emit('open-responsible', {
-        weekNumber: weekMeta.weekNumber,
-        weekStartUtc: weekMeta.weekStartUtc,
-        weekEndUtc: weekMeta.weekEndUtc
-      });
-    }
+    // TASK-070: Убрана проверка на props.data?.responsible, так как данные могут загружаться отдельно
+    // при открытии модального окна через API в ResponsibleModal.vue
+    emit('open-responsible', {
+      weekNumber: weekMeta.weekNumber,
+      weekStartUtc: weekMeta.weekStartUtc,
+      weekEndUtc: weekMeta.weekEndUtc
+    });
   } else if (type === 'carryover' && carryoverTickets > 0) {
     emit('open-carryover', {
       weekNumber: weekMeta.weekNumber,

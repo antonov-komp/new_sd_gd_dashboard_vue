@@ -31,7 +31,11 @@ class Aggregator
         array $closingStages,
         int $keeperId,
         bool $debug = false,
-        array $allStages = []
+        array $allStages = [],
+        bool $includeNewTicketsByStages = false,
+        bool $includeTickets = false,
+        bool $includeCarryoverTicketsByDuration = false,
+        array $durationCategories = []
     ): array {
         $newCount = 0;
         $closedCount = 0;
@@ -43,6 +47,34 @@ class Aggregator
         $carryoverTicketsCreatedOlder = 0;
         $carryoverTicketsCreatedOtherWeek = 0;
         $stageAgg = [];
+
+        // TASK-070: Инициализация агрегации новых тикетов по стадиям
+        $newTicketsByStagesAgg = [];
+        if ($includeNewTicketsByStages) {
+            foreach ($allStages as $stageId => $stageInfo) {
+                $newTicketsByStagesAgg[$stageId] = [
+                    'stageId' => $stageId,
+                    'stageName' => $stageInfo['name'],
+                    'color' => $stageInfo['color'],
+                    'count' => 0,
+                    'tickets' => []
+                ];
+            }
+        }
+
+        // TASK-070: Инициализация агрегации переходящих тикетов по срокам
+        $carryoverTicketsByDurationAgg = [];
+        if ($includeCarryoverTicketsByDuration) {
+            foreach ($durationCategories as $category => $info) {
+                $carryoverTicketsByDurationAgg[$category] = [
+                    'durationCategory' => $category,
+                    'durationLabel' => $info['label'],
+                    'color' => $info['color'],
+                    'count' => 0,
+                    'tickets' => []
+                ];
+            }
+        }
 
         $weekStartStr = $weekStart->format('Y-m-d H:i:s');
         $weekEndStr = $weekEnd->format('Y-m-d H:i:s');
@@ -58,6 +90,7 @@ class Aggregator
             $stageId = $ticket['stageId'] ?? null;
             $stageId = $stageId ? strtoupper($stageId) : null;
             $ticketId = $ticket['id'] ?? 'unknown';
+            $assignedRaw = $ticket['assignedById'] ?? null;
 
             $isInClosingStages = $stageId && in_array($stageId, $closingStages, true);
             $isMovedInRange = $this->dateHelper->isInRange($movedTime, $weekStart, $weekEnd);
@@ -66,6 +99,38 @@ class Aggregator
             // Новые за неделю
             if ($isCreatedInRange) {
                 $newCount++;
+                
+                // TASK-070: Агрегация новых тикетов по стадиям
+                if ($includeNewTicketsByStages) {
+                    if ($stageId && isset($newTicketsByStagesAgg[$stageId])) {
+                        $newTicketsByStagesAgg[$stageId]['count']++;
+                        
+                        // Если нужно включить тикеты, сохранить данные тикета
+                        if ($includeTickets) {
+                            // Нормализация assignedById
+                            $responsibleId = $assignedRaw;
+                            if (is_array($responsibleId)) {
+                                $responsibleId = $responsibleId['id'] ?? $responsibleId['ID'] ?? $responsibleId['value'] ?? null;
+                            }
+                            $responsibleId = $responsibleId ? (int)$responsibleId : null;
+                            
+                            $newTicketsByStagesAgg[$stageId]['tickets'][] = [
+                                'id' => (int)$ticket['id'],
+                                'title' => $ticket['title'] ?? 'Без названия',
+                                'createdTime' => $ticket['createdTime'] ?? null,
+                                'stageId' => $stageId,
+                                'assignedById' => $responsibleId
+                            ];
+                        }
+                    } else if ($debug) {
+                        // Логирование для отладки: почему тикет не попал в агрегацию
+                        if (!$stageId) {
+                            error_log("[TASK-070] New ticket #{$ticketId} has no stageId");
+                        } else if (!isset($newTicketsByStagesAgg[$stageId])) {
+                            error_log("[TASK-070] New ticket #{$ticketId} has stageId '{$stageId}' which is not in allStages. Available stages: " . implode(', ', array_keys($newTicketsByStagesAgg)));
+                        }
+                    }
+                }
             }
 
             // Закрытые за неделю
@@ -117,6 +182,33 @@ class Aggregator
                         $carryoverTicketsCreatedOlder++;
                     }
                 }
+                
+                // TASK-070: Группировка переходящих тикетов по срокам
+                if ($includeCarryoverTicketsByDuration && $createdTime) {
+                    $category = $this->dateHelper->calculateDurationCategory($createdTime, $weekStart);
+                    
+                    if (isset($carryoverTicketsByDurationAgg[$category])) {
+                        $carryoverTicketsByDurationAgg[$category]['count']++;
+                        
+                        // Если нужно включить тикеты, сохранить данные тикета
+                        if ($includeTickets) {
+                            // Нормализация assignedById
+                            $responsibleId = $assignedRaw;
+                            if (is_array($responsibleId)) {
+                                $responsibleId = $responsibleId['id'] ?? $responsibleId['ID'] ?? $responsibleId['value'] ?? null;
+                            }
+                            $responsibleId = $responsibleId ? (int)$responsibleId : null;
+                            
+                            $carryoverTicketsByDurationAgg[$category]['tickets'][] = [
+                                'id' => (int)$ticket['id'],
+                                'title' => $ticket['title'] ?? 'Без названия',
+                                'createdTime' => $createdTime,
+                                'stageId' => $stageId,
+                                'assignedById' => $responsibleId
+                            ];
+                        }
+                    }
+                }
             }
         }
 
@@ -138,6 +230,58 @@ class Aggregator
             ];
         }, array_keys($stageAgg));
 
+        // TASK-070: Формируем массив новых тикетов по стадиям
+        $newTicketsByStages = null;
+        if ($includeNewTicketsByStages) {
+            $newTicketsByStages = array_map(function ($item) use ($includeTickets) {
+                $result = [
+                    'stageId' => $item['stageId'],
+                    'stageName' => $item['stageName'],
+                    'color' => $item['color'],
+                    'count' => $item['count']
+                ];
+                
+                // Включить тикеты только если запрошено
+                if ($includeTickets && isset($item['tickets'])) {
+                    $result['tickets'] = $item['tickets'];
+                }
+                
+                return $result;
+            }, array_values($newTicketsByStagesAgg));
+            
+            // Фильтруем только стадии с count > 0
+            $newTicketsByStages = array_filter($newTicketsByStages, function($stage) {
+                return $stage['count'] > 0;
+            });
+            $newTicketsByStages = array_values($newTicketsByStages);
+        }
+
+        // TASK-070: Формируем массив переходящих тикетов по срокам
+        $carryoverTicketsByDuration = null;
+        if ($includeCarryoverTicketsByDuration) {
+            $carryoverTicketsByDuration = array_map(function ($item) use ($includeTickets) {
+                $result = [
+                    'durationCategory' => $item['durationCategory'],
+                    'durationLabel' => $item['durationLabel'],
+                    'color' => $item['color'],
+                    'count' => $item['count']
+                ];
+                
+                // Включить тикеты только если запрошено
+                if ($includeTickets && isset($item['tickets']) && count($item['tickets']) > 0) {
+                    $result['tickets'] = $item['tickets'];
+                }
+                
+                return $result;
+            }, array_values($carryoverTicketsByDurationAgg));
+            
+            // Фильтруем только категории с count > 0
+            $carryoverTicketsByDuration = array_filter($carryoverTicketsByDuration, function($category) {
+                return $category['count'] > 0;
+            });
+            $carryoverTicketsByDuration = array_values($carryoverTicketsByDuration);
+        }
+
         return [
             'newTickets' => $newCount,
             'closedTickets' => $closedCount,
@@ -149,7 +293,9 @@ class Aggregator
             'carryoverTicketsCreatedOlder' => $carryoverTicketsCreatedOlder,
             'carryoverTicketsCreatedOtherWeek' => $carryoverTicketsCreatedOtherWeek,
             'stages' => $stages,
-            'stageCounts' => $stageAgg
+            'stageCounts' => $stageAgg,
+            'newTicketsByStages' => $newTicketsByStages,
+            'carryoverTicketsByDuration' => $carryoverTicketsByDuration
         ];
     }
 
@@ -164,7 +310,11 @@ class Aggregator
         array $closingStages,
         int $keeperId,
         bool $debug = false,
-        array $allStages = []
+        array $allStages = [],
+        bool $includeNewTicketsByStages = false,
+        bool $includeTickets = false,
+        bool $includeCarryoverTicketsByDuration = false,
+        array $durationCategories = []
     ): array {
         $series = [
             'new' => [],
@@ -192,7 +342,11 @@ class Aggregator
                 $closingStages,
                 $keeperId,
                 $debug,
-                $allStages
+                $allStages,
+                $includeNewTicketsByStages,
+                $includeTickets,
+                $includeCarryoverTicketsByDuration,
+                $durationCategories
             );
 
             $series['new'][] = $weekMetrics['newTickets'];
@@ -228,13 +382,38 @@ class Aggregator
         }
 
         $stageAgg = $lastWeekStageCounts ?: [];
+        
+        // TASK-070: Получаем newTicketsByStages и carryoverTicketsByDuration для текущей недели (последняя неделя)
+        $currentWeekNewTicketsByStages = null;
+        $currentWeekCarryoverTicketsByDuration = null;
+        if (($includeNewTicketsByStages || $includeCarryoverTicketsByDuration) && count($weeks) > 0) {
+            $lastWeek = $weeks[count($weeks) - 1];
+            $lastWeekMetrics = $this->calculateWeekMetrics(
+                $lastWeek['weekStart'],
+                $lastWeek['weekEnd'],
+                $tickets,
+                $targetStages,
+                $closingStages,
+                $keeperId,
+                $debug,
+                $allStages,
+                $includeNewTicketsByStages,
+                $includeTickets,
+                $includeCarryoverTicketsByDuration,
+                $durationCategories
+            );
+            $currentWeekNewTicketsByStages = $lastWeekMetrics['newTicketsByStages'] ?? null;
+            $currentWeekCarryoverTicketsByDuration = $lastWeekMetrics['carryoverTicketsByDuration'] ?? null;
+        }
 
         return [
             'series' => $series,
             'weeksData' => $weeksData,
             'stagesByWeek' => $stagesByWeek,
             'currentWeekData' => $currentWeekData,
-            'stageAgg' => $stageAgg
+            'stageAgg' => $stageAgg,
+            'currentWeekNewTicketsByStages' => $currentWeekNewTicketsByStages,
+            'currentWeekCarryoverTicketsByDuration' => $currentWeekCarryoverTicketsByDuration
         ];
     }
 

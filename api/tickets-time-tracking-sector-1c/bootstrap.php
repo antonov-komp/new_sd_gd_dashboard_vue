@@ -28,6 +28,7 @@ require_once __DIR__ . '/domain/TimeAggregator.php';
 require_once __DIR__ . '/domain/EmployeeSummaryBuilder.php';
 require_once __DIR__ . '/service/TimeTrackingService.php';
 require_once __DIR__ . '/controller/TimeTrackingController.php';
+require_once __DIR__ . '/cache/CacheStore.php'; // TASK-071-05: Подключение CacheStore
 
 use TimeTracking\Bitrix\Bitrix24Client;
 use TimeTracking\Repository\EmployeeRepository;
@@ -43,6 +44,9 @@ use TimeTracking\Controller\TimeTrackingController;
 try {
     // Инициализация зависимостей
     $bitrixClient = new Bitrix24Client();
+    
+    // TASK-071-05: Инициализация кеша
+    $cacheStore = new CacheStore();
     
     $employeeRepository = new EmployeeRepository($bitrixClient);
     $taskRepository = new TaskRepository($bitrixClient);
@@ -60,7 +64,8 @@ try {
         $ticketRepository,
         $taskTicketMatcher,
         $timeAggregator,
-        $employeeSummaryBuilder
+        $employeeSummaryBuilder,
+        $cacheStore // TASK-071-05: Передача кеша в сервис
     );
     
     $controller = new TimeTrackingController($service);

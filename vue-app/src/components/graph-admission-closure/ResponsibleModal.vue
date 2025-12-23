@@ -830,14 +830,28 @@ async function loadEmployeeTickets(employeeId) {
     // TASK-047: Используем данные из выбранной категории, если они доступны
     let employeeTickets = [];
     
+    console.log('[ResponsibleModal] loadEmployeeTickets called:', {
+      employeeId,
+      selectedCategory: selectedCategory.value?.id,
+      hasSelectedCategory: !!selectedCategory.value,
+      hasResponsible: !!(selectedCategory.value?.responsible),
+      responsibleCount: selectedCategory.value?.responsible?.length || 0
+    });
+    
     if (selectedCategory.value && selectedCategory.value.responsible) {
       // Ищем сотрудника в выбранной категории
       const employee = selectedCategory.value.responsible.find(r => r.id === employeeId);
+      console.log('[ResponsibleModal] Employee found in category:', {
+        employee: employee,
+        hasTickets: !!(employee?.tickets),
+        ticketsCount: employee?.tickets?.length || 0
+      });
       employeeTickets = employee?.tickets || [];
     }
     
     // Если тикеты не найдены в категории, загружаем через API (fallback)
     if (employeeTickets.length === 0 && props.weekStartUtc && props.weekEndUtc) {
+      console.log('[ResponsibleModal] Tickets not found in category, loading from API');
       const response = await fetchAdmissionClosureStats({
         product: '1C',
         weekStartUtc: props.weekStartUtc,
@@ -845,12 +859,29 @@ async function loadEmployeeTickets(employeeId) {
         includeTickets: true
       });
       
+      console.log('[ResponsibleModal] API response:', {
+        hasResponsibleCreatedThisWeek: !!(response.data.responsibleCreatedThisWeek),
+        hasResponsibleCreatedOtherWeek: !!(response.data.responsibleCreatedOtherWeek),
+        thisWeekCount: response.data.responsibleCreatedThisWeek?.length || 0,
+        otherWeekCount: response.data.responsibleCreatedOtherWeek?.length || 0
+      });
+      
       // Ищем в соответствующей категории из ответа API
       const categoryData = selectedCategory.value?.id === 'created-this-week'
         ? response.data.responsibleCreatedThisWeek
         : response.data.responsibleCreatedOtherWeek;
       
+      console.log('[ResponsibleModal] Category data:', {
+        categoryId: selectedCategory.value?.id,
+        categoryDataCount: categoryData?.length || 0
+      });
+      
       const employee = categoryData?.find(r => r.id === employeeId);
+      console.log('[ResponsibleModal] Employee found in API response:', {
+        employee: employee,
+        hasTickets: !!(employee?.tickets),
+        ticketsCount: employee?.tickets?.length || 0
+      });
       employeeTickets = employee?.tickets || [];
     }
     
@@ -938,9 +969,27 @@ function retryLoadTickets() {
   }
 }
 
-// Сброс состояния при закрытии попапа
+// TASK-070: Обновлённый watch с логированием для отладки
 watch(() => props.isVisible, (newValue) => {
-  if (!newValue) {
+  if (newValue) {
+    console.log('[TASK-070] ResponsibleModal opened for week', props.weekNumber);
+    console.log('[TASK-070] ResponsibleModal data:', {
+      weekStartUtc: props.weekStartUtc,
+      weekEndUtc: props.weekEndUtc,
+      responsibleCreatedThisWeek: props.responsibleCreatedThisWeek?.length || 0,
+      responsibleCreatedOtherWeek: props.responsibleCreatedOtherWeek?.length || 0,
+      closedTicketsCreatedThisWeek: props.closedTicketsCreatedThisWeek,
+      closedTicketsCreatedOtherWeek: props.closedTicketsCreatedOtherWeek
+    });
+    
+    // TASK-070: Проверка для предыдущей недели
+    // Для текущей недели данные уже загружены, для предыдущей - могут быть предзагружены или загрузятся при открытии
+    const currentWeekNumber = props.weekNumber;
+    if (currentWeekNumber) {
+      console.log('[TASK-070] ResponsibleModal: Week number', currentWeekNumber);
+    }
+  } else {
+    // Сброс состояния при закрытии попапа
     popupLevel.value = 0; // TASK-047: Сбрасываем на уровень 0
     activeTab.value = 'categories'; // Сбрасываем на вкладку "По категориям"
     selectedCategory.value = null;

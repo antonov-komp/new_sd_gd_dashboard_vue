@@ -116,11 +116,11 @@
 
     <ResponsibleModal
       :is-visible="showResponsibleModal"
-      :responsible="chartData.responsible || []"
-      :closed-tickets-created-this-week="chartData.closedTicketsCreatedThisWeek ?? 0"
-      :closed-tickets-created-other-week="chartData.closedTicketsCreatedOtherWeek ?? 0"
-      :responsible-created-this-week="chartData.responsibleCreatedThisWeek || []"
-      :responsible-created-other-week="chartData.responsibleCreatedOtherWeek || []"
+      :responsible="getResponsibleData(selectedWeekMeta) || chartData.responsible || []"
+      :closed-tickets-created-this-week="getClosedTicketsCreatedThisWeek(selectedWeekMeta) ?? chartData.closedTicketsCreatedThisWeek ?? 0"
+      :closed-tickets-created-other-week="getClosedTicketsCreatedOtherWeek(selectedWeekMeta) ?? chartData.closedTicketsCreatedOtherWeek ?? 0"
+      :responsible-created-this-week="getResponsibleCreatedThisWeek(selectedWeekMeta) || chartData.responsibleCreatedThisWeek || []"
+      :responsible-created-other-week="getResponsibleCreatedOtherWeek(selectedWeekMeta) || chartData.responsibleCreatedOtherWeek || []"
       :week-number="selectedWeekMeta?.weekNumber || chartMeta?.weekNumber || null"
       :week-start-utc="selectedWeekMeta?.weekStartUtc || chartMeta?.weekStartUtc || null"
       :week-end-utc="selectedWeekMeta?.weekEndUtc || chartMeta?.weekEndUtc || null"
@@ -132,6 +132,7 @@
       :week-number="selectedWeekMeta?.weekNumber || chartMeta?.weekNumber || null"
       :week-start-utc="selectedWeekMeta?.weekStartUtc || chartMeta?.weekStartUtc || null"
       :week-end-utc="selectedWeekMeta?.weekEndUtc || chartMeta?.weekEndUtc || null"
+      :preloaded-data="getPreloadedStagesData(selectedWeekMeta)"
       @close="showStagesModal = false; selectedWeekMeta.value = null"
     />
 
@@ -140,6 +141,7 @@
       :week-number="selectedWeekMeta?.weekNumber || chartMeta?.weekNumber || null"
       :week-start-utc="selectedWeekMeta?.weekStartUtc || chartMeta?.weekStartUtc || null"
       :week-end-utc="selectedWeekMeta?.weekEndUtc || chartMeta?.weekEndUtc || null"
+      :preloaded-data="getPreloadedCarryoverData(selectedWeekMeta)"
       @close="showCarryoverModal = false; selectedWeekMeta.value = null"
     />
 
@@ -185,6 +187,31 @@ const showPeriodModeInfo = ref(true); // Показываем попап сра�
 
 // TASK-062: Метаданные выбранной недели для попапов (текущая или предыдущая)
 const selectedWeekMeta = ref(null);
+
+// TASK-070: Предзагруженные данные для попапов
+const preloadedPopupData = ref({
+  currentWeek: {
+    newTicketsByStages: null,
+    carryoverTicketsByDuration: null,
+    responsibleCreatedThisWeek: null,  // Для ResponsibleModal (уже частично загружено)
+    responsibleCreatedOtherWeek: null  // Для ResponsibleModal (уже частично загружено)
+  },
+  previousWeek: {
+    newTicketsByStages: null,
+    carryoverTicketsByDuration: null,
+    responsibleCreatedThisWeek: null,
+    responsibleCreatedOtherWeek: null
+  }
+});
+
+// TASK-070: Метаданные предыдущей недели для предзагрузки данных
+const previousWeekMetaForPreload = computed(() => {
+  const weeks = chartMeta.value?.weeks || [];
+  if (weeks.length >= 2) {
+    return weeks[weeks.length - 2]; // Предпоследняя неделя
+  }
+  return null;
+});
 
 // Навигация "Назад"
 const isNavigatingBack = ref(false);
@@ -283,7 +310,9 @@ async function loadData() {
         periodMode: 'weeks',
         weekStartUtc,
         weekEndUtc,
-        includeTickets: true // TASK-047: Включаем тикеты для вкладки "По сотрудникам"
+        includeTickets: true,                    // TASK-047: Включаем тикеты для вкладки "По сотрудникам"
+        includeNewTicketsByStages: true,          // TASK-070: Предзагрузка для StagesModal
+        includeCarryoverTicketsByDuration: true   // TASK-070: Предзагрузка для CarryoverDurationModal
       })
     ]);
     
@@ -292,6 +321,23 @@ async function loadData() {
     chartMeta.value = meta;
     chartData.value = data;
     console.log('[DEBUG] Data set, meta:', meta, 'data keys:', Object.keys(data));
+    
+    // TASK-070: Сохраняем предзагруженные данные для текущей недели
+    if (data.newTicketsByStages) {
+      preloadedPopupData.value.currentWeek.newTicketsByStages = data.newTicketsByStages;
+      console.log('[TASK-070] Preloaded newTicketsByStages for current week:', data.newTicketsByStages.length, 'stages');
+    }
+    if (data.carryoverTicketsByDuration) {
+      preloadedPopupData.value.currentWeek.carryoverTicketsByDuration = data.carryoverTicketsByDuration;
+      console.log('[TASK-070] Preloaded carryoverTicketsByDuration for current week:', data.carryoverTicketsByDuration.length, 'categories');
+    }
+    // TASK-070: Сохраняем данные для ResponsibleModal (уже загружены в первом запросе)
+    if (data.responsibleCreatedThisWeek) {
+      preloadedPopupData.value.currentWeek.responsibleCreatedThisWeek = data.responsibleCreatedThisWeek;
+    }
+    if (data.responsibleCreatedOtherWeek) {
+      preloadedPopupData.value.currentWeek.responsibleCreatedOtherWeek = data.responsibleCreatedOtherWeek;
+    }
     
     // TASK-063: Временный вывод carryover breakdown для проверки в консоли
     if (carryoverDebug) {
@@ -307,6 +353,50 @@ async function loadData() {
       console.log('[CARRYOVER-DEBUG] Full object:', carryoverDebug);
       console.log('[CARRYOVER-DEBUG] ========================================');
     }
+    
+    // TASK-070: Параллельная загрузка данных для предыдущей недели (не блокирует основной UI)
+    if (previousWeekMetaForPreload.value) {
+      const prevWeekStart = previousWeekMetaForPreload.value.weekStartUtc;
+      const prevWeekEnd = previousWeekMetaForPreload.value.weekEndUtc;
+      
+      console.log('[TASK-070] Starting preload for previous week:', {
+        weekNumber: previousWeekMetaForPreload.value.weekNumber,
+        weekStartUtc: prevWeekStart,
+        weekEndUtc: prevWeekEnd
+      });
+      
+      // Загружаем данные для предыдущей недели в фоне (не блокируем основной UI)
+      fetchAdmissionClosureStats({
+        product: '1C',
+        periodMode: 'weeks',
+        weekStartUtc: prevWeekStart,
+        weekEndUtc: prevWeekEnd,
+        includeTickets: true,                    // Для ResponsibleModal
+        includeNewTicketsByStages: true,          // Для StagesModal
+        includeCarryoverTicketsByDuration: true   // Для CarryoverDurationModal
+      }).then(result => {
+        console.log('[TASK-070] Preload successful for previous week');
+        
+        // Сохраняем предзагруженные данные для предыдущей недели
+        if (result.data.newTicketsByStages) {
+          preloadedPopupData.value.previousWeek.newTicketsByStages = result.data.newTicketsByStages;
+          console.log('[TASK-070] Preloaded newTicketsByStages for previous week:', result.data.newTicketsByStages.length, 'stages');
+        }
+        if (result.data.carryoverTicketsByDuration) {
+          preloadedPopupData.value.previousWeek.carryoverTicketsByDuration = result.data.carryoverTicketsByDuration;
+          console.log('[TASK-070] Preloaded carryoverTicketsByDuration for previous week:', result.data.carryoverTicketsByDuration.length, 'categories');
+        }
+        if (result.data.responsibleCreatedThisWeek) {
+          preloadedPopupData.value.previousWeek.responsibleCreatedThisWeek = result.data.responsibleCreatedThisWeek;
+        }
+        if (result.data.responsibleCreatedOtherWeek) {
+          preloadedPopupData.value.previousWeek.responsibleCreatedOtherWeek = result.data.responsibleCreatedOtherWeek;
+        }
+      }).catch(err => {
+        console.warn('[TASK-070] Failed to preload previous week data (non-critical):', err);
+        // Не критично, данные загрузятся при открытии попапа (fallback)
+      });
+    }
   } catch (err) {
     console.error('[DEBUG] API call failed:', err);
     error.value = err instanceof Error ? err : new Error('Неизвестная ошибка загрузки');
@@ -316,6 +406,215 @@ async function loadData() {
     isLoading.value = false;
     console.log('[DEBUG] isLoading after:', isLoading.value);
   }
+}
+
+/**
+ * TASK-070: Получение предзагруженных данных для StagesModal
+ * 
+ * @param {Object|null} weekMeta - Метаданные недели (текущей или предыдущей)
+ * @returns {Array|null} Предзагруженные данные стадий или null
+ */
+function getPreloadedStagesData(weekMeta) {
+  if (!weekMeta || !chartMeta.value) {
+    console.log('[TASK-070] getPreloadedStagesData: Missing weekMeta or chartMeta');
+    return null;
+  }
+  
+  // Определяем текущую неделю: последний элемент из weeks или weekNumber из chartMeta
+  const weeks = chartMeta.value?.weeks || [];
+  const currentWeekNumber = weeks.length > 0 
+    ? weeks[weeks.length - 1].weekNumber 
+    : chartMeta.value.weekNumber;
+  
+  const previousWeekNumber = weeks.length >= 2 
+    ? weeks[weeks.length - 2].weekNumber 
+    : null;
+  
+  console.log('[TASK-070] getPreloadedStagesData:', {
+    requestedWeek: weekMeta.weekNumber,
+    currentWeekNumber,
+    previousWeekNumber,
+    weeksInMeta: weeks.length
+  });
+  
+  const isCurrentWeek = weekMeta.weekNumber === currentWeekNumber;
+  const isPreviousWeek = weekMeta.weekNumber === previousWeekNumber;
+  
+  let data = null;
+  if (isCurrentWeek) {
+    data = preloadedPopupData.value.currentWeek.newTicketsByStages;
+    console.log('[TASK-070] Requested week is current week, checking currentWeek data:', data ? `Array(${data.length})` : 'null');
+  } else if (isPreviousWeek) {
+    data = preloadedPopupData.value.previousWeek.newTicketsByStages;
+    console.log('[TASK-070] Requested week is previous week, checking previousWeek data:', data ? `Array(${data.length})` : 'null');
+  } else {
+    console.log('[TASK-070] Requested week', weekMeta.weekNumber, 'is neither current nor previous, no preloaded data available');
+    return null;
+  }
+  
+  // Валидация: проверяем, что данные есть и это массив
+  if (Array.isArray(data) && data.length > 0) {
+    console.log('[TASK-070] Using preloaded stages data for week', weekMeta.weekNumber, ':', data.length, 'stages');
+    return data;
+  }
+  
+  console.log('[TASK-070] No preloaded stages data for week', weekMeta.weekNumber, ', will use API fallback');
+  return null;
+}
+
+/**
+ * TASK-070: Получение предзагруженных данных для CarryoverDurationModal
+ * 
+ * @param {Object|null} weekMeta - Метаданные недели (текущей или предыдущей)
+ * @returns {Array|null} Предзагруженные данные категорий сроков или null
+ */
+function getPreloadedCarryoverData(weekMeta) {
+  if (!weekMeta || !chartMeta.value) {
+    return null;
+  }
+  
+  // Определяем текущую неделю: последний элемент из weeks или weekNumber из chartMeta
+  const weeks = chartMeta.value?.weeks || [];
+  const currentWeekNumber = weeks.length > 0 
+    ? weeks[weeks.length - 1].weekNumber 
+    : chartMeta.value.weekNumber;
+  
+  const isCurrentWeek = weekMeta.weekNumber === currentWeekNumber;
+  const data = isCurrentWeek 
+    ? preloadedPopupData.value.currentWeek.carryoverTicketsByDuration
+    : preloadedPopupData.value.previousWeek.carryoverTicketsByDuration;
+  
+  // Валидация: проверяем, что данные есть и это массив
+  if (Array.isArray(data) && data.length > 0) {
+    console.log('[TASK-070] Using preloaded carryover data for week', weekMeta.weekNumber, ':', data.length, 'categories');
+    return data;
+  }
+  
+  console.log('[TASK-070] No preloaded carryover data for week', weekMeta.weekNumber, ', will use API fallback');
+  return null;
+}
+
+/**
+ * TASK-070: Получение данных ответственных для ResponsibleModal
+ * 
+ * @param {Object|null} weekMeta - Метаданные недели (текущей или предыдущей)
+ * @returns {Array|null} Данные ответственных или null
+ */
+function getResponsibleData(weekMeta) {
+  // Для ResponsibleModal данные загружаются через отдельный запрос при открытии попапа
+  // Предзагруженные данные используются только для текущей недели (уже в chartData)
+  if (!weekMeta || !chartMeta.value) {
+    return null;
+  }
+  
+  // Определяем текущую неделю: последний элемент из weeks или weekNumber из chartMeta
+  const weeks = chartMeta.value?.weeks || [];
+  const currentWeekNumber = weeks.length > 0 
+    ? weeks[weeks.length - 1].weekNumber 
+    : chartMeta.value.weekNumber;
+  
+  const isCurrentWeek = weekMeta.weekNumber === currentWeekNumber;
+  if (isCurrentWeek) {
+    // Для текущей недели данные уже в chartData.responsible
+    return chartData.value.responsible || null;
+  }
+  
+  // Для предыдущей недели данные будут загружены при открытии попапа
+  return null;
+}
+
+/**
+ * TASK-070: Получение данных responsibleCreatedThisWeek для ResponsibleModal
+ */
+function getResponsibleCreatedThisWeek(weekMeta) {
+  if (!weekMeta || !chartMeta.value) {
+    return null;
+  }
+  
+  // Определяем текущую неделю: последний элемент из weeks или weekNumber из chartMeta
+  const weeks = chartMeta.value?.weeks || [];
+  const currentWeekNumber = weeks.length > 0 
+    ? weeks[weeks.length - 1].weekNumber 
+    : chartMeta.value.weekNumber;
+  
+  const isCurrentWeek = weekMeta.weekNumber === currentWeekNumber;
+  if (isCurrentWeek) {
+    return chartData.value.responsibleCreatedThisWeek || null;
+  }
+  
+  // Для предыдущей недели данные будут загружены при открытии попапа
+  return preloadedPopupData.value.previousWeek.responsibleCreatedThisWeek || null;
+}
+
+/**
+ * TASK-070: Получение данных responsibleCreatedOtherWeek для ResponsibleModal
+ */
+function getResponsibleCreatedOtherWeek(weekMeta) {
+  if (!weekMeta || !chartMeta.value) {
+    return null;
+  }
+  
+  // Определяем текущую неделю: последний элемент из weeks или weekNumber из chartMeta
+  const weeks = chartMeta.value?.weeks || [];
+  const currentWeekNumber = weeks.length > 0 
+    ? weeks[weeks.length - 1].weekNumber 
+    : chartMeta.value.weekNumber;
+  
+  const isCurrentWeek = weekMeta.weekNumber === currentWeekNumber;
+  if (isCurrentWeek) {
+    return chartData.value.responsibleCreatedOtherWeek || null;
+  }
+  
+  // Для предыдущей недели данные будут загружены при открытии попапа
+  return preloadedPopupData.value.previousWeek.responsibleCreatedOtherWeek || null;
+}
+
+/**
+ * TASK-070: Получение closedTicketsCreatedThisWeek для ResponsibleModal
+ */
+function getClosedTicketsCreatedThisWeek(weekMeta) {
+  if (!weekMeta || !chartMeta.value) {
+    return null;
+  }
+  
+  // Определяем текущую неделю: последний элемент из weeks или weekNumber из chartMeta
+  const weeks = chartMeta.value?.weeks || [];
+  const currentWeekNumber = weeks.length > 0 
+    ? weeks[weeks.length - 1].weekNumber 
+    : chartMeta.value.weekNumber;
+  
+  const isCurrentWeek = weekMeta.weekNumber === currentWeekNumber;
+  if (isCurrentWeek) {
+    return chartData.value.closedTicketsCreatedThisWeek ?? null;
+  }
+  
+  // Для предыдущей недели нужно получить из weeksData или сделать отдельный запрос
+  // Пока возвращаем null, попап сделает запрос при открытии
+  return null;
+}
+
+/**
+ * TASK-070: Получение closedTicketsCreatedOtherWeek для ResponsibleModal
+ */
+function getClosedTicketsCreatedOtherWeek(weekMeta) {
+  if (!weekMeta || !chartMeta.value) {
+    return null;
+  }
+  
+  // Определяем текущую неделю: последний элемент из weeks или weekNumber из chartMeta
+  const weeks = chartMeta.value?.weeks || [];
+  const currentWeekNumber = weeks.length > 0 
+    ? weeks[weeks.length - 1].weekNumber 
+    : chartMeta.value.weekNumber;
+  
+  const isCurrentWeek = weekMeta.weekNumber === currentWeekNumber;
+  if (isCurrentWeek) {
+    return chartData.value.closedTicketsCreatedOtherWeek ?? null;
+  }
+  
+  // Для предыдущей недели нужно получить из weeksData или сделать отдельный запрос
+  // Пока возвращаем null, попап сделает запрос при открытии
+  return null;
 }
 
 function updateStages(newStages) {

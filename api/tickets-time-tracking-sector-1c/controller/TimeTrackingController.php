@@ -30,6 +30,11 @@ class TimeTrackingController
             // Парсинг тела запроса
             $params = ResponseHelper::parseJsonBody();
             
+            // TASK-071-04: Обработка параметра forceRefresh
+            if (isset($params['forceRefresh'])) {
+                $params['forceRefresh'] = (bool)$params['forceRefresh'];
+            }
+            
             // Валидация параметров
             $this->validateRequest($params);
             
@@ -133,6 +138,11 @@ class TimeTrackingController
             if (!is_numeric($params['perPage']) || (int)$params['perPage'] < 1) {
                 throw new \InvalidArgumentException('perPage must be a positive integer');
             }
+        }
+        
+        // TASK-071-04: Валидация forceRefresh
+        if (isset($params['forceRefresh']) && !is_bool($params['forceRefresh'])) {
+            throw new \InvalidArgumentException('forceRefresh must be a boolean');
         }
     }
 }
