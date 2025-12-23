@@ -308,6 +308,7 @@ function isInRange(?string $dateStr, DateTimeImmutable $start, DateTimeImmutable
  * @param array $closingStages Закрывающие стадии
  * @param int $keeperId ID хранителя объектов
  * @param bool $debug Включить детальное логирование (TASK-054)
+ * @param array $allStages Полный список стадий (для маппинга названий) - нужен для stagesByWeek (TASK-064)
  * @return array Метрики недели
  */
 function calculateWeekMetrics(
@@ -317,7 +318,8 @@ function calculateWeekMetrics(
     array $targetStages,
     array $closingStages,
     int $keeperId,
-    bool $debug = false
+    bool $debug = false,
+    array $allStages = []
 ): array {
     $newCount = 0;
     $closedCount = 0;
@@ -328,6 +330,8 @@ function calculateWeekMetrics(
     $carryoverTicketsCreatedPreviousWeek = 0; // TASK-063: НОВОЕ
     $carryoverTicketsCreatedOlder = 0; // TASK-063: НОВОЕ
     $carryoverTicketsCreatedOtherWeek = 0; // TASK-063: DEPRECATED (для обратной совместимости)
+    // TASK-064: Разбивка закрытий по стадиям для каждой недели
+    $stageAgg = [];
     
     $weekStartStr = $weekStart->format('Y-m-d H:i:s');
     $weekEndStr = $weekEnd->format('Y-m-d H:i:s');
@@ -431,6 +435,14 @@ function calculateWeekMetrics(
             } else {
                 $closedTicketsCreatedOtherWeek++;
             }
+
+            // TASK-064: Агрегация закрытий по стадиям для недели
+            if ($stageId) {
+                if (!isset($stageAgg[$stageId])) {
+                    $stageAgg[$stageId] = 0;
+                }
+                $stageAgg[$stageId]++;
+            }
         } else if ($isInClosingStages && !$isMovedInRange) {
             // TASK-054: Логирование закрытых тикетов, которые не попали в диапазон
             // Детальное логирование отключено для производительности
@@ -495,6 +507,16 @@ function calculateWeekMetrics(
         }
     }
     
+    // TASK-064: Формируем массив стадий для конкретной недели
+    $stages = array_map(function ($stageId) use ($stageAgg, $allStages) {
+        $stageName = isset($allStages[$stageId]) ? $allStages[$stageId]['name'] : $stageId;
+        return [
+            'stageId' => $stageId,
+            'stageName' => $stageName,
+            'count' => $stageAgg[$stageId]
+        ];
+    }, array_keys($stageAgg));
+
     return [
         'newTickets' => $newCount,
         'closedTickets' => $closedCount,
@@ -504,7 +526,10 @@ function calculateWeekMetrics(
         'carryoverTicketsCreatedThisWeek' => $carryoverTicketsCreatedThisWeek,
         'carryoverTicketsCreatedPreviousWeek' => $carryoverTicketsCreatedPreviousWeek, // TASK-063: НОВОЕ
         'carryoverTicketsCreatedOlder' => $carryoverTicketsCreatedOlder, // TASK-063: НОВОЕ
-        'carryoverTicketsCreatedOtherWeek' => $carryoverTicketsCreatedOtherWeek // TASK-063: DEPRECATED (для обратной совместимости)
+        'carryoverTicketsCreatedOtherWeek' => $carryoverTicketsCreatedOtherWeek, // TASK-063: DEPRECATED (для обратной совместимости)
+        // TASK-064: Отдаём разбивку закрытий по стадиям для этой недели
+        'stages' => $stages,
+        'stageCounts' => $stageAgg
     ];
 }
 
@@ -2385,6 +2410,8 @@ try {
     ];
     
     $weeksData = [];
+    $stagesByWeek = []; // TASK-064: Стадии по каждой неделе (порядок совпадает с series/meta.weeks)
+    $lastWeekStageCounts = []; // TASK-064: Используем для обратной совместимости (data.stages)
     $currentWeekData = null;
     
     // Для каждой недели подсчитываем метрики
@@ -2396,7 +2423,8 @@ try {
             $targetStages,
             $closingStages,
             $keeperId,
-            $debug
+            $debug,
+            $allStages // TASK-064: прокидываем список стадий для формирования stagesByWeek
         );
         
         // TASK-063: Детальное логирование для диагностики
@@ -2437,10 +2465,17 @@ try {
             'carryoverTicketsCreatedThisWeek' => $weekMetrics['carryoverTicketsCreatedThisWeek'],
             'carryoverTicketsCreatedPreviousWeek' => $weekMetrics['carryoverTicketsCreatedPreviousWeek'], // TASK-063: НОВОЕ
             'carryoverTicketsCreatedOlder' => $weekMetrics['carryoverTicketsCreatedOlder'], // TASK-063: НОВОЕ
-            'carryoverTicketsCreatedOtherWeek' => $weekMetrics['carryoverTicketsCreatedOtherWeek'] // TASK-063: DEPRECATED (для обратной совместимости)
+            'carryoverTicketsCreatedOtherWeek' => $weekMetrics['carryoverTicketsCreatedOtherWeek'], // TASK-063: DEPRECATED (для обратной совместимости)
+            // TASK-064: Разбивка закрытий по стадиям для конкретной недели
+            'stages' => $weekMetrics['stages'] ?? []
         ];
         $weeksData[] = $weekData;
+        $stagesByWeek[] = $weekMetrics['stages'] ?? [];
+        $lastWeekStageCounts = $weekMetrics['stageCounts'] ?? [];
     }
+    
+    // TASK-064: Обновляем агрегат стадий для совместимости (data.stages) — берём текущую неделю (последний элемент)
+    $stageAgg = $lastWeekStageCounts ?: [];
     
     // TASK-048: Всегда используем последний элемент из weeksData как текущую неделю
     // (массив weeksData уже отсортирован от старых к новым, последний элемент - текущая неделя)
@@ -2505,6 +2540,8 @@ try {
         'series' => $series, // TASK-048: массивы с 4 элементами (по одному для каждой недели)
         'weeksData' => $weeksData, // TASK-048: данные для каждой недели
         'currentWeek' => $currentWeekData, // TASK-048: данные текущей недели (для summary-карточек)
+        // TASK-064: Новый контракт — разбивка закрытий по стадиям для каждой недели (индексы синхронизированы с meta.weeks / series)
+        'stagesByWeek' => $stagesByWeek,
         'stages' => array_map(function ($stageId) use ($stageAgg, $allStages) {
             $stageName = isset($allStages[$stageId]) ? $allStages[$stageId]['name'] : $stageId;
             return [

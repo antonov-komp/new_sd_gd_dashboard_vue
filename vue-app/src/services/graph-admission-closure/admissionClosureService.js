@@ -52,6 +52,7 @@ function normalizeResponse(raw) {
           carryoverCreatedOlder: [0]
         },
         weeksData: [], // TASK-048
+        stagesByWeek: [], // TASK-064: стадии по неделям (индексы = meta.weeks)
         stages: [],
         responsible: [],
         responsibleCreatedThisWeek: [], // TASK-047
@@ -131,6 +132,8 @@ function normalizeResponse(raw) {
       },
       // TASK-048: Добавляем weeksData
       weeksData: payload.data?.weeksData ?? payload.weeksData ?? [],
+      // TASK-064: Стадии по неделям для недельного режима
+      stagesByWeek: payload.data?.stagesByWeek ?? payload.stagesByWeek ?? [],
       stages: payload.data?.stages ?? payload.stages ?? [],
       responsible: payload.data?.responsible ?? payload.responsible ?? [],
       responsibleCreatedThisWeek: payload.data?.responsibleCreatedThisWeek ?? payload.responsibleCreatedThisWeek ?? [], // TASK-047

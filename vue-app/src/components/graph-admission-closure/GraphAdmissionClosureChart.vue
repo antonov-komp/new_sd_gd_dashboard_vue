@@ -121,13 +121,13 @@
             <div class="summary-card__label">Закрытия по стадиям</div>
             <div class="summary-card__tags">
               <span
-                v-for="stage in data.stages || []"
+                v-for="stage in currentWeekStages"
                 :key="stage.stageId"
                 class="stage-tag"
               >
                 {{ stage.stageName || stage.stageId }} — {{ stage.count }}
               </span>
-              <span v-if="!data.stages || data.stages.length === 0" class="stage-tag stage-tag--empty">
+              <span v-if="!currentWeekStages || currentWeekStages.length === 0" class="stage-tag stage-tag--empty">
                 Нет данных
               </span>
             </div>
@@ -273,14 +273,14 @@
             <div class="summary-card__label">Закрытия по стадиям</div>
             <div class="summary-card__tags">
               <span
-                v-for="stage in data.stages || []"
+                v-for="stage in previousWeekStages"
                 :key="stage.stageId"
                 class="stage-tag"
               >
                 {{ stage.stageName || stage.stageId }} — {{ stage.count }}
               </span>
-              <span v-if="!data.stages || data.stages.length === 0" class="stage-tag stage-tag--empty">
-                Нет данных
+              <span v-if="!previousWeekStages || previousWeekStages.length === 0" class="stage-tag stage-tag--empty">
+                {{ previousWeekStagesEmptyLabel }}
               </span>
             </div>
           </div>
@@ -354,6 +354,7 @@ const props = defineProps({
         carryoverCreatedOlder: [0], // TASK-063: НОВОЕ
         carryoverCreatedOtherWeek: [0] // TASK-063: DEPRECATED
       },
+      stagesByWeek: [], // TASK-064: стадии по неделям (синхронизировано с meta.weeks/series)
       stages: [],
       responsible: []
     })
@@ -1353,6 +1354,49 @@ const previousWeekData = computed(() => {
   
   // 4. Если данных меньше 2 недель, возвращаем null (блок не отображается)
   return null;
+});
+
+// TASK-064: Стадии по неделям (индекс синхронизирован с meta.weeks/series)
+const stagesByWeek = computed(() => {
+  const stages = props.data?.stagesByWeek;
+  if (Array.isArray(stages)) {
+    return stages;
+  }
+  return null;
+});
+
+// TASK-064: Стадии текущей недели — берём из stagesByWeek[last] или fallback на data.stages (старый контракт)
+const currentWeekStages = computed(() => {
+  const byWeek = stagesByWeek.value;
+  if (byWeek && byWeek.length > 0) {
+    const lastIndex = byWeek.length - 1;
+    const stages = byWeek[lastIndex];
+    if (Array.isArray(stages)) {
+      return stages;
+    }
+  }
+  return props.data?.stages ?? [];
+});
+
+// TASK-064: Стадии предыдущей недели — берём из stagesByWeek[prev] или показываем пустой список (для "Нет данных")
+const previousWeekStages = computed(() => {
+  const byWeek = stagesByWeek.value;
+  if (byWeek && byWeek.length >= 2) {
+    const prevIndex = byWeek.length - 2;
+    const stages = byWeek[prevIndex];
+    if (Array.isArray(stages)) {
+      return stages;
+    }
+  }
+  return [];
+});
+
+// TASK-064: Текст для отсутствия данных по стадиям предыдущей недели
+const previousWeekStagesEmptyLabel = computed(() => {
+  if (previousWeekData.value?.weekNumber) {
+    return `Нет данных для недели ${previousWeekData.value.weekNumber}`;
+  }
+  return 'Нет данных';
 });
 
 // TASK-062: Вычисляет процент изменения
