@@ -319,7 +319,17 @@ async function loadData() {
     console.log('[DEBUG] API call successful, result:', result);
     const { meta, data, carryoverDebug } = result;
     chartMeta.value = meta;
-    chartData.value = data;
+    
+    // Нормализация данных: преобразуем объекты в массивы, если необходимо
+    chartData.value = {
+      ...data,
+      responsibleCreatedThisWeek: Array.isArray(data.responsibleCreatedThisWeek) 
+        ? data.responsibleCreatedThisWeek 
+        : (data.responsibleCreatedThisWeek ? Object.values(data.responsibleCreatedThisWeek) : []),
+      responsibleCreatedOtherWeek: Array.isArray(data.responsibleCreatedOtherWeek) 
+        ? data.responsibleCreatedOtherWeek 
+        : (data.responsibleCreatedOtherWeek ? Object.values(data.responsibleCreatedOtherWeek) : [])
+    };
     console.log('[DEBUG] Data set, meta:', meta, 'data keys:', Object.keys(data));
     
     // TASK-070: Логирование данных responsible для диагностики
@@ -359,9 +369,13 @@ async function loadData() {
     }
     // TASK-070: Сохраняем данные для ResponsibleModal (уже загружены в первом запросе)
     if (data.responsibleCreatedThisWeek) {
-      preloadedPopupData.value.currentWeek.responsibleCreatedThisWeek = data.responsibleCreatedThisWeek;
-      console.log('[TASK-070] Preloaded responsibleCreatedThisWeek for current week:', data.responsibleCreatedThisWeek.length, 'employees');
-      console.log('[TASK-070] responsibleCreatedThisWeek details:', data.responsibleCreatedThisWeek.map(r => ({
+      // Нормализация: преобразуем объект в массив, если необходимо
+      const normalizedThisWeek = Array.isArray(data.responsibleCreatedThisWeek) 
+        ? data.responsibleCreatedThisWeek 
+        : Object.values(data.responsibleCreatedThisWeek);
+      preloadedPopupData.value.currentWeek.responsibleCreatedThisWeek = normalizedThisWeek;
+      console.log('[TASK-070] Preloaded responsibleCreatedThisWeek for current week:', normalizedThisWeek.length, 'employees');
+      console.log('[TASK-070] responsibleCreatedThisWeek details:', normalizedThisWeek.map(r => ({
         id: r.id,
         name: r.name,
         count: r.count,
@@ -370,9 +384,13 @@ async function loadData() {
       })));
     }
     if (data.responsibleCreatedOtherWeek) {
-      preloadedPopupData.value.currentWeek.responsibleCreatedOtherWeek = data.responsibleCreatedOtherWeek;
-      console.log('[TASK-070] Preloaded responsibleCreatedOtherWeek for current week:', data.responsibleCreatedOtherWeek.length, 'employees');
-      console.log('[TASK-070] responsibleCreatedOtherWeek details:', data.responsibleCreatedOtherWeek.map(r => ({
+      // Нормализация: преобразуем объект в массив, если необходимо
+      const normalizedOtherWeek = Array.isArray(data.responsibleCreatedOtherWeek) 
+        ? data.responsibleCreatedOtherWeek 
+        : Object.values(data.responsibleCreatedOtherWeek);
+      preloadedPopupData.value.currentWeek.responsibleCreatedOtherWeek = normalizedOtherWeek;
+      console.log('[TASK-070] Preloaded responsibleCreatedOtherWeek for current week:', normalizedOtherWeek.length, 'employees');
+      console.log('[TASK-070] responsibleCreatedOtherWeek details:', normalizedOtherWeek.map(r => ({
         id: r.id,
         name: r.name,
         count: r.count,
@@ -429,12 +447,20 @@ async function loadData() {
           console.log('[TASK-070] Preloaded carryoverTicketsByDuration for previous week:', result.data.carryoverTicketsByDuration.length, 'categories');
         }
         if (result.data.responsibleCreatedThisWeek) {
-          preloadedPopupData.value.previousWeek.responsibleCreatedThisWeek = result.data.responsibleCreatedThisWeek;
-          console.log('[TASK-070] Preloaded responsibleCreatedThisWeek for previous week:', result.data.responsibleCreatedThisWeek.length, 'employees');
+          // Нормализация: преобразуем объект в массив, если необходимо
+          const normalizedThisWeek = Array.isArray(result.data.responsibleCreatedThisWeek) 
+            ? result.data.responsibleCreatedThisWeek 
+            : Object.values(result.data.responsibleCreatedThisWeek);
+          preloadedPopupData.value.previousWeek.responsibleCreatedThisWeek = normalizedThisWeek;
+          console.log('[TASK-070] Preloaded responsibleCreatedThisWeek for previous week:', normalizedThisWeek.length, 'employees');
         }
         if (result.data.responsibleCreatedOtherWeek) {
-          preloadedPopupData.value.previousWeek.responsibleCreatedOtherWeek = result.data.responsibleCreatedOtherWeek;
-          console.log('[TASK-070] Preloaded responsibleCreatedOtherWeek for previous week:', result.data.responsibleCreatedOtherWeek.length, 'employees');
+          // Нормализация: преобразуем объект в массив, если необходимо
+          const normalizedOtherWeek = Array.isArray(result.data.responsibleCreatedOtherWeek) 
+            ? result.data.responsibleCreatedOtherWeek 
+            : Object.values(result.data.responsibleCreatedOtherWeek);
+          preloadedPopupData.value.previousWeek.responsibleCreatedOtherWeek = normalizedOtherWeek;
+          console.log('[TASK-070] Preloaded responsibleCreatedOtherWeek for previous week:', normalizedOtherWeek.length, 'employees');
         }
       }).catch(err => {
         console.warn('[TASK-070] Failed to preload previous week data (non-critical):', err);
@@ -583,7 +609,10 @@ function getResponsibleCreatedThisWeek(weekMeta) {
   
   const isCurrentWeek = weekMeta.weekNumber === currentWeekNumber;
   if (isCurrentWeek) {
-    return chartData.value.responsibleCreatedThisWeek || null;
+    const data = chartData.value.responsibleCreatedThisWeek;
+    if (!data) return null;
+    // Нормализация: преобразуем объект в массив, если необходимо
+    return Array.isArray(data) ? data : Object.values(data);
   }
   
   // Для предыдущей недели данные будут загружены при открытии попапа
@@ -606,7 +635,10 @@ function getResponsibleCreatedOtherWeek(weekMeta) {
   
   const isCurrentWeek = weekMeta.weekNumber === currentWeekNumber;
   if (isCurrentWeek) {
-    return chartData.value.responsibleCreatedOtherWeek || null;
+    const data = chartData.value.responsibleCreatedOtherWeek;
+    if (!data) return null;
+    // Нормализация: преобразуем объект в массив, если необходимо
+    return Array.isArray(data) ? data : Object.values(data);
   }
   
   // Для предыдущей недели данные будут загружены при открытии попапа
