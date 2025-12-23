@@ -320,7 +320,11 @@
 import { computed, ref } from 'vue';
 import { Line, Bar, Doughnut } from 'vue-chartjs';
 import { Chart as ChartJS } from 'chart.js';
+import ChartDataLabels from 'chartjs-plugin-datalabels';
 import { chartColors } from '@/utils/chart-config.js';
+
+// TASK-066: Регистрация плагина для отображения datalabels на линейных графиках недельного режима
+ChartJS.register(ChartDataLabels);
 
 const props = defineProps({
   meta: {
@@ -379,6 +383,34 @@ const chartTypes = [
 ];
 
 const chartType = ref('line');
+
+const baseDataLabelConfig = {
+  color: '#111827',
+  font: {
+    size: 12,
+    weight: 'bold'
+  },
+  backgroundColor: 'rgba(255, 255, 255, 0.9)',
+  borderColor: (ctx) => ctx?.dataset?.borderColor || '#111827',
+  borderWidth: 1,
+  borderRadius: 4,
+  padding: 4,
+  offset: 8,
+  formatter: (value) => {
+    if (value === null || value === undefined || isNaN(value)) {
+      return '';
+    }
+    return formatNumber(value);
+  },
+  display: (context) => {
+    const chartKind = context?.chart?.config?.type;
+    if (chartKind !== 'line') {
+      return false;
+    }
+    const value = context?.dataset?.data?.[context.dataIndex];
+    return value !== null && value !== undefined && !isNaN(value) && isFinite(value);
+  }
+};
 
 const weekLabel = computed(() => props.meta?.weekNumber ?? '—');
 
@@ -463,11 +495,22 @@ const newClosedChartData = computed(() => {
         borderWidth: 3, // TASK-056-01: Увеличена толщина для основных линий
         tension: 0.4, // TASK-056-01: Увеличено скругление
         fill: true, // TASK-056-01: Включена заливка для градиента
-        pointRadius: 0, // TASK-056-01: Скрыты точки по умолчанию
-        pointHoverRadius: 5, // TASK-056-01: Показывать точки при hover
+        pointRadius: 4, // TASK-066: Видимые точки для недельного режима
+        pointBorderWidth: 1,
+        pointBorderColor: chartColors.primary,
+        pointHoverRadius: 6, // TASK-056-01: Показывать точки при hover
         pointHoverBorderWidth: 2, // TASK-056-01: Обводка точек
         pointHoverBorderColor: '#ffffff', // TASK-056-01: Белая обводка
-        pointBackgroundColor: chartColors.primary
+        pointHoverBackgroundColor: chartColors.primary,
+        pointBackgroundColor: chartColors.primary,
+        datalabels: {
+          ...baseDataLabelConfig,
+          anchor: 'end',
+          align: 'top',
+          offset: 10,
+          color: chartColors.primary,
+          borderColor: chartColors.primary
+        }
       },
       {
         // TASK-056-01: Основная линия - Закрытые (все)
@@ -482,11 +525,22 @@ const newClosedChartData = computed(() => {
         borderWidth: 3, // TASK-056-01: Увеличена толщина для основных линий
         tension: 0.4, // TASK-056-01: Увеличено скругление
         fill: true, // TASK-056-01: Включена заливка для градиента
-        pointRadius: 0, // TASK-056-01: Скрыты точки по умолчанию
-        pointHoverRadius: 5, // TASK-056-01: Показывать точки при hover
+        pointRadius: 4, // TASK-066: Видимые точки для недельного режима
+        pointBorderWidth: 1,
+        pointBorderColor: chartColors.success,
+        pointHoverRadius: 6, // TASK-056-01: Показывать точки при hover
         pointHoverBorderWidth: 2, // TASK-056-01: Обводка точек
         pointHoverBorderColor: '#ffffff', // TASK-056-01: Белая обводка
-        pointBackgroundColor: chartColors.success
+        pointHoverBackgroundColor: chartColors.success,
+        pointBackgroundColor: chartColors.success,
+        datalabels: {
+          ...baseDataLabelConfig,
+          anchor: 'start',
+          align: 'bottom',
+          offset: 10,
+          color: chartColors.success,
+          borderColor: chartColors.success
+        }
       },
       {
         // TASK-056-01: Вспомогательная линия - Закрытые (созданы этой неделей)
@@ -498,11 +552,22 @@ const newClosedChartData = computed(() => {
         tension: 0.4, // TASK-056-01: Увеличено скругление
         borderDash: [8, 4], // TASK-056-01: Обновлён стиль пунктира
         fill: false, // TASK-056-01: Без градиента для вспомогательных линий
-        pointRadius: 0, // TASK-056-01: Скрыты точки по умолчанию
-        pointHoverRadius: 4, // TASK-056-01: Показывать точки при hover (меньший радиус)
+        pointRadius: 3, // TASK-066: Видимые точки для вспомогательных линий
+        pointBorderWidth: 1,
+        pointBorderColor: chartColors.successLight,
+        pointHoverRadius: 5, // TASK-056-01: Показывать точки при hover (меньший радиус)
         pointHoverBorderWidth: 2, // TASK-056-01: Обводка точек
         pointHoverBorderColor: '#ffffff', // TASK-056-01: Белая обводка
-        pointBackgroundColor: chartColors.successLight
+        pointHoverBackgroundColor: chartColors.successLight,
+        pointBackgroundColor: chartColors.successLight,
+        datalabels: {
+          ...baseDataLabelConfig,
+          anchor: 'end',
+          align: 'bottom',
+          offset: 8,
+          color: chartColors.successLight,
+          borderColor: chartColors.successLight
+        }
       },
       {
         // TASK-056-01: Вспомогательная линия - Закрытые (созданы другой неделей)
@@ -514,11 +579,22 @@ const newClosedChartData = computed(() => {
         tension: 0.4, // TASK-056-01: Увеличено скругление
         borderDash: [8, 4], // TASK-056-01: Обновлён стиль пунктира
         fill: false, // TASK-056-01: Без градиента для вспомогательных линий
-        pointRadius: 0, // TASK-056-01: Скрыты точки по умолчанию
-        pointHoverRadius: 4, // TASK-056-01: Показывать точки при hover (меньший радиус)
+        pointRadius: 3, // TASK-066: Видимые точки для вспомогательных линий
+        pointBorderWidth: 1,
+        pointBorderColor: chartColors.warning,
+        pointHoverRadius: 5, // TASK-056-01: Показывать точки при hover (меньший радиус)
         pointHoverBorderWidth: 2, // TASK-056-01: Обводка точек
         pointHoverBorderColor: '#ffffff', // TASK-056-01: Белая обводка
-        pointBackgroundColor: chartColors.warning
+        pointHoverBackgroundColor: chartColors.warning,
+        pointBackgroundColor: chartColors.warning,
+        datalabels: {
+          ...baseDataLabelConfig,
+          anchor: 'end',
+          align: 'bottom',
+          offset: 8,
+          color: chartColors.warning,
+          borderColor: chartColors.warning
+        }
       }
     ]
   };
@@ -565,11 +641,22 @@ const carryoverChartData = computed(() => {
         borderWidth: 3, // TASK-056-01: Увеличена толщина для основных линий
         tension: 0.4, // TASK-056-01: Увеличено скругление
         fill: true, // TASK-056-01: Включена заливка для градиента
-        pointRadius: 0, // TASK-056-01: Скрыты точки по умолчанию
-        pointHoverRadius: 5, // TASK-056-01: Показывать точки при hover
+        pointRadius: 4, // TASK-066: Видимые точки для недельного режима
+        pointBorderWidth: 1,
+        pointBorderColor: chartColors.carryover,
+        pointHoverRadius: 6, // TASK-056-01: Показывать точки при hover
         pointHoverBorderWidth: 2, // TASK-056-01: Обводка точек
         pointHoverBorderColor: '#ffffff', // TASK-056-01: Белая обводка
-        pointBackgroundColor: chartColors.carryover
+        pointHoverBackgroundColor: chartColors.carryover,
+        pointBackgroundColor: chartColors.carryover,
+        datalabels: {
+          ...baseDataLabelConfig,
+          anchor: 'end',
+          align: 'top',
+          offset: 8,
+          color: chartColors.carryover,
+          borderColor: chartColors.carryover
+        }
       },
       {
         // TASK-056-01: Вспомогательная линия - Переходящие (созданы этой неделей)
@@ -581,11 +668,22 @@ const carryoverChartData = computed(() => {
         tension: 0.4, // TASK-056-01: Увеличено скругление
         borderDash: [8, 4], // TASK-056-01: Обновлён стиль пунктира
         fill: false, // TASK-056-01: Без градиента для вспомогательных линий
-        pointRadius: 0, // TASK-056-01: Скрыты точки по умолчанию
-        pointHoverRadius: 4, // TASK-056-01: Показывать точки при hover (меньший радиус)
+        pointRadius: 3, // TASK-066: Видимые точки для вспомогательных линий
+        pointBorderWidth: 1,
+        pointBorderColor: chartColors.carryoverLight,
+        pointHoverRadius: 5, // TASK-056-01: Показывать точки при hover (меньший радиус)
         pointHoverBorderWidth: 2, // TASK-056-01: Обводка точек
         pointHoverBorderColor: '#ffffff', // TASK-056-01: Белая обводка
-        pointBackgroundColor: chartColors.carryoverLight
+        pointHoverBackgroundColor: chartColors.carryoverLight,
+        pointBackgroundColor: chartColors.carryoverLight,
+        datalabels: {
+          ...baseDataLabelConfig,
+          anchor: 'end',
+          align: 'top',
+          offset: 6,
+          color: chartColors.carryoverLight,
+          borderColor: chartColors.carryoverLight
+        }
       },
       {
         // TASK-063: Вспомогательная линия - Переходящие (созданы предыдущей неделей)
@@ -597,11 +695,22 @@ const carryoverChartData = computed(() => {
         tension: 0.4, // TASK-056-01: Увеличено скругление
         borderDash: [8, 4], // TASK-056-01: Обновлён стиль пунктира
         fill: false, // TASK-056-01: Без градиента для вспомогательных линий
-        pointRadius: 0, // TASK-056-01: Скрыты точки по умолчанию
-        pointHoverRadius: 4, // TASK-056-01: Показывать точки при hover (меньший радиус)
+        pointRadius: 3, // TASK-066: Видимые точки для вспомогательных линий
+        pointBorderWidth: 1,
+        pointBorderColor: chartColors.warning,
+        pointHoverRadius: 5, // TASK-056-01: Показывать точки при hover (меньший радиус)
         pointHoverBorderWidth: 2, // TASK-056-01: Обводка точек
         pointHoverBorderColor: '#ffffff', // TASK-056-01: Белая обводка
-        pointBackgroundColor: chartColors.warning
+        pointHoverBackgroundColor: chartColors.warning,
+        pointBackgroundColor: chartColors.warning,
+        datalabels: {
+          ...baseDataLabelConfig,
+          anchor: 'end',
+          align: 'top',
+          offset: 6,
+          color: chartColors.warning,
+          borderColor: chartColors.warning
+        }
       },
       {
         // TASK-063: Вспомогательная линия - Переходящие (созданы остальными неделями)
@@ -613,11 +722,22 @@ const carryoverChartData = computed(() => {
         tension: 0.4, // TASK-056-01: Увеличено скругление
         borderDash: [8, 4], // TASK-056-01: Обновлён стиль пунктира
         fill: false, // TASK-056-01: Без градиента для вспомогательных линий
-        pointRadius: 0, // TASK-056-01: Скрыты точки по умолчанию
-        pointHoverRadius: 4, // TASK-056-01: Показывать точки при hover (меньший радиус)
+        pointRadius: 3, // TASK-066: Видимые точки для вспомогательных линий
+        pointBorderWidth: 1,
+        pointBorderColor: chartColors.carryoverDark,
+        pointHoverRadius: 5, // TASK-056-01: Показывать точки при hover (меньший радиус)
         pointHoverBorderWidth: 2, // TASK-056-01: Обводка точек
         pointHoverBorderColor: '#ffffff', // TASK-056-01: Белая обводка
-        pointBackgroundColor: chartColors.carryoverDark
+        pointHoverBackgroundColor: chartColors.carryoverDark,
+        pointBackgroundColor: chartColors.carryoverDark,
+        datalabels: {
+          ...baseDataLabelConfig,
+          anchor: 'end',
+          align: 'top',
+          offset: 6,
+          color: chartColors.carryoverDark,
+          borderColor: chartColors.carryoverDark
+        }
       }
     ]
   };
@@ -679,7 +799,23 @@ const lineBarData = computed(() => {
         backgroundColor: chartColors.primary,
         borderColor: chartColors.primary,
         tension: 0.3,
-        fill: false
+        fill: false,
+        pointRadius: 4, // TASK-066: Видимые точки для линейного режима
+        pointBorderWidth: 1,
+        pointBorderColor: chartColors.primary,
+        pointHoverRadius: 6,
+        pointHoverBorderWidth: 2,
+        pointHoverBorderColor: '#ffffff',
+        pointHoverBackgroundColor: chartColors.primary,
+        pointBackgroundColor: chartColors.primary,
+        datalabels: {
+          ...baseDataLabelConfig,
+          anchor: 'end',
+          align: 'top',
+          offset: 10,
+          color: chartColors.primary,
+          borderColor: chartColors.primary
+        }
       },
       {
         label: 'Закрытые (все)',
@@ -687,7 +823,23 @@ const lineBarData = computed(() => {
         backgroundColor: chartColors.success,
         borderColor: chartColors.success,
         tension: 0.3,
-        fill: false
+        fill: false,
+        pointRadius: 4, // TASK-066: Видимые точки для линейного режима
+        pointBorderWidth: 1,
+        pointBorderColor: chartColors.success,
+        pointHoverRadius: 6,
+        pointHoverBorderWidth: 2,
+        pointHoverBorderColor: '#ffffff',
+        pointHoverBackgroundColor: chartColors.success,
+        pointBackgroundColor: chartColors.success,
+        datalabels: {
+          ...baseDataLabelConfig,
+          anchor: 'start',
+          align: 'bottom',
+          offset: 10,
+          color: chartColors.success,
+          borderColor: chartColors.success
+        }
       },
       {
         label: 'Закрытые (созданы этой неделей)',
@@ -696,7 +848,23 @@ const lineBarData = computed(() => {
         borderColor: chartColors.successLight,
         tension: 0.3,
         fill: false,
-        borderDash: [5, 5] // Пунктирная линия
+        borderDash: [5, 5], // Пунктирная линия
+        pointRadius: 3, // TASK-066: Видимые точки для вспомогательных линий
+        pointBorderWidth: 1,
+        pointBorderColor: chartColors.successLight,
+        pointHoverRadius: 5,
+        pointHoverBorderWidth: 2,
+        pointHoverBorderColor: '#ffffff',
+        pointHoverBackgroundColor: chartColors.successLight,
+        pointBackgroundColor: chartColors.successLight,
+        datalabels: {
+          ...baseDataLabelConfig,
+          anchor: 'end',
+          align: 'bottom',
+          offset: 8,
+          color: chartColors.successLight,
+          borderColor: chartColors.successLight
+        }
       },
       {
         label: 'Закрытые (созданы другой неделей)',
@@ -705,7 +873,23 @@ const lineBarData = computed(() => {
         borderColor: chartColors.warning,
         tension: 0.3,
         fill: false,
-        borderDash: [5, 5] // Пунктирная линия
+        borderDash: [5, 5], // Пунктирная линия
+        pointRadius: 3, // TASK-066: Видимые точки для вспомогательных линий
+        pointBorderWidth: 1,
+        pointBorderColor: chartColors.warning,
+        pointHoverRadius: 5,
+        pointHoverBorderWidth: 2,
+        pointHoverBorderColor: '#ffffff',
+        pointHoverBackgroundColor: chartColors.warning,
+        pointBackgroundColor: chartColors.warning,
+        datalabels: {
+          ...baseDataLabelConfig,
+          anchor: 'end',
+          align: 'bottom',
+          offset: 8,
+          color: chartColors.warning,
+          borderColor: chartColors.warning
+        }
       },
       {
         label: 'Переходящие (все)',
@@ -713,7 +897,23 @@ const lineBarData = computed(() => {
         backgroundColor: chartColors.carryover,
         borderColor: chartColors.carryover,
         tension: 0.3,
-        fill: false
+        fill: false,
+        pointRadius: 4, // TASK-066: Видимые точки для линейного режима
+        pointBorderWidth: 1,
+        pointBorderColor: chartColors.carryover,
+        pointHoverRadius: 6,
+        pointHoverBorderWidth: 2,
+        pointHoverBorderColor: '#ffffff',
+        pointHoverBackgroundColor: chartColors.carryover,
+        pointBackgroundColor: chartColors.carryover,
+        datalabels: {
+          ...baseDataLabelConfig,
+          anchor: 'end',
+          align: 'top',
+          offset: 8,
+          color: chartColors.carryover,
+          borderColor: chartColors.carryover
+        }
       },
       {
         label: 'Переходящие (созданы этой неделей)',
@@ -722,7 +922,23 @@ const lineBarData = computed(() => {
         borderColor: chartColors.carryoverLight,
         tension: 0.3,
         fill: false,
-        borderDash: [5, 5] // Пунктирная линия
+        borderDash: [5, 5], // Пунктирная линия
+        pointRadius: 3, // TASK-066: Видимые точки для вспомогательных линий
+        pointBorderWidth: 1,
+        pointBorderColor: chartColors.carryoverLight,
+        pointHoverRadius: 5,
+        pointHoverBorderWidth: 2,
+        pointHoverBorderColor: '#ffffff',
+        pointHoverBackgroundColor: chartColors.carryoverLight,
+        pointBackgroundColor: chartColors.carryoverLight,
+        datalabels: {
+          ...baseDataLabelConfig,
+          anchor: 'end',
+          align: 'top',
+          offset: 6,
+          color: chartColors.carryoverLight,
+          borderColor: chartColors.carryoverLight
+        }
       },
       {
         // TASK-063: Вспомогательная линия - Переходящие (созданы предыдущей неделей)
@@ -732,7 +948,23 @@ const lineBarData = computed(() => {
         borderColor: chartColors.warning,
         tension: 0.3,
         fill: false,
-        borderDash: [5, 5] // Пунктирная линия
+        borderDash: [5, 5], // Пунктирная линия
+        pointRadius: 3, // TASK-066: Видимые точки для вспомогательных линий
+        pointBorderWidth: 1,
+        pointBorderColor: chartColors.warning,
+        pointHoverRadius: 5,
+        pointHoverBorderWidth: 2,
+        pointHoverBorderColor: '#ffffff',
+        pointHoverBackgroundColor: chartColors.warning,
+        pointBackgroundColor: chartColors.warning,
+        datalabels: {
+          ...baseDataLabelConfig,
+          anchor: 'end',
+          align: 'top',
+          offset: 6,
+          color: chartColors.warning,
+          borderColor: chartColors.warning
+        }
       },
       {
         // TASK-063: Вспомогательная линия - Переходящие (созданы остальными неделями)
@@ -742,7 +974,23 @@ const lineBarData = computed(() => {
         borderColor: chartColors.carryoverDark,
         tension: 0.3,
         fill: false,
-        borderDash: [5, 5] // Пунктирная линия
+        borderDash: [5, 5], // Пунктирная линия
+        pointRadius: 3, // TASK-066: Видимые точки для вспомогательных линий
+        pointBorderWidth: 1,
+        pointBorderColor: chartColors.carryoverDark,
+        pointHoverRadius: 5,
+        pointHoverBorderWidth: 2,
+        pointHoverBorderColor: '#ffffff',
+        pointHoverBackgroundColor: chartColors.carryoverDark,
+        pointBackgroundColor: chartColors.carryoverDark,
+        datalabels: {
+          ...baseDataLabelConfig,
+          anchor: 'end',
+          align: 'top',
+          offset: 6,
+          color: chartColors.carryoverDark,
+          borderColor: chartColors.carryoverDark
+        }
       }
     ]
   };
@@ -854,6 +1102,11 @@ const chartOptions = computed(() => ({
     mode: 'index' // TASK-056-06: Показывать все серии для текущего индекса
   },
   plugins: {
+    datalabels: {
+      ...baseDataLabelConfig,
+      anchor: 'end',
+      align: 'top'
+    },
     tooltip: {
       // TASK-056-02: Улучшенные стили tooltip
       enabled: true,
