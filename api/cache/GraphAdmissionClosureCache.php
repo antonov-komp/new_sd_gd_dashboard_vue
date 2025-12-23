@@ -3,10 +3,11 @@
  * Файловый кеш для API endpoint graph-1c-admission-closure.php
  * 
  * TASK-059-05: Реализация файлового кеша для режима "3 месяца"
+ * TASK-068-01: Расширение для поддержки режима "4 недели"
  * 
  * Расположение: api/cache/GraphAdmissionClosureCache.php
  * 
- * Управляет кешированием результатов запросов в режиме "3 месяца"
+ * Управляет кешированием результатов запросов в режимах "3 месяца" и "4 недели"
  */
 class GraphAdmissionClosureCache
 {
@@ -22,6 +23,12 @@ class GraphAdmissionClosureCache
     private const CACHE_MONTHS_DIR = self::CACHE_BASE_DIR . '/months';
     
     /**
+     * Поддиректория для режима "weeks"
+     * TASK-068-01: Добавлена поддержка режима "weeks"
+     */
+    private const CACHE_WEEKS_DIR = self::CACHE_BASE_DIR . '/weeks';
+    
+    /**
      * TTL по умолчанию (5 минут)
      */
     private const DEFAULT_TTL = 300;
@@ -29,12 +36,16 @@ class GraphAdmissionClosureCache
     /**
      * Получить данные из кеша
      * 
+     * TASK-068-01: Обновлено для поддержки режима "weeks"
+     * 
      * @param string $key Ключ кеша
      * @return array|null Данные или null, если кеш не найден/истёк
      */
     public static function get(string $key): ?array
     {
-        $cachePath = self::getCachePath($key);
+        // Определяем режим из префикса ключа
+        $periodMode = strpos($key, 'weeks_') === 0 ? 'weeks' : 'months';
+        $cachePath = self::getCachePath($key, $periodMode);
         
         // Проверка существования файла
         if (!file_exists($cachePath)) {
@@ -74,6 +85,8 @@ class GraphAdmissionClosureCache
     /**
      * Сохранить данные в кеш
      * 
+     * TASK-068-01: Обновлено для поддержки режима "weeks"
+     * 
      * @param string $key Ключ кеша
      * @param array $data Данные для кеширования
      * @param int $ttl TTL в секундах (по умолчанию 5 минут)
@@ -81,12 +94,15 @@ class GraphAdmissionClosureCache
      */
     public static function set(string $key, array $data, int $ttl = self::DEFAULT_TTL): bool
     {
+        // Определяем режим из префикса ключа
+        $periodMode = strpos($key, 'weeks_') === 0 ? 'weeks' : 'months';
+        
         // Создание директории, если не существует
-        if (!self::ensureCacheDirectory()) {
+        if (!self::ensureCacheDirectory($periodMode)) {
             return false;
         }
         
-        $cachePath = self::getCachePath($key);
+        $cachePath = self::getCachePath($key, $periodMode);
         $now = time();
         
         // Формирование структуры данных
@@ -126,12 +142,16 @@ class GraphAdmissionClosureCache
     /**
      * Удалить запись из кеша
      * 
+     * TASK-068-01: Обновлено для поддержки режима "weeks"
+     * 
      * @param string $key Ключ кеша
      * @return bool true если успешно
      */
     public static function delete(string $key): bool
     {
-        $cachePath = self::getCachePath($key);
+        // Определяем режим из префикса ключа
+        $periodMode = strpos($key, 'weeks_') === 0 ? 'weeks' : 'months';
+        $cachePath = self::getCachePath($key, $periodMode);
         
         if (file_exists($cachePath)) {
             return @unlink($cachePath);
@@ -143,12 +163,37 @@ class GraphAdmissionClosureCache
     /**
      * Очистить весь кеш
      * 
+     * TASK-068-01: Обновлено для очистки обоих режимов (weeks и months)
+     * 
      * @return bool true если успешно
      */
     public static function clear(): bool
     {
-        $cacheDir = self::CACHE_MONTHS_DIR;
+        $success = true;
         
+        // Очистка кешей режима "weeks"
+        if (!self::clearDirectory(self::CACHE_WEEKS_DIR)) {
+            $success = false;
+        }
+        
+        // Очистка кешей режима "months"
+        if (!self::clearDirectory(self::CACHE_MONTHS_DIR)) {
+            $success = false;
+        }
+        
+        return $success;
+    }
+    
+    /**
+     * Очистить все файлы в директории
+     * 
+     * TASK-068-01: Вспомогательный метод для избежания дублирования кода
+     * 
+     * @param string $cacheDir Путь к директории кеша
+     * @return bool true если успешно
+     */
+    private static function clearDirectory(string $cacheDir): bool
+    {
         if (!is_dir($cacheDir)) {
             return true; // Директория не существует
         }
@@ -169,19 +214,41 @@ class GraphAdmissionClosureCache
     /**
      * Очистить устаревшие записи
      * 
-     * @return int Количество удалённых файлов
+     * TASK-068-01: Обновлено для очистки обоих режимов (weeks и months)
+     * 
+     * @return int Количество удалённых файлов (из обеих директорий)
      */
     public static function clearExpired(): int
     {
-        $cacheDir = self::CACHE_MONTHS_DIR;
+        $deleted = 0;
+        $now = time();
         
+        // Очистка кешей режима "weeks"
+        $deleted += self::clearExpiredInDirectory(self::CACHE_WEEKS_DIR, $now);
+        
+        // Очистка кешей режима "months"
+        $deleted += self::clearExpiredInDirectory(self::CACHE_MONTHS_DIR, $now);
+        
+        return $deleted;
+    }
+    
+    /**
+     * Очистить устаревшие записи в конкретной директории
+     * 
+     * TASK-068-01: Вспомогательный метод для избежания дублирования кода
+     * 
+     * @param string $cacheDir Путь к директории кеша
+     * @param int $now Текущее время (Unix timestamp)
+     * @return int Количество удалённых файлов
+     */
+    private static function clearExpiredInDirectory(string $cacheDir, int $now): int
+    {
         if (!is_dir($cacheDir)) {
             return 0;
         }
         
         $files = glob($cacheDir . '/*.json');
         $deleted = 0;
-        $now = time();
         
         foreach ($files as $file) {
             $content = @file_get_contents($file);
@@ -208,19 +275,29 @@ class GraphAdmissionClosureCache
     /**
      * Получить путь к файлу кеша
      * 
+     * TASK-068-01: Обновлено для поддержки обоих режимов (weeks и months)
+     * 
      * @param string $key Ключ кеша
+     * @param string $periodMode Режим периода ('weeks' или 'months')
      * @return string Полный путь к файлу
      */
-    private static function getCachePath(string $key): string
+    private static function getCachePath(string $key, string $periodMode = 'months'): string
     {
         // Безопасное имя файла (только буквы, цифры, дефисы, подчёркивания)
         $safeKey = preg_replace('/[^a-zA-Z0-9_-]/', '_', $key);
         
-        return self::CACHE_MONTHS_DIR . '/' . $safeKey . '.json';
+        // Выбор директории в зависимости от режима
+        $cacheDir = $periodMode === 'weeks' 
+            ? self::CACHE_WEEKS_DIR 
+            : self::CACHE_MONTHS_DIR;
+        
+        return $cacheDir . '/' . $safeKey . '.json';
     }
     
     /**
      * Генерация ключа кеша на основе параметров запроса
+     * 
+     * TASK-068-02: Обновлено для включения weekStartUtc/weekEndUtc в ключ для режима "weeks"
      * 
      * @param array $params Параметры запроса
      * @return string Ключ кеша
@@ -233,30 +310,43 @@ class GraphAdmissionClosureCache
             'periodMode' => $params['periodMode'] ?? 'months',
             'includeTickets' => $params['includeTickets'] ?? false,
             'includeNewTicketsByStages' => $params['includeNewTicketsByStages'] ?? false,
-            'includeCarryoverTickets' => $params['includeCarryoverTickets'] ?? true,
             'includeCarryoverTicketsByDuration' => $params['includeCarryoverTicketsByDuration'] ?? false
         ];
         
-        // Для режима "months" период определяется автоматически (последние 3 месяца)
-        // Поэтому не включаем weekStartUtc/weekEndUtc в ключ
+        // Для режима "weeks" включаем границы недель в ключ
+        if ($normalized['periodMode'] === 'weeks') {
+            $normalized['weekStartUtc'] = $params['weekStartUtc'] ?? null;
+            $normalized['weekEndUtc'] = $params['weekEndUtc'] ?? null;
+            $normalized['includeCarryoverTickets'] = $params['includeCarryoverTickets'] ?? false;
+        } else {
+            // Для режима "months" период определяется автоматически (последние 3 месяца)
+            // Поэтому не включаем weekStartUtc/weekEndUtc в ключ
+            $normalized['includeCarryoverTickets'] = $params['includeCarryoverTickets'] ?? true;
+        }
         
         // Генерация MD5 хеша от нормализованных параметров
+        // Важно: json_encode с JSON_UNESCAPED_UNICODE для консистентности
         $keyString = json_encode($normalized, JSON_UNESCAPED_UNICODE);
         $hash = md5($keyString);
         
-        // Добавляем префикс для читаемости
-        return 'months_' . $hash;
+        // Добавляем префикс для читаемости и определения режима
+        $prefix = $normalized['periodMode'] === 'weeks' ? 'weeks' : 'months';
+        return $prefix . '_' . $hash;
     }
     
     /**
      * Проверка истечения срока действия кеша
+     * 
+     * TASK-068-01: Обновлено для поддержки режима "weeks"
      * 
      * @param string $key Ключ кеша
      * @return bool true если кеш истёк или не существует
      */
     public static function isExpired(string $key): bool
     {
-        $cachePath = self::getCachePath($key);
+        // Определяем режим из префикса ключа
+        $periodMode = strpos($key, 'weeks_') === 0 ? 'weeks' : 'months';
+        $cachePath = self::getCachePath($key, $periodMode);
         
         if (!file_exists($cachePath)) {
             return true;
@@ -279,11 +369,16 @@ class GraphAdmissionClosureCache
     /**
      * Убедиться, что директория кеша существует
      * 
+     * TASK-068-01: Обновлено для поддержки обоих режимов (weeks и months)
+     * 
+     * @param string $periodMode Режим периода ('weeks' или 'months')
      * @return bool true если директория существует или создана
      */
-    private static function ensureCacheDirectory(): bool
+    private static function ensureCacheDirectory(string $periodMode = 'months'): bool
     {
-        $cacheDir = self::CACHE_MONTHS_DIR;
+        $cacheDir = $periodMode === 'weeks' 
+            ? self::CACHE_WEEKS_DIR 
+            : self::CACHE_MONTHS_DIR;
         
         if (is_dir($cacheDir)) {
             return is_writable($cacheDir);

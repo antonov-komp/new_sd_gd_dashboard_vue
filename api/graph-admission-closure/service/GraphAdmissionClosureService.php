@@ -50,8 +50,29 @@ class GraphAdmissionClosureService
         }
 
         // Недельный режим
+        // TASK-068-04: Начало измерения времени (перед проверкой кеша)
+        $weeksModeStartTime = microtime(true);
+        
         [$weekStart, $weekEnd] = $this->dateHelper->getWeekBounds($weekStartParam, $weekEndParam);
         $weeks = $this->dateHelper->getFourWeeksBounds($weekStart, $weekEnd);
+
+        // TASK-068-03: Проверка кеша для режима "weeks" (если не forceRefresh)
+        if (!$forceRefresh) {
+            $cacheKey = $this->getCacheKeyForWeeks($payload, $weekStart, $weekEnd);
+            
+            $cachedData = $this->cacheStore->get($cacheKey);
+            if ($cachedData !== null) {
+                // TASK-068-04: Логирование времени при cache hit
+                $cacheResponseTime = microtime(true) - $weeksModeStartTime;
+                error_log("[Cache] Cache hit for key: {$cacheKey}");
+                error_log("[WEEKS-PERFORMANCE] Total execution time (from cache): " . round($cacheResponseTime, 3) . " seconds");
+                return $cachedData;
+            }
+            
+            error_log("[Cache] Cache miss for key: {$cacheKey}");
+        } else {
+            error_log("[Cache] Force refresh requested, skipping cache check");
+        }
 
         // Загрузка тикетов через BitrixClient
         $periodStart = $weeks[0]['weekStart'];
@@ -217,6 +238,30 @@ class GraphAdmissionClosureService
                 ]
             ] : null
         ];
+
+        // TASK-068-03: Сохранение в кеш для режима "weeks"
+        // Сохраняем только успешные ответы
+        if (isset($response['success']) && $response['success'] === true) {
+            $cacheKey = $this->getCacheKeyForWeeks($payload, $weekStart, $weekEnd);
+            
+            if ($this->cacheStore->set($cacheKey, $response, 120)) {
+                error_log("[Cache] Cache saved for key: {$cacheKey}");
+            } else {
+                error_log("[Cache] Failed to save cache for key: {$cacheKey}");
+            }
+            
+            // Периодическая очистка устаревших кешей (каждый 10-й запрос)
+            if (rand(1, 10) === 1) {
+                $deleted = $this->cacheStore->clearExpired();
+                if ($deleted > 0) {
+                    error_log("[Cache] Cleared {$deleted} expired cache entries");
+                }
+            }
+        }
+
+        // TASK-068-04: Логирование общего времени выполнения
+        $weeksModeTotalTime = microtime(true) - $weeksModeStartTime;
+        error_log("[WEEKS-PERFORMANCE] Total execution time: " . round($weeksModeTotalTime, 2) . " seconds");
 
         return $response;
     }
@@ -490,5 +535,29 @@ class GraphAdmissionClosureService
         error_log("[MONTHS-PERFORMANCE] Total execution time: " . round($monthsModeTotalTime, 2) . " seconds");
 
         return $response;
+    }
+
+    /**
+     * Генерация ключа кеша для режима "weeks"
+     * 
+     * TASK-068-03: Создан для избежания дублирования кода
+     * 
+     * @param array $payload Параметры запроса (payload)
+     * @param DateTimeImmutable $weekStart Начало недели
+     * @param DateTimeImmutable $weekEnd Конец недели
+     * @return string Ключ кеша
+     */
+    private function getCacheKeyForWeeks(array $payload, DateTimeImmutable $weekStart, DateTimeImmutable $weekEnd): string
+    {
+        return $this->cacheStore->generateKey([
+            'product' => $payload['product'] ?? '1C',
+            'periodMode' => 'weeks',
+            'weekStartUtc' => $weekStart->format('Y-m-d\TH:i:s\Z'),
+            'weekEndUtc' => $weekEnd->format('Y-m-d\TH:i:s\Z'),
+            'includeTickets' => $payload['includeTickets'] ?? false,
+            'includeNewTicketsByStages' => $payload['includeNewTicketsByStages'] ?? false,
+            'includeCarryoverTickets' => $payload['includeCarryoverTickets'] ?? false,
+            'includeCarryoverTicketsByDuration' => $payload['includeCarryoverTicketsByDuration'] ?? false
+        ]);
     }
 }
