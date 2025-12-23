@@ -3,7 +3,9 @@
 **Дата создания:** 2025-12-23 08:22 (UTC+3, Брест)  
 **Статус:** Новая  
 **Приоритет:** Высокий  
-**Исполнитель:** Bitrix24 Программист (Vue.js) + DevOps
+**Исполнитель:** Bitrix24 Программист (Vue.js) + DevOps  
+**Оценка времени:** 4-6 часов  
+**Сложность:** Средняя
 
 ---
 
@@ -81,7 +83,18 @@ return [
 - Файл должен быть в корне приложения
 - Должен возвращать массив с настройками
 - По умолчанию `allow_direct_access = false` (безопасность)
-- Должен быть добавлен в `.gitignore` (если содержит секреты)
+- **НЕ добавлять в `.gitignore`** (не содержит секретов, конфигурация должна быть в репозитории)
+
+**Права доступа:**
+```bash
+chmod 644 direct-access-config.php
+chown www-data:www-data direct-access-config.php
+```
+
+**Валидация:**
+- Проверка, что файл возвращает массив
+- Проверка наличия обязательных ключей: `allow_direct_access`, `message_on_deny`
+- Тип `allow_direct_access` должен быть boolean
 
 ### 2. Создание API endpoint для чтения конфигурации
 
@@ -104,28 +117,60 @@ return [
  * API endpoint для получения конфигурации прямого доступа
  * 
  * Возвращает настройки прямого доступа из direct-access-config.php
+ * 
+ * Метод: GET
+ * Формат ответа: JSON
  */
 
 header('Content-Type: application/json; charset=utf-8');
+
+// Значения по умолчанию (безопасные)
+$defaultConfig = [
+    'allow_direct_access' => false,
+    'message_on_deny' => 'Прямой доступ к приложению запрещён. Откройте приложение через интерфейс Bitrix24.'
+];
 
 $configPath = __DIR__ . '/../direct-access-config.php';
 
 if (!file_exists($configPath)) {
     // Если конфиг не существует, возвращаем значения по умолчанию
-    echo json_encode([
-        'allow_direct_access' => false,
-        'message_on_deny' => 'Прямой доступ к приложению запрещён. Откройте приложение через интерфейс Bitrix24.'
-    ]);
+    echo json_encode($defaultConfig, JSON_UNESCAPED_UNICODE);
     exit;
 }
 
-$config = require $configPath;
-
-echo json_encode([
-    'allow_direct_access' => $config['allow_direct_access'] ?? false,
-    'message_on_deny' => $config['message_on_deny'] ?? 'Прямой доступ к приложению запрещён.'
-]);
+try {
+    $config = require $configPath;
+    
+    // Валидация конфигурации
+    if (!is_array($config)) {
+        // Если конфиг не массив, возвращаем значения по умолчанию
+        echo json_encode($defaultConfig, JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    
+    // Проверка и нормализация значений
+    $result = [
+        'allow_direct_access' => isset($config['allow_direct_access']) 
+            ? (bool)$config['allow_direct_access'] 
+            : false,
+        'message_on_deny' => isset($config['message_on_deny']) 
+            ? (string)$config['message_on_deny'] 
+            : $defaultConfig['message_on_deny']
+    ];
+    
+    echo json_encode($result, JSON_UNESCAPED_UNICODE);
+} catch (Exception $e) {
+    // При ошибке чтения конфига возвращаем значения по умолчанию
+    error_log('Error reading direct-access-config.php: ' . $e->getMessage());
+    echo json_encode($defaultConfig, JSON_UNESCAPED_UNICODE);
+}
 ```
+
+**Дополнительные требования:**
+- Обработка ошибок при чтении конфига
+- Валидация типов данных
+- Логирование ошибок в error_log
+- Использование `JSON_UNESCAPED_UNICODE` для корректного отображения русских символов
 
 ### 3. Создание утилиты для работы с конфигурацией (Vue.js)
 
@@ -139,41 +184,93 @@ echo json_encode([
  * Утилита для работы с конфигурацией прямого доступа
  * 
  * Читает настройки прямого доступа из API endpoint
+ * 
+ * Используется для проверки, разрешён ли прямой доступ к приложению
+ * при открытии не в iframe Bitrix24
  */
 
 import { getApiUrl } from './path-utils.js';
 
+// Кеш конфигурации (загружается один раз)
 let cachedConfig = null;
+let configLoadPromise = null; // Promise для предотвращения параллельных запросов
+
+/**
+ * Значения по умолчанию (безопасные)
+ */
+const DEFAULT_CONFIG = {
+  allow_direct_access: false,
+  message_on_deny: 'Прямой доступ к приложению запрещён. Откройте приложение через интерфейс Bitrix24.'
+};
 
 /**
  * Получение конфигурации прямого доступа
  * 
+ * Кеширует результат после первой загрузки.
+ * При ошибке возвращает безопасные значения по умолчанию.
+ * 
  * @returns {Promise<object>} Конфигурация прямого доступа
  */
 export async function getDirectAccessConfig() {
+  // Если конфиг уже загружен, возвращаем из кеша
   if (cachedConfig) {
     return cachedConfig;
   }
   
-  try {
-    const response = await fetch(getApiUrl('/api/direct-access-config.php'));
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    
-    const config = await response.json();
-    cachedConfig = config;
-    
-    return config;
-  } catch (error) {
-    console.error('Error loading direct access config:', error);
-    // Возвращаем значения по умолчанию при ошибке
-    return {
-      allow_direct_access: false,
-      message_on_deny: 'Прямой доступ к приложению запрещён. Откройте приложение через интерфейс Bitrix24.'
-    };
+  // Если уже идёт загрузка, ждём её завершения
+  if (configLoadPromise) {
+    return configLoadPromise;
   }
+  
+  // Начинаем загрузку конфигурации
+  configLoadPromise = (async () => {
+    try {
+      const response = await fetch(getApiUrl('/api/direct-access-config.php'), {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        // Таймаут 5 секунд
+        signal: AbortSignal.timeout(5000)
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const config = await response.json();
+      
+      // Валидация конфигурации
+      if (!config || typeof config !== 'object') {
+        throw new Error('Invalid config format');
+      }
+      
+      // Нормализация значений
+      const normalizedConfig = {
+        allow_direct_access: config.allow_direct_access === true,
+        message_on_deny: config.message_on_deny || DEFAULT_CONFIG.message_on_deny
+      };
+      
+      // Сохраняем в кеш
+      cachedConfig = normalizedConfig;
+      
+      return normalizedConfig;
+    } catch (error) {
+      console.error('Error loading direct access config:', error);
+      
+      // При ошибке возвращаем безопасные значения по умолчанию
+      const defaultConfig = { ...DEFAULT_CONFIG };
+      cachedConfig = defaultConfig; // Кешируем даже значения по умолчанию
+      
+      return defaultConfig;
+    } finally {
+      // Очищаем promise после завершения
+      configLoadPromise = null;
+    }
+  })();
+  
+  return configLoadPromise;
 }
 
 /**
@@ -185,7 +282,34 @@ export async function isDirectAccessAllowed() {
   const config = await getDirectAccessConfig();
   return config.allow_direct_access === true;
 }
+
+/**
+ * Получение сообщения об отказе в доступе
+ * 
+ * @returns {Promise<string>} Сообщение об отказе в доступе
+ */
+export async function getDenyMessage() {
+  const config = await getDirectAccessConfig();
+  return config.message_on_deny || DEFAULT_CONFIG.message_on_deny;
+}
+
+/**
+ * Сброс кеша конфигурации (для тестирования)
+ * 
+ * @internal
+ */
+export function resetConfigCache() {
+  cachedConfig = null;
+  configLoadPromise = null;
+}
 ```
+
+**Дополнительные возможности:**
+- Предотвращение параллельных запросов через `configLoadPromise`
+- Таймаут запроса (5 секунд)
+- Валидация и нормализация данных
+- Функция для получения сообщения об отказе
+- Функция для сброса кеша (для тестирования)
 
 ### 4. Модификация AccessControlService
 
@@ -197,42 +321,177 @@ export async function isDirectAccessAllowed() {
 2. Если приложение открыто напрямую (не в iframe) и прямой доступ разрешён — использовать токен первичного администратора
 3. Если приложение открыто напрямую и прямой доступ запрещён — показать сообщение об ошибке
 
-**Логика:**
+**Детальная логика с учетом существующего кода:**
 
 ```javascript
 static async checkAccess() {
   try {
-    // Проверка контекста
+    // ШАГ 1: Проверка контекста (внутри Bitrix24 или нет)
     const isInsideB24 = isInsideBitrix24();
     
-    // Если не внутри Bitrix24, проверяем конфигурацию прямого доступа
+    // ШАГ 2: Если НЕ внутри Bitrix24, проверяем конфигурацию прямого доступа
     if (!isInsideB24) {
-      const { isDirectAccessAllowed, getDirectAccessConfig } = await import('@/utils/direct-access-config.js');
+      // Динамический импорт для уменьшения размера бандла
+      const { isDirectAccessAllowed, getDenyMessage } = await import('@/utils/direct-access-config.js');
       
+      // Проверяем, разрешён ли прямой доступ
       const allowDirectAccess = await isDirectAccessAllowed();
       
       if (!allowDirectAccess) {
-        // Прямой доступ запрещён
-        const config = await getDirectAccessConfig();
+        // Прямой доступ запрещён — возвращаем ошибку доступа
+        const denyMessage = await getDenyMessage();
+        
+        console.warn('Direct access denied: Application opened directly in browser, but direct access is disabled in config');
+        
         return new AccessCheckResult(
           false,
           AccessErrorCodes.ACCESS_DENIED,
-          config.message_on_deny || 'Прямой доступ к приложению запрещён. Откройте приложение через интерфейс Bitrix24.'
+          denyMessage,
+          null // Пользователь не определён
         );
       }
+      
+      // Прямой доступ разрешён — продолжаем проверку
+      // Логируем для отладки
+      console.log('Direct access allowed: Using primary administrator token from settings.php');
       
       // Прямой доступ разрешён — используем токен первичного администратора
       // Это будет обработано в getCurrentUser() через прокси API
       // Прокси API использует токен из settings.php (первичный администратор)
     }
     
-    // Остальная логика проверки доступа...
-    // (получение пользователя, проверка отделов и т.д.)
+    // ШАГ 3: Инициализация Bitrix24 API (только если внутри Bitrix24)
+    // Добавляем таймаут для инициализации, но не прерываем при ошибке
+    if (isInsideB24) {
+      try {
+        await Promise.race([
+          Bitrix24BxApi.init(),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Инициализация Bitrix24 API превысила 5 секунд')), 5000)
+          )
+        ]);
+      } catch (initError) {
+        // Если инициализация не удалась, продолжаем - getCurrentUser() сам попробует прокси
+        console.warn('BX24.init() failed, will try proxy API:', initError);
+      }
+    }
+    
+    // ШАГ 4: Получение информации о текущем пользователе
+    // Автоматически использует правильный метод (BX24 или прокси)
+    // Добавляем таймаут для получения пользователя (10 секунд общий)
+    let user;
+    try {
+      user = await Promise.race([
+        Bitrix24BxApi.getCurrentUser(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Получение информации о пользователе превысило 10 секунд')), 10000)
+        )
+      ]);
+    } catch (getUserError) {
+      // Если BX24 API не работает, пробуем прокси API как fallback
+      // ВАЖНО: При прямом доступе прокси API вернёт владельца токена (первичного администратора)
+      console.warn('Bitrix24BxApi.getCurrentUser() failed, trying proxy API:', getUserError);
+      const { Bitrix24ApiService } = await import('./bitrix24-api.js');
+      try {
+        user = await Promise.race([
+          Bitrix24ApiService.getCurrentUser(),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Прокси API превысило 5 секунд')), 5000)
+          )
+        ]);
+        console.log('Got user from proxy API:', user?.ID || 'unknown');
+      } catch (proxyError) {
+        // Если и прокси не работает, выбрасываем ошибку
+        console.error('Both BX24 API and proxy API failed:', proxyError);
+        throw new Error('Не удалось определить пользователя. Обратитесь в Поддержку приложения в ИТ отдел.');
+      }
+    }
+    
+    // ШАГ 5: Проверка, что пользователь определён
+    if (!user || !user.ID) {
+      console.warn('AccessControlService.checkAccess - user not determined:', user);
+      return new AccessCheckResult(
+        false,
+        AccessErrorCodes.USER_NOT_DETERMINED,
+        'Не удалось определить пользователя. Обратитесь в Поддержку приложения в ИТ отдел.'
+      );
+    }
+    
+    // ШАГ 6: Получение ID отделов пользователя
+    const departmentIds = user.UF_DEPARTMENT || [];
+    
+    // ШАГ 7: Проверка, что пользователь привязан к отделу
+    if (!Array.isArray(departmentIds) || departmentIds.length === 0) {
+      return new AccessCheckResult(
+        false,
+        AccessErrorCodes.ACCESS_DENIED,
+        'Доступ запрещён. Пользователь не привязан к отделу.'
+      );
+    }
+    
+    // ШАГ 8: Проверка доступа по ID отделов
+    const hasAccess = departmentIds.some(deptId => isDepartmentAllowed(deptId));
+    
+    if (!hasAccess) {
+      return new AccessCheckResult(
+        false,
+        AccessErrorCodes.ACCESS_DENIED,
+        'Доступ запрещён'
+      );
+    }
+    
+    // ШАГ 9: Доступ разрешён
+    return new AccessCheckResult(true, null, null, user);
+    
   } catch (error) {
-    // Обработка ошибок...
+    console.error('AccessControlService.checkAccess error:', error);
+    
+    // Обработка CORS ошибок
+    // ВАЖНО: При прямом доступе CORS ошибки не должны блокировать работу,
+    // так как мы используем прокси API
+    if (error.message && (
+      error.message.includes('CORS') || 
+      error.message.includes('blocked') ||
+      error.message.includes('ERR_FAILED') ||
+      error.message.includes('unknown address space')
+    )) {
+      // CORS блокирует доступ к BX24 API
+      // При прямом доступе это нормально, используем прокси
+      // Но если мы внутри Bitrix24 и CORS блокирует - это проблема
+      if (isInsideBitrix24()) {
+        console.error('CORS error inside Bitrix24: Cannot determine interface user.');
+        return new AccessCheckResult(
+          false,
+          AccessErrorCodes.API_ERROR,
+          'Ошибка CORS: не удалось определить пользователя интерфейса. Обратитесь в Поддержку приложения в ИТ отдел.'
+        );
+      }
+      // При прямом доступе CORS ошибка не критична, продолжаем через прокси
+    }
+    
+    // Обработка других ошибок API
+    if (error.message && error.message.includes('not loaded')) {
+      return new AccessCheckResult(
+        false,
+        AccessErrorCodes.USER_NOT_DETERMINED,
+        'Не удалось определить пользователя. Обратитесь в Поддержку приложения в ИТ отдел.'
+      );
+    }
+    
+    return new AccessCheckResult(
+      false,
+      AccessErrorCodes.API_ERROR,
+      'Ошибка при проверке доступа. Обратитесь в Поддержку приложения в ИТ отдел.'
+    );
   }
 }
 ```
+
+**Важные моменты:**
+- Проверка конфигурации выполняется **ДО** инициализации Bitrix24 API
+- При запрете прямого доступа возвращается ошибка **сразу**, без попыток получить пользователя
+- При разрешённом прямом доступе логируется для отладки
+- Обработка CORS ошибок учитывает контекст (iframe vs standalone)
 
 ### 5. Модификация логики определения пользователя
 
@@ -270,6 +529,143 @@ static async getCurrentUser() {
 При отображении сообщения об ошибке доступа:
 - Если ошибка связана с запретом прямого доступа — показать специальное сообщение
 - Предложить открыть приложение через интерфейс Bitrix24
+- Добавить визуальное отличие сообщения о запрете прямого доступа
+
+**Детальная реализация:**
+
+В методе `onMounted()` компонента `IndexPage.vue`:
+
+```javascript
+onMounted(async () => {
+  try {
+    // Проверка доступа
+    const accessResult = await AccessControlService.checkAccess();
+    
+    if (accessResult.allowed) {
+      // Доступ разрешён
+      accessAllowed.value = true;
+      currentUser.value = accessResult.user;
+    } else {
+      // Доступ запрещён
+      accessDenied.value = true;
+      
+      // Определяем, является ли это ошибкой прямого доступа
+      // Проверяем контекст и сообщение об ошибке
+      const isInsideB24 = isInsideBitrix24();
+      const isDirectAccessDenied = !isInsideB24 && 
+        accessResult.errorCode === AccessErrorCodes.ACCESS_DENIED &&
+        accessResult.errorMessage && 
+        accessResult.errorMessage.includes('Прямой доступ');
+      
+      if (isDirectAccessDenied) {
+        // Специальная обработка для запрета прямого доступа
+        accessErrorMessage.value = accessResult.errorMessage;
+        // Можно добавить дополнительную информацию или ссылку
+      } else {
+        // Обычная обработка ошибки доступа
+        // Сохраняем информацию о пользователе для отладки
+        if (accessResult.user) {
+          const { getAllowedDepartmentIds } = await import('@/config/access-config.js');
+          debugInfo.value = {
+            userId: accessResult.user.ID,
+            departmentIds: accessResult.user.UF_DEPARTMENT || [],
+            allowedIds: getAllowedDepartmentIds()
+          };
+        }
+        
+        // Определяем сообщение об ошибке
+        if (accessResult.errorCode === AccessErrorCodes.USER_NOT_DETERMINED) {
+          accessErrorMessage.value = 'Не удалось определить пользователя. Обратитесь в Поддержку приложения в ИТ отдел.';
+        } else if (accessResult.errorCode === AccessErrorCodes.ACCESS_DENIED) {
+          accessErrorMessage.value = 'Доступ запрещён';
+        } else {
+          accessErrorMessage.value = accessResult.errorMessage || 'Ошибка при проверке доступа. Обратитесь в Поддержку приложения в ИТ отдел.';
+        }
+      }
+    }
+  } catch (err) {
+    error.value = err.message;
+    console.error('Error checking access:', err);
+  } finally {
+    loading.value = false;
+  }
+});
+```
+
+**В шаблоне (template):**
+
+Можно добавить специальный блок для сообщения о запрете прямого доступа:
+
+```vue
+<!-- Блокировка доступа -->
+<StatusMessage
+  v-if="!loading && accessDenied"
+  type="error"
+  title="Доступ запрещён"
+  :message="accessErrorMessage"
+>
+  <!-- Специальное сообщение для запрета прямого доступа -->
+  <div v-if="isDirectAccessDenied" class="direct-access-denied-info">
+    <p><strong>Как открыть приложение:</strong></p>
+    <ol>
+      <li>Войдите в Bitrix24</li>
+      <li>Откройте приложение через интерфейс Bitrix24 (placement, виджет или вкладку)</li>
+    </ol>
+  </div>
+  
+  <!-- Обычная отладочная информация -->
+  <div v-else-if="debugInfo" class="debug-info">
+    <!-- ... существующий код отладки ... -->
+  </div>
+</StatusMessage>
+```
+
+### 7. Обновление роутера (опционально)
+
+**Файл:** `vue-app/src/router/index.js`
+
+**Изменения:**
+
+В navigation guard можно добавить проверку прямого доступа для защищённых маршрутов:
+
+```javascript
+router.beforeEach(async (to, from, next) => {
+  // ... существующий код ...
+  
+  // Проверка авторизации (если требуется)
+  if (to.meta.requiresAuth) {
+    try {
+      const accessResult = await AccessControlService.checkAccess();
+      
+      if (!accessResult.allowed) {
+        // Проверяем, является ли это ошибкой прямого доступа
+        const isInsideB24 = isInsideBitrix24();
+        const isDirectAccessDenied = !isInsideB24 && 
+          accessResult.errorCode === AccessErrorCodes.ACCESS_DENIED;
+        
+        if (isDirectAccessDenied) {
+          // При запрете прямого доступа редиректим на главную страницу
+          // где будет показано специальное сообщение
+          console.warn('Direct access denied, redirecting to index');
+          next({ name: 'index' });
+          return;
+        }
+        
+        // Обычная обработка ошибки доступа
+        console.warn('Unauthorized access attempt to:', to.path, accessResult.errorMessage);
+        next({ name: 'index' });
+        return;
+      }
+    } catch (error) {
+      console.error('Error checking access in navigation guard:', error);
+      next();
+      return;
+    }
+  }
+  
+  // ... остальной код ...
+});
+```
 
 ---
 
@@ -280,23 +676,55 @@ static async getCurrentUser() {
 - **Формат:** PHP массив (return array)
 - **Расположение:** Корень приложения (`/var/www/app/public/rest_api_aps/sd_it_gen_plan/direct-access-config.php`)
 - **Права доступа:** `644` (чтение для всех, запись для владельца)
-- **Безопасность:** Можно добавить в `.gitignore`, если содержит секреты (но в данном случае не содержит)
+- **Владелец:** `www-data:www-data` (или соответствующий пользователь веб-сервера)
+- **Безопасность:** **НЕ добавлять в `.gitignore`** (не содержит секретов, конфигурация должна быть в репозитории)
+- **Валидация:** Обязательные ключи: `allow_direct_access` (boolean), `message_on_deny` (string)
 
 ### API Endpoint
 
 - **URL:** `/api/direct-access-config.php`
 - **Метод:** GET
-- **Формат ответа:** JSON
+- **Формат ответа:** JSON с `JSON_UNESCAPED_UNICODE`
 - **Кеширование:** На стороне клиента (Vue.js)
+- **Таймаут:** 5 секунд на стороне клиента
+- **Обработка ошибок:** При ошибке возвращаются безопасные значения по умолчанию
+- **Логирование:** Ошибки логируются в `error_log` PHP
 
 ### Vue.js утилита
 
 - **Кеширование:** Конфигурация кешируется после первой загрузки
+- **Предотвращение параллельных запросов:** Используется `configLoadPromise`
 - **Fallback:** При ошибке загрузки возвращаются значения по умолчанию (безопасность)
+- **Таймаут:** 5 секунд через `AbortSignal.timeout()`
+- **Валидация:** Проверка формата и нормализация данных
+
+### Порядок проверок
+
+**Критически важно соблюдать порядок:**
+
+1. **Сначала:** Проверка контекста (`isInsideBitrix24()`)
+2. **Затем:** Если не в iframe → проверка конфигурации прямого доступа
+3. **Если прямой доступ запрещён:** Возврат ошибки **сразу**, без дальнейших проверок
+4. **Если прямой доступ разрешён:** Продолжение обычной логики проверки доступа
+
+### Производительность
+
+- Конфигурация загружается **один раз** при первом обращении
+- Кешируется в памяти на время сессии
+- При ошибке загрузки используются безопасные значения по умолчанию (не блокирует работу)
+- Таймауты предотвращают зависание приложения
+
+### Совместимость
+
+- **Совместимо с существующим кодом:** Не ломает текущую логику проверки доступа
+- **Обратная совместимость:** Если конфиг не существует, используется безопасное поведение по умолчанию
+- **Не влияет на iframe режим:** При открытии в iframe Bitrix24 логика не меняется
 
 ---
 
 ## Критерии приёмки
+
+### Обязательные требования
 
 - [ ] Создан файл `direct-access-config.php` в корне приложения
 - [ ] Создан API endpoint `/api/direct-access-config.php`
@@ -309,6 +737,25 @@ static async getCurrentUser() {
 - [ ] При ошибке загрузки конфигурации используются безопасные значения по умолчанию
 - [ ] Код соответствует стандартам проекта
 - [ ] Добавлены комментарии с объяснением логики
+
+### Дополнительные требования
+
+- [ ] Обработка всех edge cases (пустой конфиг, неверный формат, ошибки сети)
+- [ ] Валидация данных в API endpoint
+- [ ] Логирование ошибок в PHP `error_log`
+- [ ] Предотвращение параллельных запросов конфигурации
+- [ ] Таймауты для всех асинхронных операций
+- [ ] Обновлён `IndexPage.vue` для отображения специальных сообщений
+- [ ] Все тесты проходят успешно
+- [ ] Документация обновлена (если требуется)
+
+### Проверка качества кода
+
+- [ ] Нет console.log в production коде (только console.warn/error)
+- [ ] Все функции имеют JSDoc комментарии
+- [ ] Обработка всех возможных ошибок
+- [ ] Нет утечек памяти (кеш очищается при необходимости)
+- [ ] Код читаемый и поддерживаемый
 
 ---
 
@@ -359,6 +806,42 @@ static async getCurrentUser() {
 - ❌ Используются безопасные значения по умолчанию (`allow_direct_access = false`)
 - ❌ Показывается сообщение об ошибке доступа
 
+### Тест 5: Некорректный формат конфигурации
+
+**Шаги:**
+1. Создать `direct-access-config.php` с некорректным форматом (например, вернуть строку вместо массива)
+2. Открыть приложение напрямую в браузере
+3. Проверить поведение
+
+**Ожидаемый результат:**
+- ❌ API endpoint возвращает безопасные значения по умолчанию
+- ❌ Показывается сообщение об ошибке доступа
+- ✅ Ошибка логируется в `error_log` PHP
+
+### Тест 6: Параллельные запросы конфигурации
+
+**Шаги:**
+1. Открыть приложение напрямую в браузере
+2. Одновременно открыть несколько вкладок
+3. Проверить, что конфигурация загружается только один раз
+
+**Ожидаемый результат:**
+- ✅ Конфигурация загружается один раз
+- ✅ Параллельные запросы используют кеш или ожидают первого запроса
+- ✅ Нет дублирования запросов в Network tab
+
+### Тест 7: Таймаут загрузки конфигурации
+
+**Шаги:**
+1. Симулировать медленный ответ API (например, через DevTools → Network throttling)
+2. Открыть приложение напрямую в браузере
+3. Проверить поведение при таймауте
+
+**Ожидаемый результат:**
+- ✅ При таймауте используются безопасные значения по умолчанию
+- ✅ Приложение не зависает
+- ✅ Показывается сообщение об ошибке доступа
+
 ---
 
 ## Безопасность
@@ -369,12 +852,74 @@ static async getCurrentUser() {
 2. **В production:** Рекомендуется оставить `false`
 3. **В development:** Можно установить `true` для удобства разработки
 4. **Логирование:** Логировать попытки прямого доступа (опционально)
+5. **Мониторинг:** Отслеживать попытки прямого доступа в логах
 
 ### Потенциальные риски
 
 - ⚠️ При `allow_direct_access = true` любой, кто знает URL, может открыть приложение
 - ⚠️ Используется токен первичного администратора, что даёт полный доступ
+- ⚠️ Токен первичного администратора хранится в `settings.php` и `settings.json`
 - ✅ Риск минимизирован тем, что по умолчанию прямой доступ запрещён
+- ✅ При ошибке загрузки конфигурации используется безопасное поведение по умолчанию
+
+### Меры защиты
+
+1. **Конфигурационный файл:**
+   - Права доступа `644` (только владелец может изменять)
+   - Валидация данных при чтении
+   - Безопасные значения по умолчанию при ошибке
+
+2. **API Endpoint:**
+   - Только чтение (GET), без возможности изменения
+   - Валидация и нормализация данных
+   - Логирование ошибок
+
+3. **Vue.js утилита:**
+   - Кеширование для предотвращения множественных запросов
+   - Таймауты для предотвращения зависания
+   - Безопасные значения по умолчанию при ошибке
+
+4. **AccessControlService:**
+   - Проверка конфигурации выполняется **до** получения пользователя
+   - При запрете прямого доступа возвращается ошибка **сразу**
+   - Логирование для отладки и мониторинга
+
+### Логирование (опционально)
+
+Можно добавить логирование попыток прямого доступа:
+
+**В `AccessControlService.checkAccess()`:**
+```javascript
+if (!isInsideB24) {
+  const allowDirectAccess = await isDirectAccessAllowed();
+  
+  if (!allowDirectAccess) {
+    // Логирование попытки прямого доступа (опционально)
+    console.warn('Direct access attempt blocked:', {
+      url: window.location.href,
+      userAgent: navigator.userAgent,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Можно отправить на сервер для мониторинга
+    // fetch('/api/log-direct-access-attempt.php', { method: 'POST', ... });
+    
+    return new AccessCheckResult(/* ... */);
+  }
+}
+```
+
+**В PHP (опционально):**
+```php
+// api/log-direct-access-attempt.php
+$logData = [
+    'timestamp' => date('Y-m-d H:i:s'),
+    'ip' => $_SERVER['REMOTE_ADDR'] ?? 'unknown',
+    'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'unknown',
+    'url' => $_SERVER['REQUEST_URI'] ?? 'unknown'
+];
+error_log('Direct access attempt: ' . json_encode($logData));
+```
 
 ---
 
@@ -385,28 +930,289 @@ static async getCurrentUser() {
 **Файл:** `direct-access-config.php`
 ```php
 <?php
+/**
+ * Конфигурация прямого доступа к приложению
+ * 
+ * Production режим: Прямой доступ запрещён для безопасности
+ */
+
 return [
     'allow_direct_access' => false,
     'message_on_deny' => 'Прямой доступ к приложению запрещён. Откройте приложение через интерфейс Bitrix24.'
 ];
 ```
 
+**Результат:**
+- При открытии в iframe Bitrix24: ✅ Работает нормально
+- При прямом открытии в браузере: ❌ Показывается сообщение об ошибке
+
 ### Пример 2: Разрешение прямого доступа (development)
 
 **Файл:** `direct-access-config.php`
 ```php
 <?php
+/**
+ * Конфигурация прямого доступа к приложению
+ * 
+ * Development режим: Прямой доступ разрешён для удобства разработки
+ * ВАЖНО: Не использовать в production!
+ */
+
 return [
     'allow_direct_access' => true,
     'message_on_deny' => 'Прямой доступ к приложению запрещён.'
 ];
 ```
 
+**Результат:**
+- При открытии в iframe Bitrix24: ✅ Работает нормально
+- При прямом открытии в браузере: ✅ Используется токен первичного администратора
+
+### Пример 3: Кастомное сообщение об отказе
+
+**Файл:** `direct-access-config.php`
+```php
+<?php
+return [
+    'allow_direct_access' => false,
+    'message_on_deny' => 'Для доступа к приложению необходимо открыть его через интерфейс Bitrix24. Обратитесь к администратору для получения доступа.'
+];
+```
+
+### Пример 4: Минимальная конфигурация
+
+**Файл:** `direct-access-config.php`
+```php
+<?php
+// Минимальная конфигурация (используются значения по умолчанию для message_on_deny)
+return [
+    'allow_direct_access' => false
+];
+```
+
+**Результат:**
+- `allow_direct_access` = `false`
+- `message_on_deny` = значение по умолчанию из API endpoint
+
+---
+
+## Дополнительные детали реализации
+
+### Edge Cases (Граничные случаи)
+
+1. **Конфиг существует, но пустой массив:**
+   - API endpoint должен вернуть значения по умолчанию
+   - Проверка `isset($config['allow_direct_access'])` вернёт `false`
+
+2. **Конфиг содержит неверный тип данных:**
+   - `allow_direct_access` не boolean → нормализация через `(bool)`
+   - `message_on_deny` не string → использование значения по умолчанию
+
+3. **Ошибка при чтении конфига (syntax error):**
+   - PHP выбросит исключение
+   - API endpoint перехватит и вернёт значения по умолчанию
+   - Ошибка логируется в `error_log`
+
+4. **Сеть недоступна при загрузке конфига:**
+   - Fetch запрос упадёт с ошибкой сети
+   - Утилита вернёт безопасные значения по умолчанию
+   - Приложение продолжит работу
+
+5. **Параллельные запросы конфига:**
+   - `configLoadPromise` предотвращает дублирование запросов
+   - Все запросы ждут завершения первого
+
+### Интеграция с существующим кодом
+
+**Не требует изменений:**
+- `crest.php` — работает как есть
+- `settings.php` — используется для получения токена
+- `settings.json` — используется CRest для работы с токенами
+- Роутер Vue.js — работает как есть (опциональные улучшения)
+
+**Требует изменений:**
+- `AccessControlService.checkAccess()` — добавление проверки конфигурации
+- `IndexPage.vue` — улучшение отображения ошибок
+- Роутер (опционально) — улучшение обработки ошибок доступа
+
+### Порядок выполнения задач
+
+**Рекомендуемый порядок:**
+
+1. ✅ Создать `direct-access-config.php` (шаг 1)
+2. ✅ Создать API endpoint (шаг 2)
+3. ✅ Создать Vue.js утилиту (шаг 3)
+4. ✅ Протестировать загрузку конфигурации
+5. ✅ Модифицировать `AccessControlService` (шаг 4)
+6. ✅ Протестировать проверку доступа
+7. ✅ Обновить `IndexPage.vue` (шаг 6)
+8. ✅ Протестировать отображение ошибок
+9. ✅ Финальное тестирование всех сценариев
+
+### Отладка
+
+**Полезные команды для отладки:**
+
+```javascript
+// В консоли браузера
+import { getDirectAccessConfig, isDirectAccessAllowed } from '@/utils/direct-access-config.js';
+
+// Проверить конфигурацию
+const config = await getDirectAccessConfig();
+console.log('Direct access config:', config);
+
+// Проверить, разрешён ли прямой доступ
+const allowed = await isDirectAccessAllowed();
+console.log('Direct access allowed:', allowed);
+```
+
+**Проверка в PHP:**
+```bash
+# Проверить, что конфиг читается
+php -r "var_dump(require 'direct-access-config.php');"
+
+# Проверить API endpoint
+curl http://localhost/api/direct-access-config.php
+```
+
+### Производительность
+
+**Оптимизации:**
+- Кеширование конфигурации в памяти (Vue.js)
+- Один запрос при первом обращении
+- Таймауты предотвращают зависание
+- Безопасные значения по умолчанию не требуют запроса
+
+**Метрики:**
+- Время загрузки конфигурации: < 100ms (локально)
+- Время проверки доступа: +50-100ms при прямом доступе
+- Влияние на iframe режим: 0ms (проверка не выполняется)
+
+---
+
+## Чек-лист перед коммитом
+
+### Backend (PHP)
+
+- [ ] Файл `direct-access-config.php` создан в корне приложения
+- [ ] Файл имеет правильные права доступа (`644`)
+- [ ] API endpoint `api/direct-access-config.php` создан и работает
+- [ ] API endpoint обрабатывает все edge cases (отсутствие файла, ошибки чтения)
+- [ ] API endpoint валидирует данные
+- [ ] Ошибки логируются в `error_log`
+- [ ] Используется `JSON_UNESCAPED_UNICODE` для корректного отображения русских символов
+
+### Frontend (Vue.js)
+
+- [ ] Утилита `direct-access-config.js` создана
+- [ ] Реализовано кеширование конфигурации
+- [ ] Предотвращены параллельные запросы
+- [ ] Добавлены таймауты для всех запросов
+- [ ] Обработаны все ошибки (сеть, таймаут, неверный формат)
+- [ ] `AccessControlService.checkAccess()` модифицирован
+- [ ] Проверка конфигурации выполняется **до** получения пользователя
+- [ ] При запрете прямого доступа возвращается ошибка **сразу**
+- [ ] `IndexPage.vue` обновлён для отображения специальных сообщений
+- [ ] Роутер обновлён (опционально)
+
+### Тестирование
+
+- [ ] Тест 1: Открытие в iframe Bitrix24 — ✅ работает
+- [ ] Тест 2: Прямое открытие при `allow_direct_access = false` — ❌ показывает ошибку
+- [ ] Тест 3: Прямое открытие при `allow_direct_access = true` — ✅ использует токен админа
+- [ ] Тест 4: Ошибка загрузки конфигурации — ❌ использует безопасные значения
+- [ ] Тест 5: Некорректный формат конфигурации — ❌ использует безопасные значения
+- [ ] Тест 6: Параллельные запросы — ✅ нет дублирования
+- [ ] Тест 7: Таймаут загрузки — ✅ использует безопасные значения
+
+### Документация
+
+- [ ] Код содержит комментарии с объяснением логики
+- [ ] JSDoc комментарии для всех функций
+- [ ] Обновлена документация (если требуется)
+
+### Безопасность
+
+- [ ] По умолчанию `allow_direct_access = false`
+- [ ] При ошибке используются безопасные значения по умолчанию
+- [ ] Нет утечек информации в сообщениях об ошибках
+- [ ] Конфигурационный файл не содержит секретов
+
+---
+
+## Рекомендации по реализации
+
+### Порядок выполнения
+
+1. **Начать с backend:**
+   - Создать `direct-access-config.php`
+   - Создать API endpoint
+   - Протестировать API endpoint вручную (curl, Postman)
+
+2. **Затем frontend:**
+   - Создать утилиту `direct-access-config.js`
+   - Протестировать загрузку конфигурации
+   - Модифицировать `AccessControlService`
+
+3. **Интеграция:**
+   - Обновить `IndexPage.vue`
+   - Протестировать все сценарии
+   - Проверить edge cases
+
+4. **Финальная проверка:**
+   - Все тесты проходят
+   - Код соответствует стандартам
+   - Документация обновлена
+
+### Советы по отладке
+
+1. **Использовать консоль браузера:**
+   ```javascript
+   // Проверить контекст
+   console.log('Is inside Bitrix24:', isInsideBitrix24());
+   
+   // Проверить конфигурацию
+   const config = await getDirectAccessConfig();
+   console.log('Config:', config);
+   ```
+
+2. **Проверить Network tab:**
+   - Убедиться, что запрос к `/api/direct-access-config.php` выполняется
+   - Проверить статус ответа и содержимое
+
+3. **Проверить PHP error_log:**
+   ```bash
+   tail -f /var/log/php/error.log
+   ```
+
+4. **Использовать DevTools:**
+   - Breakpoints в `AccessControlService.checkAccess()`
+   - Проверка значений переменных на каждом этапе
+
+### Частые ошибки и их решение
+
+1. **Ошибка: "Config is not defined"**
+   - **Причина:** Утилита не импортирована
+   - **Решение:** Проверить импорт `@/utils/direct-access-config.js`
+
+2. **Ошибка: "CORS error"**
+   - **Причина:** API endpoint не настроен правильно
+   - **Решение:** Проверить заголовки в API endpoint
+
+3. **Ошибка: "Timeout"**
+   - **Причина:** Сеть медленная или API недоступен
+   - **Решение:** Увеличить таймаут или проверить доступность API
+
+4. **Конфиг не загружается:**
+   - **Причина:** Неправильный путь к файлу
+   - **Решение:** Проверить путь в API endpoint (`__DIR__ . '/../direct-access-config.php'`)
+
 ---
 
 ## История правок
 
 - 2025-12-23 08:22 (UTC+3, Брест): Создана задача
+- 2025-12-23 08:22 (UTC+3, Брест): Добавлены детали реализации, edge cases, тестирование, безопасность
 
 ---
 
@@ -415,4 +1221,5 @@ return [
 - [Архитектура точки входа](../ARCHITECTURE/application-entry-point.md)
 - [Механизм проверки пользователя](../ARCHITECTURE/user-authentication-authorization.md)
 - [Settings.php](../../settings.php) — конфигурация первичного администратора
+- [AccessControlService](../../vue-app/src/services/access-control-service.js) — текущая реализация проверки доступа
 
