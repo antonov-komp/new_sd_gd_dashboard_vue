@@ -653,7 +653,7 @@ const carryoverChartData = computed(() => {
           ...baseDataLabelConfig,
           anchor: 'end',
           align: 'top',
-          offset: 8,
+          offset: 4, // TASK-066: Соответствует месячному режиму (offset: 4)
           color: chartColors.carryover,
           borderColor: chartColors.carryover
         }
@@ -910,7 +910,7 @@ const lineBarData = computed(() => {
           ...baseDataLabelConfig,
           anchor: 'end',
           align: 'top',
-          offset: 8,
+          offset: 4, // TASK-066: Соответствует месячному режиму (offset: 4)
           color: chartColors.carryover,
           borderColor: chartColors.carryover
         }
