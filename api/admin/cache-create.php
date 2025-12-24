@@ -89,15 +89,68 @@ try {
     $mode = $input['mode'] ?? null;
     $params = $input['params'] ?? [];
     
-    // Определение модуля и создание кеша
-    $result = createCacheForModule($moduleId, $mode, $params);
+    // Генерация task_id для отслеживания прогресса
+    $taskId = 'cache_' . uniqid() . '_' . time();
+    
+    // Создание статуса задачи
+    $statusDir = __DIR__ . '/../cache/task-status';
+    if (!is_dir($statusDir)) {
+        @mkdir($statusDir, 0755, true);
+    }
+    
+    $statusFile = $statusDir . '/' . preg_replace('/[^a-zA-Z0-9_-]/', '_', $taskId) . '.json';
+    
+    // Инициализация статуса
+    $initialStatus = [
+        'task_id' => $taskId,
+        'module_id' => $moduleId,
+        'status' => 'in_progress',
+        'progress' => 0,
+        'message' => 'Начало создания кеша...',
+        'cache_key' => null,
+        'created_at' => time(),
+        'updated_at' => time()
+    ];
+    
+    @file_put_contents($statusFile, json_encode($initialStatus, JSON_UNESCAPED_UNICODE));
+    
+    // Определение модуля и создание кеша (асинхронно через фоновую задачу или синхронно)
+    // Для простоты делаем синхронно, но обновляем статус
+    $result = createCacheForModule($moduleId, $mode, $params, $taskId, $statusFile);
     
     if ($result['success']) {
+        // Обновление статуса на завершённый
+        $finalStatus = [
+            'task_id' => $taskId,
+            'module_id' => $moduleId,
+            'status' => 'completed',
+            'progress' => 100,
+            'message' => 'Кеш успешно создан',
+            'cache_key' => $result['cache_key'] ?? null,
+            'created_at' => $initialStatus['created_at'],
+            'updated_at' => time()
+        ];
+        @file_put_contents($statusFile, json_encode($finalStatus, JSON_UNESCAPED_UNICODE));
+        
         http_response_code(200);
-        echo json_encode($result);
+        echo json_encode(array_merge($result, ['task_id' => $taskId]));
     } else {
+        // Обновление статуса на ошибку
+        $errorStatus = [
+            'task_id' => $taskId,
+            'module_id' => $moduleId,
+            'status' => 'failed',
+            'progress' => 0,
+            'message' => 'Ошибка создания кеша',
+            'error' => $result['error'] ?? 'Unknown error',
+            'cache_key' => null,
+            'created_at' => $initialStatus['created_at'],
+            'updated_at' => time()
+        ];
+        @file_put_contents($statusFile, json_encode($errorStatus, JSON_UNESCAPED_UNICODE));
+        
         http_response_code(500);
-        echo json_encode($result);
+        echo json_encode(array_merge($result, ['task_id' => $taskId]));
     }
 } catch (\Exception $e) {
     http_response_code(500);
@@ -115,18 +168,20 @@ try {
  * @param string $moduleId ID модуля
  * @param string|null $mode Режим кеша (если модуль поддерживает режимы)
  * @param array $params Параметры для создания кеша
+ * @param string|null $taskId ID задачи для отслеживания прогресса
+ * @param string|null $statusFile Путь к файлу статуса
  * @return array Результат создания кеша
  */
-function createCacheForModule(string $moduleId, ?string $mode, array $params): array
+function createCacheForModule(string $moduleId, ?string $mode, array $params, ?string $taskId = null, ?string $statusFile = null): array
 {
     // График приёма/закрытий 1С
     if (strpos($moduleId, 'graph-admission-closure') === 0) {
-        return createGraphAdmissionClosureCache($moduleId, $mode, $params);
+        return createGraphAdmissionClosureCache($moduleId, $mode, $params, $taskId, $statusFile);
     }
     
     // Трудозатраты на Тикеты сектора 1С
     if (strpos($moduleId, 'time-tracking') === 0) {
-        return createTimeTrackingCache($moduleId, $mode, $params);
+        return createTimeTrackingCache($moduleId, $mode, $params, $taskId, $statusFile);
     }
     
     return [
@@ -136,14 +191,51 @@ function createCacheForModule(string $moduleId, ?string $mode, array $params): a
 }
 
 /**
+ * Обновление статуса задачи
+ * 
+ * @param string $statusFile Путь к файлу статуса
+ * @param int $progress Прогресс (0-100)
+ * @param string $message Сообщение о прогрессе
+ * @param string|null $cacheKey Ключ кеша
+ */
+function updateTaskStatus(string $statusFile, int $progress, string $message, ?string $cacheKey = null): void
+{
+    if (!file_exists($statusFile)) {
+        return;
+    }
+    
+    $content = @file_get_contents($statusFile);
+    if ($content === false) {
+        return;
+    }
+    
+    $status = @json_decode($content, true);
+    if ($status === null || !is_array($status)) {
+        return;
+    }
+    
+    $status['progress'] = $progress;
+    $status['message'] = $message;
+    $status['updated_at'] = time();
+    
+    if ($cacheKey !== null) {
+        $status['cache_key'] = $cacheKey;
+    }
+    
+    @file_put_contents($statusFile, json_encode($status, JSON_UNESCAPED_UNICODE));
+}
+
+/**
  * Создание кеша для GraphAdmissionClosureCache
  * 
  * @param string $moduleId ID модуля
  * @param string|null $mode Режим кеша
  * @param array $params Параметры для создания кеша
+ * @param string|null $taskId ID задачи для отслеживания прогресса
+ * @param string|null $statusFile Путь к файлу статуса
  * @return array Результат создания кеша
  */
-function createGraphAdmissionClosureCache(string $moduleId, ?string $mode, array $params): array
+function createGraphAdmissionClosureCache(string $moduleId, ?string $mode, array $params, ?string $taskId = null, ?string $statusFile = null): array
 {
     // Определение режима из module_id
     if ($mode === null) {
@@ -151,12 +243,14 @@ function createGraphAdmissionClosureCache(string $moduleId, ?string $mode, array
     }
     
     // Параметры по умолчанию
+    // TASK-076: Исправление для совместимости с реальным использованием модуля
+    // Для months режима модуль использует includeTickets: true (см. GraphAdmissionClosureMonthsDashboard.vue)
     $defaultParams = [
         'product' => '1C',
         'periodMode' => $mode,
-        'includeTickets' => false,
+        'includeTickets' => $mode === 'months' ? true : false, // Для months модуль использует true
         'includeNewTicketsByStages' => false,
-        'includeCarryoverTickets' => $mode === 'months',
+        'includeCarryoverTickets' => $mode === 'months' ? true : false,
         'includeCarryoverTicketsByDuration' => false
     ];
     
@@ -165,9 +259,17 @@ function createGraphAdmissionClosureCache(string $moduleId, ?string $mode, array
     // Генерация ключа кеша
     $cacheKey = GraphAdmissionClosureCache::generateKey($finalParams);
     
+    // Обновление статуса: проверка существования кеша
+    if ($statusFile) {
+        updateTaskStatus($statusFile, 10, 'Проверка существования кеша...', $cacheKey);
+    }
+    
     // Проверка существования кеша
     $existingCache = GraphAdmissionClosureCache::get($cacheKey);
     if ($existingCache !== null) {
+        if ($statusFile) {
+            updateTaskStatus($statusFile, 100, 'Кеш уже существует', $cacheKey);
+        }
         return [
             'success' => true,
             'message' => 'Кеш уже существует',
@@ -175,6 +277,11 @@ function createGraphAdmissionClosureCache(string $moduleId, ?string $mode, array
             'module_id' => $moduleId,
             'already_exists' => true
         ];
+    }
+    
+    // Обновление статуса: инициализация сервиса
+    if ($statusFile) {
+        updateTaskStatus($statusFile, 20, 'Инициализация сервиса...', $cacheKey);
     }
     
     // Инициализация зависимостей для GraphAdmissionClosureService
@@ -191,7 +298,17 @@ function createGraphAdmissionClosureCache(string $moduleId, ?string $mode, array
     
     error_log("[CacheCreate] Creating cache for module: {$moduleId}, mode: {$mode}, key: {$cacheKey}");
     
+    // Обновление статуса: загрузка данных
+    if ($statusFile) {
+        updateTaskStatus($statusFile, 30, 'Загрузка данных из Bitrix24...', $cacheKey);
+    }
+    
     $data = $service->handle($finalParams);
+    
+    // Обновление статуса: сохранение кеша
+    if ($statusFile) {
+        updateTaskStatus($statusFile, 90, 'Сохранение кеша...', $cacheKey);
+    }
     
     // Проверка успешности создания
     if (isset($data['success']) && $data['success'] === true) {
@@ -220,9 +337,11 @@ function createGraphAdmissionClosureCache(string $moduleId, ?string $mode, array
  * @param string $moduleId ID модуля
  * @param string|null $mode Режим кеша
  * @param array $params Параметры для создания кеша
+ * @param string|null $taskId ID задачи для отслеживания прогресса
+ * @param string|null $statusFile Путь к файлу статуса
  * @return array Результат создания кеша
  */
-function createTimeTrackingCache(string $moduleId, ?string $mode, array $params): array
+function createTimeTrackingCache(string $moduleId, ?string $mode, array $params, ?string $taskId = null, ?string $statusFile = null): array
 {
     // Определение режима из module_id
     if ($mode === null) {

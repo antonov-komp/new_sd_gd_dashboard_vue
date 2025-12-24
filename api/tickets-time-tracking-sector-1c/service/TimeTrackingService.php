@@ -261,7 +261,18 @@ class TimeTrackingService
             $cacheKey = $this->cacheStore->generateKey($params, $mode);
             
             // TTL определяется автоматически по режиму в TimeTrackingCache::set()
+            // TASK-076: Проверка существования кеша перед сохранением (для уведомления)
+            $wasCached = $this->cacheStore->get($cacheKey) !== null;
+            
             if ($this->cacheStore->set($cacheKey, $response)) {
+                error_log("[TimeTrackingService] Cache saved for key: {$cacheKey} (mode: {$mode})");
+                
+                // TASK-076: Логирование обновления кеша
+                if ($wasCached) {
+                    error_log("[TimeTrackingService] Cache updated for key: {$cacheKey} (mode: {$mode}, auto refresh)");
+                } else {
+                    error_log("[TimeTrackingService] Cache created for key: {$cacheKey} (mode: {$mode})");
+                }
                 error_log("[TimeTrackingService] Cache saved for key: {$cacheKey} (mode: {$mode})");
             } else {
                 error_log("[TimeTrackingService] Failed to save cache for key: {$cacheKey}");

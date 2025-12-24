@@ -96,14 +96,16 @@ export class CacheCreationService {
    */
   static getDefaultParams(moduleId) {
     // График приёма/закрытий 1С
+    // TASK-076: Исправление для совместимости с реальным использованием модуля
     if (moduleId.includes('graph-admission-closure')) {
       const mode = moduleId.includes('weeks') ? 'weeks' : 'months';
       return {
         product: '1C',
         periodMode: mode,
-        includeTickets: false,
+        // Для months режима модуль использует includeTickets: true (см. GraphAdmissionClosureMonthsDashboard.vue)
+        includeTickets: mode === 'months' ? true : false,
         includeNewTicketsByStages: false,
-        includeCarryoverTickets: mode === 'months',
+        includeCarryoverTickets: mode === 'months' ? true : false,
         includeCarryoverTicketsByDuration: false
       };
     }

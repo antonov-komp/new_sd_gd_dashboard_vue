@@ -261,12 +261,23 @@ class GraphAdmissionClosureService
         ];
 
         // TASK-068-03: Сохранение в кеш для режима "weeks"
+        // TASK-076: Уведомление об обновлении кеша
         // Сохраняем только успешные ответы
         if (isset($response['success']) && $response['success'] === true) {
             $cacheKey = $this->getCacheKeyForWeeks($payload, $weekStart, $weekEnd);
             
+            // Проверка существования кеша перед сохранением (для уведомления)
+            $wasCached = $this->cacheStore->get($cacheKey) !== null;
+            
             if ($this->cacheStore->set($cacheKey, $response, 120)) {
                 error_log("[Cache] Cache saved for key: {$cacheKey}");
+                
+                // TASK-076: Логирование обновления кеша
+                if ($wasCached) {
+                    error_log("[Cache] Cache updated for key: {$cacheKey} (auto refresh)");
+                } else {
+                    error_log("[Cache] Cache created for key: {$cacheKey}");
+                }
             } else {
                 error_log("[Cache] Failed to save cache for key: {$cacheKey}");
             }
@@ -300,10 +311,14 @@ class GraphAdmissionClosureService
         $monthsModeStartTime = microtime(true);
 
         // Валидация параметров
+        // TASK-076: Исправление значений по умолчанию для совместимости с предварительно созданными кешами
+        // Модуль GraphAdmissionClosureMonthsDashboard отправляет includeTickets: true
         $product = $payload['product'] ?? '1C';
-        $includeTickets = $payload['includeTickets'] ?? false;
+        // Для режима months модуль использует includeTickets: true по умолчанию
+        $includeTickets = $payload['includeTickets'] ?? true;
         $includeNewTicketsByStages = $payload['includeNewTicketsByStages'] ?? false;
-        $includeCarryoverTickets = $payload['includeCarryoverTickets'] ?? false;
+        // Для режима months по умолчанию includeCarryoverTickets = true (как в cache-create.php)
+        $includeCarryoverTickets = $payload['includeCarryoverTickets'] ?? true;
         $includeCarryoverTicketsByDuration = $payload['includeCarryoverTicketsByDuration'] ?? false;
         $forceRefresh = $payload['forceRefresh'] ?? false;
         $debug = $payload['debug'] ?? false;
@@ -537,6 +552,7 @@ class GraphAdmissionClosureService
         ];
 
         // Сохранение в кеш
+        // TASK-076: Уведомление об обновлении кеша
         $cacheKey = $this->cacheStore->generateKey([
             'product' => $product,
             'periodMode' => 'months',
@@ -546,8 +562,18 @@ class GraphAdmissionClosureService
             'includeCarryoverTicketsByDuration' => $includeCarryoverTicketsByDuration
         ]);
 
+        // Проверка существования кеша перед сохранением (для уведомления)
+        $wasCached = $this->cacheStore->get($cacheKey) !== null;
+
         if ($this->cacheStore->set($cacheKey, $response, 300)) {
             error_log("[Cache] Cache saved for key: {$cacheKey}");
+            
+            // TASK-076: Логирование обновления кеша
+            if ($wasCached) {
+                error_log("[Cache] Cache updated for key: {$cacheKey} (auto refresh)");
+            } else {
+                error_log("[Cache] Cache created for key: {$cacheKey}");
+            }
         } else {
             error_log("[Cache] Failed to save cache for key: {$cacheKey}");
         }
