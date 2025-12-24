@@ -32,6 +32,7 @@
           :key="module.id"
           :module="module"
           @clear="handleClearCache"
+          @refresh="loadCacheStatus"
         />
       </div>
       

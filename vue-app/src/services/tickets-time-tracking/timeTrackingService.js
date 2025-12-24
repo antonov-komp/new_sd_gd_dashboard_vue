@@ -95,7 +95,15 @@ export async function getTimeTrackingData(params = {}) {
       throw new Error(raw.error_description || raw.error || 'Unknown error');
     }
 
-    return normalizeResponse(raw);
+    const normalized = normalizeResponse(raw);
+    
+    // TASK-076: Проверка использования кеша и показ уведомления
+    if (raw.cache_used === true) {
+      const { CacheNotificationService } = await import('@/services/cache-notification-service.js');
+      CacheNotificationService.notifyCacheUsed('Трудозатраты на Тикеты сектора 1С');
+    }
+    
+    return normalized;
   } catch (error) {
     console.error('[TimeTrackingService] Error fetching time tracking data:', error);
     throw error;

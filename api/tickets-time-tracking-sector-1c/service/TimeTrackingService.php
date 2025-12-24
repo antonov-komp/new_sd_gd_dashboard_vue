@@ -80,6 +80,7 @@ class TimeTrackingService
             $mode = 'summary'; // Сводный режим с агрегированными данными
         }
         
+        // TASK-076: Использование предварительно созданных кешей
         if (!$forceRefresh && $this->cacheStore !== null) {
             // Генерация ключа кеша с указанием режима
             $cacheKey = $this->cacheStore->generateKey($params, $mode);
@@ -88,6 +89,14 @@ class TimeTrackingService
             $cachedData = $this->cacheStore->get($cacheKey);
             if ($cachedData !== null) {
                 error_log("[TimeTrackingService] Cache hit for key: {$cacheKey} (mode: {$mode})");
+                error_log("[TimeTrackingService] Using pre-created cache for key: {$cacheKey}");
+                
+                // Добавляем информацию об использовании кеша в ответ
+                if (is_array($cachedData)) {
+                    $cachedData['cache_used'] = true;
+                    $cachedData['cache_key'] = $cacheKey;
+                }
+                
                 return $cachedData;
             }
             

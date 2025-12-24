@@ -213,7 +213,18 @@ export async function fetchAdmissionClosureStats(params = {}) {
     throw new Error(json.message || 'Бэкенд вернул ошибку');
   }
 
-  return normalizeResponse(json);
+  const normalized = normalizeResponse(json);
+  
+  // TASK-076: Проверка использования кеша и показ уведомления
+  if (json.cache_used === true) {
+    const { CacheNotificationService } = await import('@/services/cache-notification-service.js');
+    const moduleName = periodMode === 'months' 
+      ? 'График приёма/закрытий 1С (3 месяца)'
+      : 'График приёма/закрытий 1С (4 недели)';
+    CacheNotificationService.notifyCacheUsed(moduleName);
+  }
+  
+  return normalized;
 }
 
 export default {

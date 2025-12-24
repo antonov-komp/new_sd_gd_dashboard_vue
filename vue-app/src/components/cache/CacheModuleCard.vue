@@ -49,6 +49,10 @@
     </div>
     
     <div class="card-footer">
+      <CacheCreateButton
+        :module="module"
+        @created="handleCacheCreated"
+      />
       <button
         @click="handleClear"
         :disabled="clearing || module.file_count === 0"
@@ -65,9 +69,13 @@
 <script>
 import { ref, computed } from 'vue';
 import { CacheManagementService } from '@/services/cache-management-service.js';
+import CacheCreateButton from './CacheCreateButton.vue';
 
 export default {
   name: 'CacheModuleCard',
+  components: {
+    CacheCreateButton
+  },
   props: {
     module: {
       type: Object,
@@ -77,7 +85,7 @@ export default {
       }
     }
   },
-  emits: ['clear'],
+  emits: ['clear', 'refresh'],
   setup(props, { emit }) {
     const clearing = ref(false);
     
@@ -230,6 +238,11 @@ export default {
       }
     };
     
+    const handleCacheCreated = () => {
+      // Перезагрузка статуса кеша
+      emit('refresh');
+    };
+    
       return {
         clearing,
         formattedSize,
@@ -239,7 +252,8 @@ export default {
         statusText,
         formattedCreatedAt,
         formattedExpiresAt,
-        handleClear
+        handleClear,
+        handleCacheCreated
       };
   }
 };
@@ -347,9 +361,11 @@ export default {
 
 .card-footer {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
   padding-top: 15px;
   border-top: 1px solid #e0e0e0;
+  gap: 10px;
 }
 
 .btn-clear {

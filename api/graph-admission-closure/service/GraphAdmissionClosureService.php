@@ -57,15 +57,25 @@ class GraphAdmissionClosureService
         $weeks = $this->dateHelper->getFourWeeksBounds($weekStart, $weekEnd);
 
         // TASK-068-03: Проверка кеша для режима "weeks" (если не forceRefresh)
+        // TASK-076: Использование предварительно созданных кешей
         if (!$forceRefresh) {
             $cacheKey = $this->getCacheKeyForWeeks($payload, $weekStart, $weekEnd);
             
             $cachedData = $this->cacheStore->get($cacheKey);
             if ($cachedData !== null) {
                 // TASK-068-04: Логирование времени при cache hit
+                // TASK-076: Добавление информации об использовании кеша
                 $cacheResponseTime = microtime(true) - $weeksModeStartTime;
                 error_log("[Cache] Cache hit for key: {$cacheKey}");
+                error_log("[Cache] Using pre-created cache for key: {$cacheKey}");
                 error_log("[WEEKS-PERFORMANCE] Total execution time (from cache): " . round($cacheResponseTime, 3) . " seconds");
+                
+                // Добавляем информацию об использовании кеша в ответ
+                if (is_array($cachedData)) {
+                    $cachedData['cache_used'] = true;
+                    $cachedData['cache_key'] = $cacheKey;
+                }
+                
                 return $cachedData;
             }
             
@@ -299,6 +309,7 @@ class GraphAdmissionClosureService
         $debug = $payload['debug'] ?? false;
 
         // Проверка кеша
+        // TASK-076: Использование предварительно созданных кешей
         if (!$forceRefresh) {
             $cacheKey = $this->cacheStore->generateKey([
                 'product' => $product,
@@ -313,7 +324,15 @@ class GraphAdmissionClosureService
             if ($cachedData !== null) {
                 $cacheResponseTime = microtime(true) - $monthsModeStartTime;
                 error_log("[Cache] Cache hit for key: {$cacheKey}");
+                error_log("[Cache] Using pre-created cache for key: {$cacheKey}");
                 error_log("[MONTHS-PERFORMANCE] Total execution time (from cache): " . round($cacheResponseTime, 3) . " seconds");
+                
+                // Добавляем информацию об использовании кеша в ответ
+                if (is_array($cachedData)) {
+                    $cachedData['cache_used'] = true;
+                    $cachedData['cache_key'] = $cacheKey;
+                }
+                
                 return $cachedData;
             }
 
