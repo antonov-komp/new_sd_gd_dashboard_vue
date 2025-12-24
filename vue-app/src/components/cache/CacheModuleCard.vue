@@ -10,6 +10,23 @@
     <div class="card-body">
       <div class="cache-info">
         <div class="info-row">
+          <span class="info-label">Статус:</span>
+          <span class="info-value" :class="statusValueClass">
+            {{ statusText }}
+          </span>
+        </div>
+        
+        <div v-if="module.created_at" class="info-row">
+          <span class="info-label">Создан:</span>
+          <span class="info-value">{{ formattedCreatedAt }}</span>
+        </div>
+        
+        <div v-if="module.expires_at" class="info-row">
+          <span class="info-label">Истекает:</span>
+          <span class="info-value">{{ formattedExpiresAt }}</span>
+        </div>
+        
+        <div class="info-row">
           <span class="info-label">Файлов:</span>
           <span class="info-value">{{ module.file_count || 0 }}</span>
         </div>
@@ -73,17 +90,105 @@ export default {
     });
     
     const statusClass = computed(() => {
-      if (props.module.file_count > 0) {
+      const status = props.module.status || 'empty';
+      if (status === 'active') {
         return 'status-active';
+      } else if (status === 'expired') {
+        return 'status-expired';
       }
       return 'status-empty';
     });
     
-    const statusText = computed(() => {
-      if (props.module.file_count > 0) {
-        return 'Активен';
+    const statusValueClass = computed(() => {
+      const status = props.module.status || 'empty';
+      if (status === 'active') {
+        return 'status-value-active';
+      } else if (status === 'expired') {
+        return 'status-value-expired';
       }
-      return 'Пуст';
+      return 'status-value-empty';
+    });
+    
+    const statusText = computed(() => {
+      return props.module.status_text || (props.module.file_count > 0 ? 'Активен' : 'Пуст');
+    });
+    
+    const formattedCreatedAt = computed(() => {
+      if (!props.module.created_at) {
+        return '—';
+      }
+      const date = new Date(props.module.created_at * 1000);
+      const now = new Date();
+      const diff = now - date;
+      
+      // Если меньше минуты назад
+      if (diff < 60000) {
+        return 'Только что';
+      }
+      
+      // Если меньше часа назад
+      if (diff < 3600000) {
+        const minutes = Math.floor(diff / 60000);
+        return `${minutes} ${minutes === 1 ? 'минуту' : minutes < 5 ? 'минуты' : 'минут'} назад`;
+      }
+      
+      // Если сегодня
+      if (date.toDateString() === now.toDateString()) {
+        return `Сегодня в ${date.toLocaleTimeString('ru-RU', {
+          hour: '2-digit',
+          minute: '2-digit'
+        })}`;
+      }
+      
+      // Если вчера
+      const yesterday = new Date(now);
+      yesterday.setDate(yesterday.getDate() - 1);
+      if (date.toDateString() === yesterday.toDateString()) {
+        return `Вчера в ${date.toLocaleTimeString('ru-RU', {
+          hour: '2-digit',
+          minute: '2-digit'
+        })}`;
+      }
+      
+      // Иначе полная дата
+      return date.toLocaleString('ru-RU', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    });
+    
+    const formattedExpiresAt = computed(() => {
+      if (!props.module.expires_at) {
+        return '—';
+      }
+      const date = new Date(props.module.expires_at * 1000);
+      const now = new Date();
+      const diff = date - now;
+      
+      if (diff < 0) {
+        return `Просрочен (${date.toLocaleString('ru-RU', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit'
+        })})`;
+      }
+      
+      // Показываем относительное время до истечения
+      const minutes = Math.floor(diff / 60000);
+      const hours = Math.floor(minutes / 60);
+      
+      if (hours > 0) {
+        return `${hours} ч ${minutes % 60} мин`;
+      } else if (minutes > 0) {
+        return `${minutes} мин`;
+      } else {
+        return 'Менее минуты';
+      }
     });
     
     const handleClear = async () => {
@@ -125,14 +230,17 @@ export default {
       }
     };
     
-    return {
-      clearing,
-      formattedSize,
-      formattedTTL,
-      statusClass,
-      statusText,
-      handleClear
-    };
+      return {
+        clearing,
+        formattedSize,
+        formattedTTL,
+        statusClass,
+        statusValueClass,
+        statusText,
+        formattedCreatedAt,
+        formattedExpiresAt,
+        handleClear
+      };
   }
 };
 </script>
@@ -179,9 +287,29 @@ export default {
   color: #155724;
 }
 
+.status-expired {
+  background-color: #fff3cd;
+  color: #856404;
+}
+
 .status-empty {
   background-color: #f8d7da;
   color: #721c24;
+}
+
+.status-value-active {
+  color: #28a745;
+  font-weight: 600;
+}
+
+.status-value-expired {
+  color: #ffc107;
+  font-weight: 600;
+}
+
+.status-value-empty {
+  color: #6c757d;
+  font-weight: 600;
 }
 
 .card-body {

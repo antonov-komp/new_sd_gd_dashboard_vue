@@ -48,40 +48,52 @@ try {
     
     // Модуль 1: График приёма/закрытий 1С (months)
     $graphMonthsDir = __DIR__ . '/../cache/graph-admission-closure/months';
+    $graphMonthsCacheInfo = getCacheInfo($graphMonthsDir, 300);
     $graphMonthsModule = [
         'id' => 'graph-admission-closure-months',
         'name' => 'График приёма/закрытий 1С (3 месяца)',
         'cache_dir' => 'api/cache/graph-admission-closure/months',
-        'status' => 'active',
-        'file_count' => getCacheFileCount($graphMonthsDir),
-        'total_size' => getCacheTotalSize($graphMonthsDir),
-        'ttl' => 300
+        'status' => $graphMonthsCacheInfo['status'],
+        'file_count' => $graphMonthsCacheInfo['file_count'],
+        'total_size' => $graphMonthsCacheInfo['total_size'],
+        'ttl' => 300,
+        'created_at' => $graphMonthsCacheInfo['created_at'],
+        'expires_at' => $graphMonthsCacheInfo['expires_at'],
+        'status_text' => $graphMonthsCacheInfo['status_text']
     ];
     $modules[] = $graphMonthsModule;
     
     // Модуль 2: График приёма/закрытий 1С (weeks)
     $graphWeeksDir = __DIR__ . '/../cache/graph-admission-closure/weeks';
+    $graphWeeksCacheInfo = getCacheInfo($graphWeeksDir, 120);
     $graphWeeksModule = [
         'id' => 'graph-admission-closure-weeks',
         'name' => 'График приёма/закрытий 1С (4 недели)',
         'cache_dir' => 'api/cache/graph-admission-closure/weeks',
-        'status' => 'active',
-        'file_count' => getCacheFileCount($graphWeeksDir),
-        'total_size' => getCacheTotalSize($graphWeeksDir),
-        'ttl' => 120
+        'status' => $graphWeeksCacheInfo['status'],
+        'file_count' => $graphWeeksCacheInfo['file_count'],
+        'total_size' => $graphWeeksCacheInfo['total_size'],
+        'ttl' => 120,
+        'created_at' => $graphWeeksCacheInfo['created_at'],
+        'expires_at' => $graphWeeksCacheInfo['expires_at'],
+        'status_text' => $graphWeeksCacheInfo['status_text']
     ];
     $modules[] = $graphWeeksModule;
     
     // Модуль 3: Трудозатраты на Тикеты сектора 1С
     $timeTrackingCacheDir = __DIR__ . '/../cache/time-tracking-sector-1c';
+    $timeTrackingCacheInfo = getCacheInfo($timeTrackingCacheDir, 300);
     $timeTrackingModule = [
         'id' => 'time-tracking-sector-1c',
         'name' => 'Трудозатраты на Тикеты сектора 1С',
         'cache_dir' => 'api/cache/time-tracking-sector-1c',
-        'status' => 'active',
-        'file_count' => getCacheFileCount($timeTrackingCacheDir),
-        'total_size' => getCacheTotalSize($timeTrackingCacheDir),
-        'ttl' => 300
+        'status' => $timeTrackingCacheInfo['status'],
+        'file_count' => $timeTrackingCacheInfo['file_count'],
+        'total_size' => $timeTrackingCacheInfo['total_size'],
+        'ttl' => 300,
+        'created_at' => $timeTrackingCacheInfo['created_at'],
+        'expires_at' => $timeTrackingCacheInfo['expires_at'],
+        'status_text' => $timeTrackingCacheInfo['status_text']
     ];
     $modules[] = $timeTrackingModule;
     
@@ -142,5 +154,89 @@ function getCacheTotalSize(string $cacheDir): int
     }
     
     return $totalSize;
+}
+
+/**
+ * Получение информации о кеше (дата создания, статус, срок действия)
+ * 
+ * @param string $cacheDir Путь к директории кеша
+ * @param int $ttl TTL в секундах
+ * @return array Информация о кеше
+ */
+function getCacheInfo(string $cacheDir, int $ttl): array
+{
+    $info = [
+        'file_count' => 0,
+        'total_size' => 0,
+        'status' => 'empty',
+        'status_text' => 'Пуст',
+        'created_at' => null,
+        'expires_at' => null
+    ];
+    
+    if (!is_dir($cacheDir)) {
+        return $info;
+    }
+    
+    $files = glob($cacheDir . '/*.json');
+    if (!$files || count($files) === 0) {
+        return $info;
+    }
+    
+    $info['file_count'] = count($files);
+    
+    $newestCreatedAt = null;
+    $newestExpiresAt = null;
+    $now = time();
+    
+    foreach ($files as $file) {
+        if (!is_file($file)) {
+            continue;
+        }
+        
+        $info['total_size'] += filesize($file);
+        
+        // Чтение метаданных из файла
+        $content = @file_get_contents($file);
+        if ($content === false) {
+            continue;
+        }
+        
+        $data = @json_decode($content, true);
+        if ($data === null || !is_array($data) || !isset($data['metadata'])) {
+            continue;
+        }
+        
+        $metadata = $data['metadata'];
+        $createdAt = $metadata['created_at'] ?? null;
+        $expiresAt = $metadata['expires_at'] ?? null;
+        
+        // Находим самый новый файл
+        if ($createdAt !== null) {
+            if ($newestCreatedAt === null || $createdAt > $newestCreatedAt) {
+                $newestCreatedAt = $createdAt;
+                $newestExpiresAt = $expiresAt;
+            }
+        }
+    }
+    
+    if ($newestCreatedAt !== null) {
+        $info['created_at'] = $newestCreatedAt;
+        $info['expires_at'] = $newestExpiresAt;
+        
+        // Определяем статус
+        if ($newestExpiresAt !== null && $now > $newestExpiresAt) {
+            $info['status'] = 'expired';
+            $info['status_text'] = 'Просрочен';
+        } else {
+            $info['status'] = 'active';
+            $info['status_text'] = 'Активен';
+        }
+    } else {
+        $info['status'] = 'empty';
+        $info['status_text'] = 'Пуст';
+    }
+    
+    return $info;
 }
 
