@@ -287,3 +287,4 @@ curl -X POST https://example.com/api/tickets-time-tracking-sector-1c.php \
 **История правок:**
 - 2025-12-23 18:30 (UTC+3, Брест): Создана API-документация после рефакторинга
 
+

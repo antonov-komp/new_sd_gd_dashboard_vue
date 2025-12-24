@@ -594,8 +594,28 @@ function handleTabChange(tab) {
  */
 async function handleCategoryClick(category) {
   if (!category || category.count === 0) {
+    console.warn('[ResponsibleModal] handleCategoryClick: Invalid category or count is 0', {
+      category,
+      count: category?.count
+    });
     return;
   }
+  
+  console.log('[ResponsibleModal] handleCategoryClick called:', {
+    categoryId: category.id,
+    categoryLabel: category.label,
+    categoryCount: category.count,
+    responsibleCount: category.responsible?.length || 0,
+    // Проверяем, есть ли тикеты в категории
+    responsibleWithTickets: category.responsible?.filter(r => r.tickets && r.tickets.length > 0).length || 0,
+    responsibleSample: category.responsible?.slice(0, 2).map(r => ({
+      id: r.id,
+      name: r.name,
+      count: r.count,
+      hasTickets: !!(r.tickets),
+      ticketsCount: r.tickets?.length || 0
+    }))
+  });
   
   selectedCategory.value = category;
   popupLevel.value = 1;
@@ -604,6 +624,17 @@ async function handleCategoryClick(category) {
   isLoadingNames.value = true;
   try {
     enrichedResponsible.value = await enrichResponsibleWithNames(category.responsible);
+    
+    console.log('[ResponsibleModal] After enrichResponsibleWithNames:', {
+      enrichedCount: enrichedResponsible.value.length,
+      enrichedSample: enrichedResponsible.value.slice(0, 2).map(r => ({
+        id: r.id,
+        name: r.name,
+        count: r.count,
+        hasTickets: !!(r.tickets),
+        ticketsCount: r.tickets?.length || 0
+      }))
+    });
   } catch (error) {
     console.error('[ResponsibleModal] Error loading employee names:', error);
     // Fallback: использовать исходные данные
@@ -835,7 +866,20 @@ async function loadEmployeeTickets(employeeId) {
       selectedCategory: selectedCategory.value?.id,
       hasSelectedCategory: !!selectedCategory.value,
       hasResponsible: !!(selectedCategory.value?.responsible),
-      responsibleCount: selectedCategory.value?.responsible?.length || 0
+      responsibleCount: selectedCategory.value?.responsible?.length || 0,
+      // Детальная информация о категории
+      categoryData: selectedCategory.value ? {
+        id: selectedCategory.value.id,
+        label: selectedCategory.value.label,
+        count: selectedCategory.value.count,
+        responsibleSample: selectedCategory.value.responsible?.slice(0, 2).map(r => ({
+          id: r.id,
+          name: r.name,
+          count: r.count,
+          hasTickets: !!(r.tickets),
+          ticketsCount: r.tickets?.length || 0
+        }))
+      } : null
     });
     
     if (selectedCategory.value && selectedCategory.value.responsible) {
@@ -844,14 +888,20 @@ async function loadEmployeeTickets(employeeId) {
       console.log('[ResponsibleModal] Employee found in category:', {
         employee: employee,
         hasTickets: !!(employee?.tickets),
-        ticketsCount: employee?.tickets?.length || 0
+        ticketsCount: employee?.tickets?.length || 0,
+        tickets: employee?.tickets ? employee.tickets.slice(0, 2) : null // Показываем первые 2 тикета для отладки
       });
       employeeTickets = employee?.tickets || [];
     }
     
     // Если тикеты не найдены в категории, загружаем через API (fallback)
     if (employeeTickets.length === 0 && props.weekStartUtc && props.weekEndUtc) {
-      console.log('[ResponsibleModal] Tickets not found in category, loading from API');
+      console.log('[ResponsibleModal] Tickets not found in category, loading from API', {
+        weekStartUtc: props.weekStartUtc,
+        weekEndUtc: props.weekEndUtc,
+        categoryId: selectedCategory.value?.id
+      });
+      
       const response = await fetchAdmissionClosureStats({
         product: '1C',
         weekStartUtc: props.weekStartUtc,
@@ -863,7 +913,22 @@ async function loadEmployeeTickets(employeeId) {
         hasResponsibleCreatedThisWeek: !!(response.data.responsibleCreatedThisWeek),
         hasResponsibleCreatedOtherWeek: !!(response.data.responsibleCreatedOtherWeek),
         thisWeekCount: response.data.responsibleCreatedThisWeek?.length || 0,
-        otherWeekCount: response.data.responsibleCreatedOtherWeek?.length || 0
+        otherWeekCount: response.data.responsibleCreatedOtherWeek?.length || 0,
+        // Детальная информация о первой категории
+        thisWeekSample: response.data.responsibleCreatedThisWeek?.slice(0, 1).map(r => ({
+          id: r.id,
+          name: r.name,
+          count: r.count,
+          hasTickets: !!(r.tickets),
+          ticketsCount: r.tickets?.length || 0
+        })),
+        otherWeekSample: response.data.responsibleCreatedOtherWeek?.slice(0, 1).map(r => ({
+          id: r.id,
+          name: r.name,
+          count: r.count,
+          hasTickets: !!(r.tickets),
+          ticketsCount: r.tickets?.length || 0
+        }))
       });
       
       // Ищем в соответствующей категории из ответа API
@@ -873,17 +938,38 @@ async function loadEmployeeTickets(employeeId) {
       
       console.log('[ResponsibleModal] Category data:', {
         categoryId: selectedCategory.value?.id,
-        categoryDataCount: categoryData?.length || 0
+        categoryDataCount: categoryData?.length || 0,
+        categoryDataSample: categoryData?.slice(0, 2).map(r => ({
+          id: r.id,
+          name: r.name,
+          count: r.count,
+          hasTickets: !!(r.tickets),
+          ticketsCount: r.tickets?.length || 0
+        }))
       });
       
       const employee = categoryData?.find(r => r.id === employeeId);
       console.log('[ResponsibleModal] Employee found in API response:', {
-        employee: employee,
-        hasTickets: !!(employee?.tickets),
-        ticketsCount: employee?.tickets?.length || 0
+        employee: employee ? {
+          id: employee.id,
+          name: employee.name,
+          count: employee.count,
+          hasTickets: !!(employee.tickets),
+          ticketsCount: employee.tickets?.length || 0,
+          ticketsSample: employee.tickets?.slice(0, 2) // Первые 2 тикета для отладки
+        } : null
       });
       employeeTickets = employee?.tickets || [];
     }
+    
+    console.log('[ResponsibleModal] Final employeeTickets before prepareTicketsForDisplay:', {
+      ticketsCount: employeeTickets.length,
+      ticketsSample: employeeTickets.slice(0, 2).map(t => ({
+        id: t.id,
+        title: t.title || t.ufSubject || 'No title',
+        stageId: t.stageId
+      }))
+    });
     
     // Использовать prepareTicketsForDisplay() для полного обогащения данных
     // Функция автоматически загружает недостающие данные через API:
@@ -900,19 +986,48 @@ async function loadEmployeeTickets(employeeId) {
         null, // snapshot (недоступен в модуле «График приёма и закрытий»)
         null  // ticketDetails (будет загружен автоматически через API)
       );
+      
+      console.log('[ResponsibleModal] Tickets after prepareTicketsForDisplay:', {
+        ticketsCount: tickets.value.length,
+        ticketsSample: tickets.value.slice(0, 2).map(t => ({
+          id: t.id,
+          title: t.title || t.ufSubject || 'No title',
+          stageId: t.stageId
+        }))
+      });
     } catch (prepareError) {
       console.error('[ResponsibleModal] Error preparing tickets:', prepareError);
+      console.error('[ResponsibleModal] prepareError details:', {
+        message: prepareError.message,
+        stack: prepareError.stack,
+        employeeTicketsCount: employeeTickets.length
+      });
       // Fallback: использовать исходные тикеты без дополнительной подготовки
       // Это гарантирует, что попап не сломается при ошибке обогащения данных
       tickets.value = employeeTickets;
+      console.log('[ResponsibleModal] Using fallback tickets (without enrichment):', tickets.value.length);
     }
     
     if (tickets.value.length === 0) {
+      console.warn('[ResponsibleModal] No tickets after loading and preparation', {
+        employeeId,
+        categoryId: selectedCategory.value?.id,
+        employeeTicketsCount: employeeTickets.length,
+        finalTicketsCount: tickets.value.length
+      });
       error.value = null; // Не ошибка, просто нет тикетов
+    } else {
+      console.log('[ResponsibleModal] Successfully loaded tickets:', tickets.value.length);
     }
   } catch (err) {
     error.value = err.message || 'Ошибка загрузки тикетов';
     console.error('[ResponsibleModal] Error loading tickets:', err);
+    console.error('[ResponsibleModal] Error details:', {
+      message: err.message,
+      stack: err.stack,
+      employeeId,
+      categoryId: selectedCategory.value?.id
+    });
     tickets.value = [];
   } finally {
     isLoadingTickets.value = false;
@@ -973,11 +1088,26 @@ function retryLoadTickets() {
 watch(() => props.isVisible, (newValue) => {
   if (newValue) {
     console.log('[TASK-070] ResponsibleModal opened for week', props.weekNumber);
+    
+    // Детальная проверка типов данных
+    console.log('[TASK-070] ResponsibleModal props types:', {
+      responsibleCreatedThisWeekType: typeof props.responsibleCreatedThisWeek,
+      responsibleCreatedThisWeekIsArray: Array.isArray(props.responsibleCreatedThisWeek),
+      responsibleCreatedThisWeekLength: Array.isArray(props.responsibleCreatedThisWeek) ? props.responsibleCreatedThisWeek.length : 'not array',
+      responsibleCreatedOtherWeekType: typeof props.responsibleCreatedOtherWeek,
+      responsibleCreatedOtherWeekIsArray: Array.isArray(props.responsibleCreatedOtherWeek),
+      responsibleCreatedOtherWeekLength: Array.isArray(props.responsibleCreatedOtherWeek) ? props.responsibleCreatedOtherWeek.length : 'not array'
+    });
+    
     console.log('[TASK-070] ResponsibleModal data:', {
       weekStartUtc: props.weekStartUtc,
       weekEndUtc: props.weekEndUtc,
-      responsibleCreatedThisWeek: props.responsibleCreatedThisWeek?.length || 0,
-      responsibleCreatedOtherWeek: props.responsibleCreatedOtherWeek?.length || 0,
+      responsibleCreatedThisWeek: Array.isArray(props.responsibleCreatedThisWeek) 
+        ? props.responsibleCreatedThisWeek.length 
+        : (props.responsibleCreatedThisWeek ? 'not array' : 'null/undefined'),
+      responsibleCreatedOtherWeek: Array.isArray(props.responsibleCreatedOtherWeek) 
+        ? props.responsibleCreatedOtherWeek.length 
+        : (props.responsibleCreatedOtherWeek ? 'not array' : 'null/undefined'),
       closedTicketsCreatedThisWeek: props.closedTicketsCreatedThisWeek,
       closedTicketsCreatedOtherWeek: props.closedTicketsCreatedOtherWeek
     });
@@ -986,20 +1116,24 @@ watch(() => props.isVisible, (newValue) => {
     console.log('[TASK-070] ResponsibleModal detailed data:', {
       responsibleCreatedThisWeek: props.responsibleCreatedThisWeek,
       responsibleCreatedOtherWeek: props.responsibleCreatedOtherWeek,
-      responsibleCreatedThisWeekWithTickets: props.responsibleCreatedThisWeek?.map(r => ({
-        id: r.id,
-        name: r.name,
-        count: r.count,
-        hasTickets: !!(r.tickets),
-        ticketsCount: r.tickets?.length || 0
-      })),
-      responsibleCreatedOtherWeekWithTickets: props.responsibleCreatedOtherWeek?.map(r => ({
-        id: r.id,
-        name: r.name,
-        count: r.count,
-        hasTickets: !!(r.tickets),
-        ticketsCount: r.tickets?.length || 0
-      }))
+      responsibleCreatedThisWeekWithTickets: Array.isArray(props.responsibleCreatedThisWeek) 
+        ? props.responsibleCreatedThisWeek.map(r => ({
+            id: r.id,
+            name: r.name,
+            count: r.count,
+            hasTickets: !!(r.tickets),
+            ticketsCount: r.tickets?.length || 0
+          }))
+        : 'not array or null',
+      responsibleCreatedOtherWeekWithTickets: Array.isArray(props.responsibleCreatedOtherWeek) 
+        ? props.responsibleCreatedOtherWeek.map(r => ({
+            id: r.id,
+            name: r.name,
+            count: r.count,
+            hasTickets: !!(r.tickets),
+            ticketsCount: r.tickets?.length || 0
+          }))
+        : 'not array or null'
     });
     
     // TASK-070: Проверка для предыдущей недели

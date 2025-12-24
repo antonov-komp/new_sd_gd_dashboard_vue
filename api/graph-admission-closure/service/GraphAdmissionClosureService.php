@@ -123,9 +123,11 @@ class GraphAdmissionClosureService
         $currentWeekData = $aggregated['currentWeekData'];
         $stageAgg = $aggregated['stageAgg'];
         
-        // TASK-070: Получаем newTicketsByStages и carryoverTicketsByDuration для текущей недели из aggregated
+        // TASK-070: Получаем newTicketsByStages, carryoverTicketsByDuration и responsible для текущей недели из aggregated
         $newTicketsByStages = $aggregated['currentWeekNewTicketsByStages'] ?? null;
         $carryoverTicketsByDuration = $aggregated['currentWeekCarryoverTicketsByDuration'] ?? null;
+        $responsibleCreatedThisWeek = $aggregated['currentWeekResponsibleCreatedThisWeek'] ?? [];
+        $responsibleCreatedOtherWeek = $aggregated['currentWeekResponsibleCreatedOtherWeek'] ?? [];
 
         // Формирование ответа (контракт legacy)
         $newCount = $currentWeekData['newTickets'] ?? 0;
@@ -156,8 +158,8 @@ class GraphAdmissionClosureService
                 ];
             }, array_keys($stageAgg)),
             'responsible' => [],
-            'responsibleCreatedThisWeek' => [],
-            'responsibleCreatedOtherWeek' => [],
+            'responsibleCreatedThisWeek' => $responsibleCreatedThisWeek, // TASK-070: Данные из Aggregator
+            'responsibleCreatedOtherWeek' => $responsibleCreatedOtherWeek, // TASK-070: Данные из Aggregator
             'newTicketsByStages' => $newTicketsByStages
         ];
 

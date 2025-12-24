@@ -76,6 +76,10 @@ class Aggregator
             }
         }
 
+        // TASK-070: Инициализация агрегации закрытых тикетов по ответственным
+        $responsibleCreatedThisWeekAgg = []; // Агрегация по сотрудникам для категории "созданные этой неделей"
+        $responsibleCreatedOtherWeekAgg = []; // Агрегация по сотрудникам для категории "созданные ранее"
+
         $weekStartStr = $weekStart->format('Y-m-d H:i:s');
         $weekEndStr = $weekEnd->format('Y-m-d H:i:s');
 
@@ -147,7 +151,9 @@ class Aggregator
 
             if ($shouldCountAsClosed) {
                 $closedCount++;
-                if ($isCreatedInRange) {
+                $createdInThisWeek = $isCreatedInRange;
+                
+                if ($createdInThisWeek) {
                     $closedTicketsCreatedThisWeek++;
                 } else {
                     $closedTicketsCreatedOtherWeek++;
@@ -158,6 +164,63 @@ class Aggregator
                         $stageAgg[$stageId] = 0;
                     }
                     $stageAgg[$stageId]++;
+                }
+
+                // TASK-070: Агрегация закрытых тикетов по ответственным
+                // Нормализация assignedById
+                $responsibleId = $assignedRaw;
+                if (is_array($responsibleId)) {
+                    $responsibleId = $responsibleId['id'] ?? $responsibleId['ID'] ?? $responsibleId['value'] ?? null;
+                }
+                $responsibleId = $responsibleId ? (int)$responsibleId : null;
+                $responsibleKey = ($responsibleId === null || $responsibleId === $keeperId) ? 'unassigned' : (string)$responsibleId;
+
+                if ($createdInThisWeek) {
+                    // Агрегация по сотрудникам для категории "созданные этой неделей"
+                    if (!isset($responsibleCreatedThisWeekAgg[$responsibleKey])) {
+                        $responsibleCreatedThisWeekAgg[$responsibleKey] = [
+                            'id' => $responsibleId,
+                            'name' => ($responsibleId === null || $responsibleId === $keeperId) ? 'Не назначен' : ('ID ' . $responsibleId),
+                            'count' => 0,
+                            'tickets' => []
+                        ];
+                    }
+                    $responsibleCreatedThisWeekAgg[$responsibleKey]['count']++;
+                    
+                    // Если нужно включить тикеты, сохранить данные тикета
+                    if ($includeTickets) {
+                        $responsibleCreatedThisWeekAgg[$responsibleKey]['tickets'][] = [
+                            'id' => (int)$ticket['id'],
+                            'title' => $ticket['title'] ?? 'Без названия',
+                            'createdTime' => $createdTime,
+                            'movedTime' => $movedTime,
+                            'stageId' => $stageId,
+                            'assignedById' => $responsibleId
+                        ];
+                    }
+                } else {
+                    // Агрегация по сотрудникам для категории "созданные ранее"
+                    if (!isset($responsibleCreatedOtherWeekAgg[$responsibleKey])) {
+                        $responsibleCreatedOtherWeekAgg[$responsibleKey] = [
+                            'id' => $responsibleId,
+                            'name' => ($responsibleId === null || $responsibleId === $keeperId) ? 'Не назначен' : ('ID ' . $responsibleId),
+                            'count' => 0,
+                            'tickets' => []
+                        ];
+                    }
+                    $responsibleCreatedOtherWeekAgg[$responsibleKey]['count']++;
+                    
+                    // Если нужно включить тикеты, сохранить данные тикета
+                    if ($includeTickets) {
+                        $responsibleCreatedOtherWeekAgg[$responsibleKey]['tickets'][] = [
+                            'id' => (int)$ticket['id'],
+                            'title' => $ticket['title'] ?? 'Без названия',
+                            'createdTime' => $createdTime,
+                            'movedTime' => $movedTime,
+                            'stageId' => $stageId,
+                            'assignedById' => $responsibleId
+                        ];
+                    }
                 }
             }
 
@@ -282,6 +345,37 @@ class Aggregator
             $carryoverTicketsByDuration = array_values($carryoverTicketsByDuration);
         }
 
+        // TASK-070: Формируем массивы ответственных для закрытых тикетов
+        $responsibleCreatedThisWeek = array_map(function ($item) use ($includeTickets) {
+            $result = [
+                'id' => $item['id'],
+                'name' => $item['name'],
+                'count' => $item['count']
+            ];
+            
+            // Включить тикеты только если запрошено
+            if ($includeTickets && isset($item['tickets'])) {
+                $result['tickets'] = $item['tickets'];
+            }
+            
+            return $result;
+        }, array_values($responsibleCreatedThisWeekAgg));
+        
+        $responsibleCreatedOtherWeek = array_map(function ($item) use ($includeTickets) {
+            $result = [
+                'id' => $item['id'],
+                'name' => $item['name'],
+                'count' => $item['count']
+            ];
+            
+            // Включить тикеты только если запрошено
+            if ($includeTickets && isset($item['tickets'])) {
+                $result['tickets'] = $item['tickets'];
+            }
+            
+            return $result;
+        }, array_values($responsibleCreatedOtherWeekAgg));
+
         return [
             'newTickets' => $newCount,
             'closedTickets' => $closedCount,
@@ -295,7 +389,9 @@ class Aggregator
             'stages' => $stages,
             'stageCounts' => $stageAgg,
             'newTicketsByStages' => $newTicketsByStages,
-            'carryoverTicketsByDuration' => $carryoverTicketsByDuration
+            'carryoverTicketsByDuration' => $carryoverTicketsByDuration,
+            'responsibleCreatedThisWeek' => $responsibleCreatedThisWeek, // TASK-070: НОВОЕ
+            'responsibleCreatedOtherWeek' => $responsibleCreatedOtherWeek  // TASK-070: НОВОЕ
         ];
     }
 
@@ -383,10 +479,14 @@ class Aggregator
 
         $stageAgg = $lastWeekStageCounts ?: [];
         
-        // TASK-070: Получаем newTicketsByStages и carryoverTicketsByDuration для текущей недели (последняя неделя)
+        // TASK-070: Получаем newTicketsByStages, carryoverTicketsByDuration и responsible для текущей недели (последняя неделя)
         $currentWeekNewTicketsByStages = null;
         $currentWeekCarryoverTicketsByDuration = null;
-        if (($includeNewTicketsByStages || $includeCarryoverTicketsByDuration) && count($weeks) > 0) {
+        $currentWeekResponsibleCreatedThisWeek = [];
+        $currentWeekResponsibleCreatedOtherWeek = [];
+        
+        // TASK-070: Всегда получаем данные ответственных для текущей недели (нужны для ResponsibleModal)
+        if (count($weeks) > 0) {
             $lastWeek = $weeks[count($weeks) - 1];
             $lastWeekMetrics = $this->calculateWeekMetrics(
                 $lastWeek['weekStart'],
@@ -402,8 +502,11 @@ class Aggregator
                 $includeCarryoverTicketsByDuration,
                 $durationCategories
             );
+            
             $currentWeekNewTicketsByStages = $lastWeekMetrics['newTicketsByStages'] ?? null;
             $currentWeekCarryoverTicketsByDuration = $lastWeekMetrics['carryoverTicketsByDuration'] ?? null;
+            $currentWeekResponsibleCreatedThisWeek = $lastWeekMetrics['responsibleCreatedThisWeek'] ?? [];
+            $currentWeekResponsibleCreatedOtherWeek = $lastWeekMetrics['responsibleCreatedOtherWeek'] ?? [];
         }
 
         return [
@@ -413,7 +516,9 @@ class Aggregator
             'currentWeekData' => $currentWeekData,
             'stageAgg' => $stageAgg,
             'currentWeekNewTicketsByStages' => $currentWeekNewTicketsByStages,
-            'currentWeekCarryoverTicketsByDuration' => $currentWeekCarryoverTicketsByDuration
+            'currentWeekCarryoverTicketsByDuration' => $currentWeekCarryoverTicketsByDuration,
+            'currentWeekResponsibleCreatedThisWeek' => $currentWeekResponsibleCreatedThisWeek, // TASK-070: НОВОЕ
+            'currentWeekResponsibleCreatedOtherWeek' => $currentWeekResponsibleCreatedOtherWeek  // TASK-070: НОВОЕ
         ];
     }
 

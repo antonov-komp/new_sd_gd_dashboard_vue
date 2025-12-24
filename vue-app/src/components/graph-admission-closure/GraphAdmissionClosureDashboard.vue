@@ -321,16 +321,42 @@ async function loadData() {
     chartMeta.value = meta;
     
     // Нормализация данных: преобразуем объекты в массивы, если необходимо
+    const normalizedThisWeek = Array.isArray(data.responsibleCreatedThisWeek) 
+      ? data.responsibleCreatedThisWeek 
+      : (data.responsibleCreatedThisWeek ? Object.values(data.responsibleCreatedThisWeek) : []);
+    const normalizedOtherWeek = Array.isArray(data.responsibleCreatedOtherWeek) 
+      ? data.responsibleCreatedOtherWeek 
+      : (data.responsibleCreatedOtherWeek ? Object.values(data.responsibleCreatedOtherWeek) : []);
+    
     chartData.value = {
       ...data,
-      responsibleCreatedThisWeek: Array.isArray(data.responsibleCreatedThisWeek) 
-        ? data.responsibleCreatedThisWeek 
-        : (data.responsibleCreatedThisWeek ? Object.values(data.responsibleCreatedThisWeek) : []),
-      responsibleCreatedOtherWeek: Array.isArray(data.responsibleCreatedOtherWeek) 
-        ? data.responsibleCreatedOtherWeek 
-        : (data.responsibleCreatedOtherWeek ? Object.values(data.responsibleCreatedOtherWeek) : [])
+      responsibleCreatedThisWeek: normalizedThisWeek,
+      responsibleCreatedOtherWeek: normalizedOtherWeek
     };
+    
     console.log('[DEBUG] Data set, meta:', meta, 'data keys:', Object.keys(data));
+    console.log('[TASK-070] chartData.value.responsibleCreatedThisWeek after normalization:', {
+      isArray: Array.isArray(normalizedThisWeek),
+      length: normalizedThisWeek.length,
+      sample: normalizedThisWeek.slice(0, 2).map(r => ({
+        id: r.id,
+        name: r.name,
+        count: r.count,
+        hasTickets: !!(r.tickets),
+        ticketsCount: r.tickets?.length || 0
+      }))
+    });
+    console.log('[TASK-070] chartData.value.responsibleCreatedOtherWeek after normalization:', {
+      isArray: Array.isArray(normalizedOtherWeek),
+      length: normalizedOtherWeek.length,
+      sample: normalizedOtherWeek.slice(0, 2).map(r => ({
+        id: r.id,
+        name: r.name,
+        count: r.count,
+        hasTickets: !!(r.tickets),
+        ticketsCount: r.tickets?.length || 0
+      }))
+    });
     
     // TASK-070: Логирование данных responsible для диагностики
     console.log('[TASK-070] responsibleCreatedThisWeek from API:', {
@@ -597,7 +623,21 @@ function getResponsibleData(weekMeta) {
  * TASK-070: Получение данных responsibleCreatedThisWeek для ResponsibleModal
  */
 function getResponsibleCreatedThisWeek(weekMeta) {
-  if (!weekMeta || !chartMeta.value) {
+  // Если weekMeta не указан (клик на summary-карточку текущей недели), используем данные из chartData
+  if (!weekMeta) {
+    const data = chartData.value.responsibleCreatedThisWeek;
+    console.log('[TASK-070] getResponsibleCreatedThisWeek: weekMeta is null, using chartData:', {
+      hasData: !!data,
+      isArray: Array.isArray(data),
+      dataLength: Array.isArray(data) ? data.length : (data ? Object.keys(data).length : 0)
+    });
+    if (!data) return null;
+    // Нормализация: преобразуем объект в массив, если необходимо
+    return Array.isArray(data) ? data : Object.values(data);
+  }
+  
+  if (!chartMeta.value) {
+    console.log('[TASK-070] getResponsibleCreatedThisWeek: chartMeta is null');
     return null;
   }
   
@@ -607,23 +647,69 @@ function getResponsibleCreatedThisWeek(weekMeta) {
     ? weeks[weeks.length - 1].weekNumber 
     : chartMeta.value.weekNumber;
   
+  const previousWeekNumber = weeks.length >= 2 
+    ? weeks[weeks.length - 2].weekNumber 
+    : null;
+  
   const isCurrentWeek = weekMeta.weekNumber === currentWeekNumber;
+  const isPreviousWeek = weekMeta.weekNumber === previousWeekNumber;
+  
+  console.log('[TASK-070] getResponsibleCreatedThisWeek:', {
+    requestedWeek: weekMeta.weekNumber,
+    currentWeekNumber,
+    previousWeekNumber,
+    isCurrentWeek,
+    isPreviousWeek
+  });
+  
   if (isCurrentWeek) {
     const data = chartData.value.responsibleCreatedThisWeek;
+    console.log('[TASK-070] getResponsibleCreatedThisWeek: current week data:', {
+      hasData: !!data,
+      isArray: Array.isArray(data),
+      dataLength: Array.isArray(data) ? data.length : (data ? Object.keys(data).length : 0)
+    });
     if (!data) return null;
     // Нормализация: преобразуем объект в массив, если необходимо
     return Array.isArray(data) ? data : Object.values(data);
   }
   
-  // Для предыдущей недели данные будут загружены при открытии попапа
-  return preloadedPopupData.value.previousWeek.responsibleCreatedThisWeek || null;
+  // Для предыдущей недели используем предзагруженные данные
+  if (isPreviousWeek) {
+    const previousWeekData = preloadedPopupData.value.previousWeek.responsibleCreatedThisWeek;
+    console.log('[TASK-070] getResponsibleCreatedThisWeek: previous week data:', {
+      hasData: !!previousWeekData,
+      isArray: Array.isArray(previousWeekData),
+      dataLength: Array.isArray(previousWeekData) ? previousWeekData.length : 0,
+      data: previousWeekData
+    });
+    return previousWeekData || null;
+  }
+  
+  // Для других недель данные будут загружены при открытии попапа
+  console.log('[TASK-070] getResponsibleCreatedThisWeek: week', weekMeta.weekNumber, 'is neither current nor previous, no preloaded data');
+  return null;
 }
 
 /**
  * TASK-070: Получение данных responsibleCreatedOtherWeek для ResponsibleModal
  */
 function getResponsibleCreatedOtherWeek(weekMeta) {
-  if (!weekMeta || !chartMeta.value) {
+  // Если weekMeta не указан (клик на summary-карточку текущей недели), используем данные из chartData
+  if (!weekMeta) {
+    const data = chartData.value.responsibleCreatedOtherWeek;
+    console.log('[TASK-070] getResponsibleCreatedOtherWeek: weekMeta is null, using chartData:', {
+      hasData: !!data,
+      isArray: Array.isArray(data),
+      dataLength: Array.isArray(data) ? data.length : (data ? Object.keys(data).length : 0)
+    });
+    if (!data) return null;
+    // Нормализация: преобразуем объект в массив, если необходимо
+    return Array.isArray(data) ? data : Object.values(data);
+  }
+  
+  if (!chartMeta.value) {
+    console.log('[TASK-070] getResponsibleCreatedOtherWeek: chartMeta is null');
     return null;
   }
   
@@ -633,16 +719,48 @@ function getResponsibleCreatedOtherWeek(weekMeta) {
     ? weeks[weeks.length - 1].weekNumber 
     : chartMeta.value.weekNumber;
   
+  const previousWeekNumber = weeks.length >= 2 
+    ? weeks[weeks.length - 2].weekNumber 
+    : null;
+  
   const isCurrentWeek = weekMeta.weekNumber === currentWeekNumber;
+  const isPreviousWeek = weekMeta.weekNumber === previousWeekNumber;
+  
+  console.log('[TASK-070] getResponsibleCreatedOtherWeek:', {
+    requestedWeek: weekMeta.weekNumber,
+    currentWeekNumber,
+    previousWeekNumber,
+    isCurrentWeek,
+    isPreviousWeek
+  });
+  
   if (isCurrentWeek) {
     const data = chartData.value.responsibleCreatedOtherWeek;
+    console.log('[TASK-070] getResponsibleCreatedOtherWeek: current week data:', {
+      hasData: !!data,
+      isArray: Array.isArray(data),
+      dataLength: Array.isArray(data) ? data.length : (data ? Object.keys(data).length : 0)
+    });
     if (!data) return null;
     // Нормализация: преобразуем объект в массив, если необходимо
     return Array.isArray(data) ? data : Object.values(data);
   }
   
-  // Для предыдущей недели данные будут загружены при открытии попапа
-  return preloadedPopupData.value.previousWeek.responsibleCreatedOtherWeek || null;
+  // Для предыдущей недели используем предзагруженные данные
+  if (isPreviousWeek) {
+    const previousWeekData = preloadedPopupData.value.previousWeek.responsibleCreatedOtherWeek;
+    console.log('[TASK-070] getResponsibleCreatedOtherWeek: previous week data:', {
+      hasData: !!previousWeekData,
+      isArray: Array.isArray(previousWeekData),
+      dataLength: Array.isArray(previousWeekData) ? previousWeekData.length : 0,
+      data: previousWeekData
+    });
+    return previousWeekData || null;
+  }
+  
+  // Для других недель данные будут загружены при открытии попапа
+  console.log('[TASK-070] getResponsibleCreatedOtherWeek: week', weekMeta.weekNumber, 'is neither current nor previous, no preloaded data');
+  return null;
 }
 
 /**
@@ -658,14 +776,24 @@ function getClosedTicketsCreatedThisWeek(weekMeta) {
   const currentWeekNumber = weeks.length > 0 
     ? weeks[weeks.length - 1].weekNumber 
     : chartMeta.value.weekNumber;
+  const previousWeekNumber = weeks.length >= 2 
+    ? weeks[weeks.length - 2].weekNumber 
+    : null;
   
   const isCurrentWeek = weekMeta.weekNumber === currentWeekNumber;
+  const isPreviousWeek = weekMeta.weekNumber === previousWeekNumber;
+  
   if (isCurrentWeek) {
     return chartData.value.closedTicketsCreatedThisWeek ?? null;
   }
   
-  // Для предыдущей недели нужно получить из weeksData или сделать отдельный запрос
-  // Пока возвращаем null, попап сделает запрос при открытии
+  // Для предыдущей недели получаем из weeksData
+  if (isPreviousWeek && chartData.value.weeksData) {
+    const previousWeekData = chartData.value.weeksData.find(w => w.weekNumber === previousWeekNumber);
+    return previousWeekData?.closedTicketsCreatedThisWeek ?? null;
+  }
+  
+  // Для других недель попап сделает запрос при открытии
   return null;
 }
 
@@ -682,14 +810,24 @@ function getClosedTicketsCreatedOtherWeek(weekMeta) {
   const currentWeekNumber = weeks.length > 0 
     ? weeks[weeks.length - 1].weekNumber 
     : chartMeta.value.weekNumber;
+  const previousWeekNumber = weeks.length >= 2 
+    ? weeks[weeks.length - 2].weekNumber 
+    : null;
   
   const isCurrentWeek = weekMeta.weekNumber === currentWeekNumber;
+  const isPreviousWeek = weekMeta.weekNumber === previousWeekNumber;
+  
   if (isCurrentWeek) {
     return chartData.value.closedTicketsCreatedOtherWeek ?? null;
   }
   
-  // Для предыдущей недели нужно получить из weeksData или сделать отдельный запрос
-  // Пока возвращаем null, попап сделает запрос при открытии
+  // Для предыдущей недели получаем из weeksData
+  if (isPreviousWeek && chartData.value.weeksData) {
+    const previousWeekData = chartData.value.weeksData.find(w => w.weekNumber === previousWeekNumber);
+    return previousWeekData?.closedTicketsCreatedOtherWeek ?? null;
+  }
+  
+  // Для других недель попап сделает запрос при открытии
   return null;
 }
 
