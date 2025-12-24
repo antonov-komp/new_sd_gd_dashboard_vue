@@ -4,6 +4,7 @@ require_once __DIR__ . '/../../cache/TimeTrackingCache.php';
 
 /**
  * TASK-071-02: Обертка над TimeTrackingCache
+ * TASK-075: Обновлено для поддержки режимов
  * 
  * Позволит сохранить совместимость при постепенном переносе логики,
  * не меняя формат ключей/TTL/структуру данных.
@@ -28,12 +29,14 @@ class CacheStore
     /**
      * Сохранить данные в кеш
      * 
+     * TASK-075: Обновлено для поддержки автоматического TTL по режиму
+     * 
      * @param string $key Ключ кеша
      * @param array $data Данные для кеширования
-     * @param int $ttl TTL в секундах (по умолчанию 5 минут)
+     * @param int|null $ttl TTL в секундах (null = автоматический выбор по режиму)
      * @return bool true если успешно
      */
-    public function set(string $key, array $data, int $ttl = 300): bool
+    public function set(string $key, array $data, ?int $ttl = null): bool
     {
         return TimeTrackingCache::set($key, $data, $ttl);
     }
@@ -41,12 +44,15 @@ class CacheStore
     /**
      * Генерация ключа кеша на основе параметров запроса
      * 
+     * TASK-075: Обновлено для поддержки режимов
+     * 
      * @param array $params Параметры запроса
+     * @param string $mode Режим ('default', 'detailed', 'summary')
      * @return string Ключ кеша
      */
-    public function generateKey(array $params): string
+    public function generateKey(array $params, string $mode = 'default'): string
     {
-        return TimeTrackingCache::generateKey($params);
+        return TimeTrackingCache::generateKey($params, $mode);
     }
 
     /**
@@ -57,6 +63,19 @@ class CacheStore
     public function clearExpired(): int
     {
         return TimeTrackingCache::clearExpired();
+    }
+    
+    /**
+     * Очистить кеш для конкретного режима
+     * 
+     * TASK-075: Новый метод для очистки конкретного режима
+     * 
+     * @param string $mode Режим ('default', 'detailed', 'summary')
+     * @return bool true если успешно
+     */
+    public function clearByMode(string $mode): bool
+    {
+        return TimeTrackingCache::clearByMode($mode);
     }
 }
 

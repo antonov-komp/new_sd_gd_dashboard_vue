@@ -27,6 +27,9 @@
 
 require_once $_SERVER['DOCUMENT_ROOT'] . '/rest_api_aps/sd_it_gen_plan/api/cache/GraphAdmissionClosureCache.php';
 require_once $_SERVER['DOCUMENT_ROOT'] . '/rest_api_aps/sd_it_gen_plan/api/cache/TimeTrackingCache.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/rest_api_aps/sd_it_gen_plan/api/cache/UsersManagementCache.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/rest_api_aps/sd_it_gen_plan/api/cache/UserActivityCache.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/rest_api_aps/sd_it_gen_plan/api/cache/WebhookLogsCache.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
@@ -80,28 +83,165 @@ try {
     ];
     $modules[] = $graphWeeksModule;
     
-    // Модуль 3: Трудозатраты на Тикеты сектора 1С
-    $timeTrackingCacheDir = __DIR__ . '/../cache/time-tracking-sector-1c';
-    $timeTrackingCacheInfo = getCacheInfo($timeTrackingCacheDir, 300);
-    $timeTrackingModule = [
-        'id' => 'time-tracking-sector-1c',
-        'name' => 'Трудозатраты на Тикеты сектора 1С',
-        'cache_dir' => 'api/cache/time-tracking-sector-1c',
-        'status' => $timeTrackingCacheInfo['status'],
-        'file_count' => $timeTrackingCacheInfo['file_count'],
-        'total_size' => $timeTrackingCacheInfo['total_size'],
-        'ttl' => 300,
-        'created_at' => $timeTrackingCacheInfo['created_at'],
-        'expires_at' => $timeTrackingCacheInfo['expires_at'],
-        'status_text' => $timeTrackingCacheInfo['status_text']
+    // Модуль 3: Трудозатраты на Тикеты сектора 1С (с режимами)
+    // TASK-075: Обновлено для поддержки режимов
+    $timeTrackingBaseDir = __DIR__ . '/../cache/time-tracking-sector-1c';
+    $timeTrackingModes = [
+        [
+            'id' => 'time-tracking-default',
+            'name' => 'Трудозатраты (режим по умолчанию)',
+            'cache_dir' => $timeTrackingBaseDir . '/default',
+            'ttl' => 300
+        ],
+        [
+            'id' => 'time-tracking-detailed',
+            'name' => 'Трудозатраты (детальный режим)',
+            'cache_dir' => $timeTrackingBaseDir . '/detailed',
+            'ttl' => 120
+        ],
+        [
+            'id' => 'time-tracking-summary',
+            'name' => 'Трудозатраты (сводный режим)',
+            'cache_dir' => $timeTrackingBaseDir . '/summary',
+            'ttl' => 600
+        ]
     ];
-    $modules[] = $timeTrackingModule;
     
-    // Модуль 4: Недельные новые и закрытые тикеты сектора 1С
-    // TODO: Добавить информацию о кеше этого модуля, если он реализован
+    foreach ($timeTrackingModes as $mode) {
+        $cacheInfo = getCacheInfo($mode['cache_dir'], $mode['ttl']);
+        $modules[] = [
+            'id' => $mode['id'],
+            'name' => $mode['name'],
+            'cache_dir' => 'api/cache/time-tracking-sector-1c/' . basename($mode['cache_dir']),
+            'status' => $cacheInfo['status'],
+            'file_count' => $cacheInfo['file_count'],
+            'total_size' => $cacheInfo['total_size'],
+            'ttl' => $mode['ttl'],
+            'created_at' => $cacheInfo['created_at'],
+            'expires_at' => $cacheInfo['expires_at'],
+            'status_text' => $cacheInfo['status_text']
+        ];
+    }
     
-    // Модуль 5: Трудозатраты сотрудников сектора 1С по неделям
-    // TODO: Добавить информацию о кеше этого модуля, если он реализован
+    // Модуль 4: Управление пользователями (с режимами)
+    // TASK-075: Добавлен новый модуль с поддержкой режимов
+    $usersManagementBaseDir = __DIR__ . '/../cache/users-management';
+    $usersManagementModes = [
+        [
+            'id' => 'users-management-departments',
+            'name' => 'Управление пользователями (отделы)',
+            'cache_dir' => $usersManagementBaseDir . '/departments',
+            'ttl' => 3600
+        ],
+        [
+            'id' => 'users-management-users',
+            'name' => 'Управление пользователями (пользователи)',
+            'cache_dir' => $usersManagementBaseDir . '/users',
+            'ttl' => 1800
+        ],
+        [
+            'id' => 'users-management-config',
+            'name' => 'Управление пользователями (конфигурация)',
+            'cache_dir' => $usersManagementBaseDir . '/config',
+            'ttl' => 300
+        ]
+    ];
+    
+    foreach ($usersManagementModes as $mode) {
+        $cacheInfo = getCacheInfo($mode['cache_dir'], $mode['ttl']);
+        $modules[] = [
+            'id' => $mode['id'],
+            'name' => $mode['name'],
+            'cache_dir' => 'api/cache/users-management/' . basename($mode['cache_dir']),
+            'status' => $cacheInfo['status'],
+            'file_count' => $cacheInfo['file_count'],
+            'total_size' => $cacheInfo['total_size'],
+            'ttl' => $mode['ttl'],
+            'created_at' => $cacheInfo['created_at'],
+            'expires_at' => $cacheInfo['expires_at'],
+            'status_text' => $cacheInfo['status_text']
+        ];
+    }
+    
+    // Модуль 5: Отслеживание активности (с режимами)
+    // TASK-075: Добавлен новый модуль с поддержкой режимов
+    $userActivityBaseDir = __DIR__ . '/../cache/user-activity';
+    $userActivityModes = [
+        [
+            'id' => 'user-activity-stats',
+            'name' => 'Отслеживание активности (статистика)',
+            'cache_dir' => $userActivityBaseDir . '/stats',
+            'ttl' => 300
+        ],
+        [
+            'id' => 'user-activity-list',
+            'name' => 'Отслеживание активности (список)',
+            'cache_dir' => $userActivityBaseDir . '/list',
+            'ttl' => 120
+        ],
+        [
+            'id' => 'user-activity-filters',
+            'name' => 'Отслеживание активности (фильтры)',
+            'cache_dir' => $userActivityBaseDir . '/filters',
+            'ttl' => 60
+        ]
+    ];
+    
+    foreach ($userActivityModes as $mode) {
+        $cacheInfo = getCacheInfo($mode['cache_dir'], $mode['ttl']);
+        $modules[] = [
+            'id' => $mode['id'],
+            'name' => $mode['name'],
+            'cache_dir' => 'api/cache/user-activity/' . basename($mode['cache_dir']),
+            'status' => $cacheInfo['status'],
+            'file_count' => $cacheInfo['file_count'],
+            'total_size' => $cacheInfo['total_size'],
+            'ttl' => $mode['ttl'],
+            'created_at' => $cacheInfo['created_at'],
+            'expires_at' => $cacheInfo['expires_at'],
+            'status_text' => $cacheInfo['status_text']
+        ];
+    }
+    
+    // Модуль 6: Логи вебхуков (с режимами)
+    // TASK-075: Добавлен новый модуль с поддержкой режимов
+    $webhookLogsBaseDir = __DIR__ . '/../cache/webhook-logs';
+    $webhookLogsModes = [
+        [
+            'id' => 'webhook-logs-api',
+            'name' => 'Логи вебхуков (API запросы)',
+            'cache_dir' => $webhookLogsBaseDir . '/api',
+            'ttl' => 300
+        ],
+        [
+            'id' => 'webhook-logs-realtime',
+            'name' => 'Логи вебхуков (realtime данные)',
+            'cache_dir' => $webhookLogsBaseDir . '/realtime',
+            'ttl' => 60
+        ],
+        [
+            'id' => 'webhook-logs-stats',
+            'name' => 'Логи вебхуков (статистика)',
+            'cache_dir' => $webhookLogsBaseDir . '/stats',
+            'ttl' => 600
+        ]
+    ];
+    
+    foreach ($webhookLogsModes as $mode) {
+        $cacheInfo = getCacheInfo($mode['cache_dir'], $mode['ttl']);
+        $modules[] = [
+            'id' => $mode['id'],
+            'name' => $mode['name'],
+            'cache_dir' => 'api/cache/webhook-logs/' . basename($mode['cache_dir']),
+            'status' => $cacheInfo['status'],
+            'file_count' => $cacheInfo['file_count'],
+            'total_size' => $cacheInfo['total_size'],
+            'ttl' => $mode['ttl'],
+            'created_at' => $cacheInfo['created_at'],
+            'expires_at' => $cacheInfo['expires_at'],
+            'status_text' => $cacheInfo['status_text']
+        ];
+    }
     
     http_response_code(200);
     echo json_encode([

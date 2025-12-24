@@ -23,6 +23,9 @@
 
 require_once $_SERVER['DOCUMENT_ROOT'] . '/rest_api_aps/sd_it_gen_plan/api/cache/GraphAdmissionClosureCache.php';
 require_once $_SERVER['DOCUMENT_ROOT'] . '/rest_api_aps/sd_it_gen_plan/api/cache/TimeTrackingCache.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/rest_api_aps/sd_it_gen_plan/api/cache/UsersManagementCache.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/rest_api_aps/sd_it_gen_plan/api/cache/UserActivityCache.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/rest_api_aps/sd_it_gen_plan/api/cache/WebhookLogsCache.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
@@ -96,14 +99,37 @@ try {
         $clearedModules[] = 'graph-admission-closure-months';
         $clearedModules[] = 'graph-admission-closure-weeks';
         
-        // Трудозатраты на Тикеты сектора 1С
+        // Трудозатраты на Тикеты сектора 1С (все режимы)
+        // TASK-075: Обновлено для очистки всех режимов
         TimeTrackingCache::clear();
-        $clearedModules[] = 'time-tracking-sector-1c';
+        $clearedModules[] = 'time-tracking-default';
+        $clearedModules[] = 'time-tracking-detailed';
+        $clearedModules[] = 'time-tracking-summary';
         
-        // TODO: Очистка других модулей
+        // Управление пользователями (все режимы)
+        // TASK-075: Добавлена очистка нового модуля
+        UsersManagementCache::clear();
+        $clearedModules[] = 'users-management-departments';
+        $clearedModules[] = 'users-management-users';
+        $clearedModules[] = 'users-management-config';
+        
+        // Отслеживание активности (все режимы)
+        // TASK-075: Добавлена очистка нового модуля
+        UserActivityCache::clear();
+        $clearedModules[] = 'user-activity-stats';
+        $clearedModules[] = 'user-activity-list';
+        $clearedModules[] = 'user-activity-filters';
+        
+        // Логи вебхуков (все режимы)
+        // TASK-075: Добавлена очистка нового модуля
+        WebhookLogsCache::clear();
+        $clearedModules[] = 'webhook-logs-api';
+        $clearedModules[] = 'webhook-logs-realtime';
+        $clearedModules[] = 'webhook-logs-stats';
         
     } else {
-        // Очистка конкретного модуля
+        // Очистка конкретного модуля или режима
+        // TASK-075: Обновлено для поддержки режимов
         switch ($moduleId) {
             case 'graph-admission-closure-months':
                 // Очистка только months
@@ -118,10 +144,101 @@ try {
                 clearCacheDirectory($cacheDir);
                 $clearedModules[] = $moduleId;
                 break;
-                
-            case 'time-tracking-sector-1c':
-                TimeTrackingCache::clear();
+            
+            // TASK-075: Очистка режимов TimeTrackingCache
+            case 'time-tracking-default':
+                TimeTrackingCache::clearByMode('default');
                 $clearedModules[] = $moduleId;
+                break;
+            
+            case 'time-tracking-detailed':
+                TimeTrackingCache::clearByMode('detailed');
+                $clearedModules[] = $moduleId;
+                break;
+            
+            case 'time-tracking-summary':
+                TimeTrackingCache::clearByMode('summary');
+                $clearedModules[] = $moduleId;
+                break;
+            
+            case 'time-tracking-sector-1c':
+                // Очистка всего модуля (всех режимов)
+                TimeTrackingCache::clear();
+                $clearedModules[] = 'time-tracking-default';
+                $clearedModules[] = 'time-tracking-detailed';
+                $clearedModules[] = 'time-tracking-summary';
+                break;
+            
+            // TASK-075: Очистка режимов UsersManagementCache
+            case 'users-management-departments':
+                UsersManagementCache::clearByMode('departments');
+                $clearedModules[] = $moduleId;
+                break;
+            
+            case 'users-management-users':
+                UsersManagementCache::clearByMode('users');
+                $clearedModules[] = $moduleId;
+                break;
+            
+            case 'users-management-config':
+                UsersManagementCache::clearByMode('config');
+                $clearedModules[] = $moduleId;
+                break;
+            
+            case 'users-management':
+                // Очистка всего модуля (всех режимов)
+                UsersManagementCache::clear();
+                $clearedModules[] = 'users-management-departments';
+                $clearedModules[] = 'users-management-users';
+                $clearedModules[] = 'users-management-config';
+                break;
+            
+            // TASK-075: Очистка режимов UserActivityCache
+            case 'user-activity-stats':
+                UserActivityCache::clearByMode('stats');
+                $clearedModules[] = $moduleId;
+                break;
+            
+            case 'user-activity-list':
+                UserActivityCache::clearByMode('list');
+                $clearedModules[] = $moduleId;
+                break;
+            
+            case 'user-activity-filters':
+                UserActivityCache::clearByMode('filters');
+                $clearedModules[] = $moduleId;
+                break;
+            
+            case 'user-activity':
+                // Очистка всего модуля (всех режимов)
+                UserActivityCache::clear();
+                $clearedModules[] = 'user-activity-stats';
+                $clearedModules[] = 'user-activity-list';
+                $clearedModules[] = 'user-activity-filters';
+                break;
+            
+            // TASK-075: Очистка режимов WebhookLogsCache
+            case 'webhook-logs-api':
+                WebhookLogsCache::clearByMode('api');
+                $clearedModules[] = $moduleId;
+                break;
+            
+            case 'webhook-logs-realtime':
+                WebhookLogsCache::clearByMode('realtime');
+                $clearedModules[] = $moduleId;
+                break;
+            
+            case 'webhook-logs-stats':
+                WebhookLogsCache::clearByMode('stats');
+                $clearedModules[] = $moduleId;
+                break;
+            
+            case 'webhook-logs':
+                // Очистка всего модуля (всех режимов)
+                WebhookLogsCache::clear();
+                $clearedModules[] = 'webhook-logs-api';
+                $clearedModules[] = 'webhook-logs-realtime';
+                $clearedModules[] = 'webhook-logs-stats';
                 break;
                 
             default:

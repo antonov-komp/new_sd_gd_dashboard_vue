@@ -69,19 +69,29 @@ class TimeTrackingService
     {
         error_log("[TimeTrackingService] Starting data collection");
         
-        // TASK-071-03: Проверка кеша перед выполнением запросов
+        // TASK-075: Проверка кеша перед выполнением запросов с поддержкой режимов
         $forceRefresh = $params['forceRefresh'] ?? false;
         
+        // Определение режима на основе параметров запроса
+        $mode = 'default'; // По умолчанию
+        if (isset($params['includeTaskDetails']) && $params['includeTaskDetails']) {
+            $mode = 'detailed'; // Детальный режим с расширенной информацией
+        } elseif (isset($params['summary']) && $params['summary']) {
+            $mode = 'summary'; // Сводный режим с агрегированными данными
+        }
+        
         if (!$forceRefresh && $this->cacheStore !== null) {
-            $cacheKey = $this->cacheStore->generateKey($params);
-            $cachedData = $this->cacheStore->get($cacheKey);
+            // Генерация ключа кеша с указанием режима
+            $cacheKey = $this->cacheStore->generateKey($params, $mode);
             
+            // Проверка кеша
+            $cachedData = $this->cacheStore->get($cacheKey);
             if ($cachedData !== null) {
-                error_log("[TimeTrackingService] Cache hit for key: {$cacheKey}");
+                error_log("[TimeTrackingService] Cache hit for key: {$cacheKey} (mode: {$mode})");
                 return $cachedData;
             }
             
-            error_log("[TimeTrackingService] Cache miss for key: {$cacheKey}");
+            error_log("[TimeTrackingService] Cache miss for key: {$cacheKey} (mode: {$mode})");
         } else if ($forceRefresh) {
             error_log("[TimeTrackingService] Force refresh requested, skipping cache");
         }
@@ -237,17 +247,19 @@ class TimeTrackingService
             'data' => $responseData
         ];
         
-        // TASK-071-03: Сохранение в кеш
+        // TASK-075: Сохранение в кеш после получения данных
         if (!$forceRefresh && $this->cacheStore !== null) {
-            $cacheKey = $this->cacheStore->generateKey($params);
+            $cacheKey = $this->cacheStore->generateKey($params, $mode);
             
-            if ($this->cacheStore->set($cacheKey, $response, 300)) {
-                error_log("[TimeTrackingService] Cache saved for key: {$cacheKey}");
+            // TTL определяется автоматически по режиму в TimeTrackingCache::set()
+            if ($this->cacheStore->set($cacheKey, $response)) {
+                error_log("[TimeTrackingService] Cache saved for key: {$cacheKey} (mode: {$mode})");
             } else {
                 error_log("[TimeTrackingService] Failed to save cache for key: {$cacheKey}");
             }
             
             // Периодическая очистка устаревших кешей (каждый 10-й запрос)
+            // Аналогично GraphAdmissionClosureService
             if (rand(1, 10) === 1) {
                 $deleted = $this->cacheStore->clearExpired();
                 if ($deleted > 0) {
