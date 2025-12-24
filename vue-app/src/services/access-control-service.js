@@ -145,11 +145,35 @@ export class AccessControlService {
         );
       }
       
+      console.log('AccessControlService.checkAccess - user determined:', {
+        id: user.ID,
+        name: user.NAME,
+        departments: user.UF_DEPARTMENT
+      });
+      
       // ШАГ 6: Получение ID отделов пользователя
       const departmentIds = user.UF_DEPARTMENT || [];
       
+      console.log('AccessControlService.checkAccess - departmentIds:', departmentIds);
+      
       // ШАГ 7: Проверка, что пользователь привязан к отделу
+      // ВАЖНО: При прямом доступе пользователь может быть первичным администратором без отделов
+      // В этом случае разрешаем доступ, если прямой доступ разрешён
       if (!Array.isArray(departmentIds) || departmentIds.length === 0) {
+        console.log('AccessControlService.checkAccess - user has no departments');
+        
+        // Если прямой доступ разрешён и мы не внутри Bitrix24, разрешаем доступ
+        if (!isInsideB24) {
+          const { isDirectAccessAllowed } = await import('@/utils/direct-access-config.js');
+          const allowDirectAccess = await isDirectAccessAllowed();
+          
+          if (allowDirectAccess) {
+            console.log('AccessControlService.checkAccess - Direct access allowed, granting access despite no departments');
+            return new AccessCheckResult(true, null, null, user);
+          }
+        }
+        
+        console.warn('AccessControlService.checkAccess - Access denied: user has no departments');
         return new AccessCheckResult(
           false,
           AccessErrorCodes.ACCESS_DENIED,
@@ -160,7 +184,10 @@ export class AccessControlService {
       // ШАГ 8: Проверка доступа по ID отделов
       const hasAccess = departmentIds.some(deptId => isDepartmentAllowed(deptId));
       
+      console.log('AccessControlService.checkAccess - hasAccess:', hasAccess);
+      
       if (!hasAccess) {
+        console.warn('AccessControlService.checkAccess - Access denied: no allowed departments');
         return new AccessCheckResult(
           false,
           AccessErrorCodes.ACCESS_DENIED,
@@ -169,6 +196,7 @@ export class AccessControlService {
       }
       
       // ШАГ 9: Доступ разрешён
+      console.log('AccessControlService.checkAccess - Access granted');
       return new AccessCheckResult(true, null, null, user);
       
     } catch (error) {

@@ -136,7 +136,17 @@ export default {
     StatusMessage,
     LoadingSpinner
   },
+  beforeCreate() {
+    console.log('[IndexPage] beforeCreate() called');
+  },
+  created() {
+    console.log('[IndexPage] created() called');
+  },
+  beforeMount() {
+    console.log('[IndexPage] beforeMount() called');
+  },
   setup() {
+    console.log('[IndexPage] setup() called');
     const router = useRouter();
     const loading = ref(true);
     const error = ref(null);
@@ -146,6 +156,12 @@ export default {
     const currentUser = ref(null);
     const debugInfo = ref(null);
     const isDirectAccessDenied = ref(false);
+    
+    console.log('[IndexPage] Initial state:', {
+      loading: loading.value,
+      accessAllowed: accessAllowed.value,
+      accessDenied: accessDenied.value
+    });
     
     // Кнопки отчётов
     const reportsButtons = ref(getReports());
@@ -239,14 +255,32 @@ export default {
     });
 
     onMounted(async () => {
+      console.log('[IndexPage] onMounted() called');
       try {
         // Проверка доступа
+        console.log('[IndexPage] Calling AccessControlService.checkAccess()...');
         const accessResult = await AccessControlService.checkAccess();
+        
+        console.log('[IndexPage] Access result:', {
+          allowed: accessResult.allowed,
+          hasUser: !!accessResult.user,
+          user: accessResult.user,
+          errorCode: accessResult.errorCode,
+          errorMessage: accessResult.errorMessage
+        });
         
         if (accessResult.allowed) {
           // Доступ разрешён
+          console.log('[IndexPage] Setting accessAllowed to true');
           accessAllowed.value = true;
           currentUser.value = accessResult.user;
+          
+          console.log('[IndexPage] Access allowed, setting state:', {
+            accessAllowed: accessAllowed.value,
+            hasUser: !!currentUser.value,
+            loading: loading.value,
+            accessDenied: accessDenied.value
+          });
           
           // Логирование первого входа (только один раз за сессию)
           if (!ActivityLoggingService.isAppEntryLogged()) {
@@ -322,6 +356,13 @@ export default {
         console.error('Error checking access:', err);
       } finally {
         loading.value = false;
+        console.log('[IndexPage] Final state:', {
+          loading: loading.value,
+          accessAllowed: accessAllowed.value,
+          accessDenied: accessDenied.value,
+          hasUser: !!currentUser.value,
+          error: error.value
+        });
       }
     });
 

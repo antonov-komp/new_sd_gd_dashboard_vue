@@ -3,6 +3,7 @@ import InstallPage from '@/components/InstallPage.vue';
 import IndexPage from '@/components/IndexPage.vue';
 import WebhookLogsPage from '@/pages/WebhookLogsPage.vue';
 import UsersManagementPage from '@/pages/UsersManagementPage.vue';
+import CacheManagementPage from '@/pages/CacheManagementPage.vue';
 import { AccessControlService } from '@/services/access-control-service.js';
 import { ActivityLoggingService } from '@/services/activity-logging-service.js';
 import { isAdmin } from '@/config/access-config.js';
@@ -43,6 +44,17 @@ const routes = [
     meta: {
       requiresAuth: true,
       title: 'Управление пользователями',
+      adminOnly: true
+    }
+  },
+  {
+    // Маршрут управления кешем
+    path: '/admin/cache',
+    name: 'admin-cache',
+    component: CacheManagementPage,
+    meta: {
+      requiresAuth: true,
+      title: 'Ручное управление кешем',
       adminOnly: true
     }
   },
@@ -100,6 +112,8 @@ const router = createRouter({
  * Использует AccessControlService для проверки доступа пользователя
  */
 router.beforeEach(async (to, from, next) => {
+  console.log('[Router] beforeEach:', { to: to.path, from: from.path, name: to.name });
+  
   // Установка заголовка страницы из метаданных маршрута
   if (to.meta.title) {
     document.title = `${to.meta.title} - Bitrix24 Dashboard`;
@@ -107,6 +121,7 @@ router.beforeEach(async (to, from, next) => {
 
   // Проверка авторизации (если требуется)
   if (to.meta.requiresAuth) {
+    console.log('[Router] requiresAuth check for:', to.path);
     try {
       const accessResult = await AccessControlService.checkAccess();
       
@@ -170,6 +185,7 @@ router.beforeEach(async (to, from, next) => {
   }
 
   // Разрешаем переход
+  console.log('[Router] Allowing navigation to:', to.path);
   next();
 });
 

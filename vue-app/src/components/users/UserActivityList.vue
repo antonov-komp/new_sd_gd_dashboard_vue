@@ -24,8 +24,9 @@
 </template>
 
 <script>
-import { ref, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, watch, onUnmounted } from 'vue';
 import { UserActivityService } from '@/services/user-activity-service.js';
+import { filterHiddenUsers } from '@/utils/hidden-users-manager.js';
 import UserActivityCard from './UserActivityCard.vue';
 
 export default {
@@ -53,9 +54,14 @@ export default {
   },
   emits: ['view-details'],
   setup(props, { emit }) {
-    const activity = ref([]);
+    const rawActivity = ref([]);
     const loading = ref(false);
     const error = ref(null);
+    
+    // Фильтрованная активность (без скрытых пользователей)
+    const activity = computed(() => {
+      return filterHiddenUsers(rawActivity.value);
+    });
     
     const loadActivity = async () => {
       loading.value = true;
@@ -69,7 +75,7 @@ export default {
           type: props.type
         };
         
-        activity.value = await UserActivityService.getActivity(options);
+        rawActivity.value = await UserActivityService.getActivity(options);
       } catch (err) {
         error.value = err.message || 'Ошибка загрузки активности';
         console.error('[UserActivityList] Error:', err);
@@ -86,8 +92,22 @@ export default {
       return `${entry.timestamp}-${entry.user_id}-${entry.type}-${entry.route_path || ''}`;
     };
     
+    // Обработчик события изменения скрытых пользователей
+    const handleHiddenUsersChange = () => {
+      // Перезагружаем активность для применения фильтрации
+      loadActivity();
+    };
+    
     onMounted(() => {
       loadActivity();
+      
+      // Подписываемся на событие изменения скрытых пользователей
+      window.addEventListener('hidden-users-changed', handleHiddenUsersChange);
+    });
+    
+    onUnmounted(() => {
+      // Отписываемся от события
+      window.removeEventListener('hidden-users-changed', handleHiddenUsersChange);
     });
     
     watch(() => [props.userId, props.dateFrom, props.dateTo, props.type], () => {

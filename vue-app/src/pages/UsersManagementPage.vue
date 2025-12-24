@@ -27,6 +27,11 @@
           @update-filters="handleFiltersUpdate"
         />
         
+        <HiddenUsersManager
+          :filters="activityFilters"
+          @hidden-users-changed="handleHiddenUsersChanged"
+        />
+        
         <UserActivityStats :filters="activityFilters" />
         
         <UserActivityList
@@ -47,6 +52,7 @@ import { useRouter } from 'vue-router';
 import UserActivityList from '@/components/users/UserActivityList.vue';
 import UserActivityFilters from '@/components/users/UserActivityFilters.vue';
 import UserActivityStats from '@/components/users/UserActivityStats.vue';
+import HiddenUsersManager from '@/components/users/HiddenUsersManager.vue';
 import { AccessControlService } from '@/services/access-control-service.js';
 import { Bitrix24ApiService } from '@/services/bitrix24-api.js';
 
@@ -55,7 +61,8 @@ export default {
   components: {
     UserActivityList,
     UserActivityFilters,
-    UserActivityStats
+    UserActivityStats,
+    HiddenUsersManager
   },
   setup() {
     const router = useRouter();
@@ -98,6 +105,14 @@ export default {
     };
     
     /**
+     * Обработка изменения скрытых пользователей
+     */
+    const handleHiddenUsersChanged = () => {
+      // Отправляем событие для обновления компонентов активности
+      window.dispatchEvent(new CustomEvent('hidden-users-changed'));
+    };
+    
+    /**
      * Возврат на главную страницу
      */
     const goBack = () => {
@@ -132,6 +147,7 @@ export default {
       activityFilters,
       handleFiltersUpdate,
       handleViewActivityDetails,
+      handleHiddenUsersChanged,
       goBack
     };
   }

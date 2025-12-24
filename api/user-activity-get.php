@@ -87,20 +87,21 @@ try {
         exit;
     }
     
-    // Сбор всех записей за период
+    // Шаг 1: Сбор всех записей за период
+    // Читаем логи за все дни и часы в указанном диапазоне
     $activity = [];
     $currentDate = clone $startDate;
     
     while ($currentDate <= $endDate) {
         $dateStr = $currentDate->format('Y-m-d');
         
-        // Чтение логов за все часы дня
+        // Чтение логов за все часы дня (0-23)
         for ($hour = 0; $hour < 24; $hour++) {
             try {
                 $hourActivity = $repository->read($category, $dateStr, $hour);
                 $activity = array_merge($activity, $hourActivity);
             } catch (\Exception $e) {
-                // Пропускаем отсутствующие файлы
+                // Пропускаем отсутствующие файлы (это нормально, если логов за этот час нет)
                 continue;
             }
         }
@@ -108,28 +109,61 @@ try {
         $currentDate->modify('+1 day');
     }
     
-    // Фильтрация по пользователю
+    // Шаг 2: Фильтрация по пользователю (если указан)
+    // Применяется ДО сортировки для оптимизации
     if ($userId !== null) {
         $activity = array_filter($activity, function($entry) use ($userId) {
             return isset($entry['user_id']) && (int)$entry['user_id'] === $userId;
         });
+        // Переиндексация массива после фильтрации
+        $activity = array_values($activity);
     }
     
-    // Фильтрация по типу
+    // Шаг 3: Фильтрация по типу активности (если указан)
+    // Применяется ДО сортировки для оптимизации
     if ($type !== null) {
         $activity = array_filter($activity, function($entry) use ($type) {
             return isset($entry['type']) && $entry['type'] === $type;
         });
+        // Переиндексация массива после фильтрации
+        $activity = array_values($activity);
     }
     
-    // Сортировка по времени (новые первыми)
+    // Шаг 4: Сортировка по времени (новые первыми)
+    // Используется DateTime для корректной обработки всех форматов ISO 8601
     usort($activity, function($a, $b) {
-        $timeA = isset($a['timestamp']) ? strtotime($a['timestamp']) : 0;
-        $timeB = isset($b['timestamp']) ? strtotime($b['timestamp']) : 0;
+        $timeA = 0;
+        $timeB = 0;
+        
+        // Парсинг timestamp для элемента A
+        if (isset($a['timestamp'])) {
+            try {
+                $dateA = new \DateTime($a['timestamp']);
+                $timeA = $dateA->getTimestamp();
+            } catch (\Exception $e) {
+                // Если не удалось распарсить, используем 0 (будет в конце списка)
+                $timeA = 0;
+            }
+        }
+        
+        // Парсинг timestamp для элемента B
+        if (isset($b['timestamp'])) {
+            try {
+                $dateB = new \DateTime($b['timestamp']);
+                $timeB = $dateB->getTimestamp();
+            } catch (\Exception $e) {
+                // Если не удалось распарсить, используем 0 (будет в конце списка)
+                $timeB = 0;
+            }
+        }
+        
+        // Сортировка по убыванию (новые первыми)
+        // Положительное значение = $b идет раньше $a (новые первыми)
         return $timeB - $timeA;
     });
     
-    // Применение лимита
+    // Шаг 5: Применение лимита записей
+    // Лимит применяется ПОСЛЕ фильтрации и сортировки
     $activity = array_slice($activity, 0, $limit);
     
     http_response_code(200);

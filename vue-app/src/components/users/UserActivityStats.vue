@@ -44,8 +44,9 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, watch, onUnmounted } from 'vue';
 import { UserActivityService } from '@/services/user-activity-service.js';
+import { filterHiddenUsers } from '@/utils/hidden-users-manager.js';
 
 export default {
   name: 'UserActivityStats',
@@ -56,7 +57,7 @@ export default {
     }
   },
   setup(props) {
-    const stats = ref({
+    const rawStats = ref({
       total_entries: 0,
       unique_users_count: 0,
       total_app_entries: 0,
@@ -66,12 +67,51 @@ export default {
     const loading = ref(false);
     const error = ref(null);
     
+    // Фильтрованная статистика (без скрытых пользователей)
+    const stats = computed(() => {
+      // Для статистики нужно пересчитать на основе отфильтрованных данных
+      // Но так как getActivityStats уже возвращает агрегированные данные,
+      // нам нужно получить сырые данные и пересчитать статистику
+      return rawStats.value;
+    });
+    
     const loadStats = async () => {
       loading.value = true;
       error.value = null;
       
       try {
-        stats.value = await UserActivityService.getActivityStats(props.filters);
+        // Получаем сырые данные активности
+        const activity = await UserActivityService.getActivity({
+          ...props.filters,
+          limit: 10000 // Большой лимит для точной статистики
+        });
+        
+        // Фильтруем скрытых пользователей
+        const filteredActivity = filterHiddenUsers(activity);
+        
+        // Пересчитываем статистику на основе отфильтрованных данных
+        rawStats.value = await UserActivityService.getActivityStats({
+          ...props.filters
+        });
+        
+        // Пересчитываем статистику вручную на основе отфильтрованных данных
+        const filteredStats = {
+          total_entries: filteredActivity.length,
+          unique_users_count: new Set(filteredActivity.map(e => e.user_id)).size,
+          total_app_entries: filteredActivity.filter(e => e.type === 'app_entry').length,
+          total_page_visits: filteredActivity.filter(e => e.type === 'page_visit').length,
+          pages_visited: {}
+        };
+        
+        // Подсчитываем популярные страницы
+        filteredActivity
+          .filter(e => e.type === 'page_visit' && e.route_path)
+          .forEach(e => {
+            const page = e.route_title || e.route_path || e.route_name || 'Неизвестная страница';
+            filteredStats.pages_visited[page] = (filteredStats.pages_visited[page] || 0) + 1;
+          });
+        
+        rawStats.value = filteredStats;
       } catch (err) {
         error.value = err.message || 'Ошибка загрузки статистики';
         console.error('[UserActivityStats] Error loading stats:', err);
@@ -91,8 +131,21 @@ export default {
         }, {});
     });
     
+    // Обработчик события изменения скрытых пользователей
+    const handleHiddenUsersChange = () => {
+      loadStats();
+    };
+    
     onMounted(() => {
       loadStats();
+      
+      // Подписываемся на событие изменения скрытых пользователей
+      window.addEventListener('hidden-users-changed', handleHiddenUsersChange);
+    });
+    
+    onUnmounted(() => {
+      // Отписываемся от события
+      window.removeEventListener('hidden-users-changed', handleHiddenUsersChange);
     });
     
     watch(() => props.filters, () => {
