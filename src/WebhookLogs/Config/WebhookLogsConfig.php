@@ -80,7 +80,7 @@ class WebhookLogsConfig
      */
     public static function getCategories(): array
     {
-        return ['tasks', 'smart-processes', 'errors'];
+        return ['tasks', 'smart-processes', 'errors', 'user-activity'];
     }
     
     /**

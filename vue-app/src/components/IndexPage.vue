@@ -123,6 +123,7 @@ import { useRouter } from 'vue-router';
 import StatusMessage from './common/StatusMessage.vue';
 import LoadingSpinner from './common/LoadingSpinner.vue';
 import { AccessControlService, AccessErrorCodes } from '@/services/access-control-service.js';
+import { ActivityLoggingService } from '@/services/activity-logging-service.js';
 import { getReports } from '@/config/reports-config.js';
 import { isAdmin } from '@/config/access-config.js';
 import { getAdminInterfaces } from '@/config/admin-config.js';
@@ -246,6 +247,21 @@ export default {
           // Доступ разрешён
           accessAllowed.value = true;
           currentUser.value = accessResult.user;
+          
+          // Логирование первого входа (только один раз за сессию)
+          if (!ActivityLoggingService.isAppEntryLogged()) {
+            try {
+              if (accessResult.user) {
+                const logged = await ActivityLoggingService.logAppEntry(accessResult.user);
+                if (logged) {
+                  ActivityLoggingService.markAppEntryLogged();
+                }
+              }
+            } catch (error) {
+              // Не прерываем работу приложения при ошибке логирования
+              console.error('[IndexPage] Error logging app entry:', error);
+            }
+          }
         } else {
           // Доступ запрещён
           accessDenied.value = true;

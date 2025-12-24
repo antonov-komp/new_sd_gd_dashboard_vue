@@ -2,7 +2,9 @@ import { createRouter, createWebHashHistory } from 'vue-router';
 import InstallPage from '@/components/InstallPage.vue';
 import IndexPage from '@/components/IndexPage.vue';
 import WebhookLogsPage from '@/pages/WebhookLogsPage.vue';
+import UsersManagementPage from '@/pages/UsersManagementPage.vue';
 import { AccessControlService } from '@/services/access-control-service.js';
+import { ActivityLoggingService } from '@/services/activity-logging-service.js';
 import { isAdmin } from '@/config/access-config.js';
 
 const routes = [
@@ -30,6 +32,17 @@ const routes = [
     meta: {
       requiresAuth: true,
       title: 'Логи вебхуков',
+      adminOnly: true
+    }
+  },
+  {
+    // Маршрут управления пользователями
+    path: '/admin/users',
+    name: 'admin-users',
+    component: UsersManagementPage,
+    meta: {
+      requiresAuth: true,
+      title: 'Управление пользователями',
       adminOnly: true
     }
   },
@@ -128,6 +141,31 @@ router.beforeEach(async (to, from, next) => {
       // В случае ошибки проверки прав администратора, запрещаем доступ
       next({ name: 'index' });
       return;
+    }
+  }
+
+  // Логирование перехода по маршруту
+  // Логируем для всех авторизованных пользователей, если это не первый рендер
+  if (from.name !== null && to.path !== from.path) {
+    try {
+      // Проверяем, что пользователь авторизован
+      const accessResult = await AccessControlService.checkAccess();
+      
+      if (accessResult.allowed) {
+        const currentUser = await AccessControlService.getCurrentUser();
+        
+        if (currentUser) {
+          // Логируем переход асинхронно, не блокируя навигацию
+          ActivityLoggingService.logPageVisit(to, currentUser, from)
+            .catch(error => {
+              // Ошибка логирования не должна прерывать навигацию
+              console.error('[Router] Error logging page visit:', error);
+            });
+        }
+      }
+    } catch (error) {
+      // Ошибка логирования не должна прерывать навигацию
+      console.error('[Router] Error in activity logging:', error);
     }
   }
 
