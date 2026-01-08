@@ -364,6 +364,9 @@ class GraphAdmissionClosureCache
             $weekEndUtc = $weekEnd->format('Y-m-d\TH:i:s\Z');
         }
 
+        // TASK-076: Всегда используем переданные границы недели
+        // Не рассчитываем заново, даже если они переданы
+
         // Стандартные параметры, используемые в интерфейсе weeks режима
         $universalParams = [
             'product' => '1C',
