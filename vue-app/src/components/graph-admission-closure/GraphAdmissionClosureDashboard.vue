@@ -865,7 +865,14 @@ function handlePeriodModeChange(mode) {
   
   // НЕ сохраняем в localStorage - режим определяется только выбором из попапа и переключением через фильтры
   // Перезагрузка данных при изменении режима (покажет прелоадер)
-  loadData();
+  // Для months режима загрузка происходит в GraphAdmissionClosureMonthsDashboard
+  if (mode === 'weeks') {
+    loadData();
+  } else if (mode === 'months') {
+    // Для месячного режима загрузка происходит в дочернем компоненте
+    // Сбрасываем isLoading, чтобы показать дочерний компонент
+    isLoading.value = false;
+  }
 }
 
 /**
@@ -896,7 +903,12 @@ function resetFilters() {
 }
 
 function applyFilters() {
-  loadData();
+  // Для months режима фильтры применяются в GraphAdmissionClosureMonthsDashboard
+  // Загружаем данные только для weeks режима
+  if (periodMode.value === 'weeks') {
+    loadData();
+  }
+  // Для months режима фильтры обрабатываются в дочернем компоненте
 }
 
 /**

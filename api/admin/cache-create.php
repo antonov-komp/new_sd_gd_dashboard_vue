@@ -259,6 +259,11 @@ function createGraphAdmissionClosureCache(string $moduleId, ?string $mode, array
     // Генерация ключа кеша
     $cacheKey = GraphAdmissionClosureCache::generateKey($finalParams);
     
+    // TASK-076: Логирование параметров для отладки
+    error_log("[CacheCreate] Module: {$moduleId}, Mode: {$mode}");
+    error_log("[CacheCreate] Final params: " . json_encode($finalParams, JSON_UNESCAPED_UNICODE));
+    error_log("[CacheCreate] Generated cache key: {$cacheKey}");
+    
     // Обновление статуса: проверка существования кеша
     if ($statusFile) {
         updateTaskStatus($statusFile, 10, 'Проверка существования кеша...', $cacheKey);

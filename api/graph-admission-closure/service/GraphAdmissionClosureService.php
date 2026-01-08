@@ -326,14 +326,21 @@ class GraphAdmissionClosureService
         // Проверка кеша
         // TASK-076: Использование предварительно созданных кешей
         if (!$forceRefresh) {
-            $cacheKey = $this->cacheStore->generateKey([
+            $cacheParams = [
                 'product' => $product,
                 'periodMode' => 'months',
                 'includeTickets' => $includeTickets,
                 'includeNewTicketsByStages' => $includeNewTicketsByStages,
                 'includeCarryoverTickets' => $includeCarryoverTickets,
                 'includeCarryoverTicketsByDuration' => $includeCarryoverTicketsByDuration
-            ]);
+            ];
+            
+            $cacheKey = $this->cacheStore->generateKey($cacheParams);
+            
+            // TASK-076: Логирование параметров для отладки
+            error_log("[GraphAdmissionClosureService] Months mode - checking cache");
+            error_log("[GraphAdmissionClosureService] Cache params: " . json_encode($cacheParams, JSON_UNESCAPED_UNICODE));
+            error_log("[GraphAdmissionClosureService] Generated cache key: {$cacheKey}");
 
             $cachedData = $this->cacheStore->get($cacheKey);
             if ($cachedData !== null) {
