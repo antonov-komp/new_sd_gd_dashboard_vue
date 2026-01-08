@@ -312,7 +312,7 @@ class GraphAdmissionClosureCache
             'includeNewTicketsByStages' => $params['includeNewTicketsByStages'] ?? false,
             'includeCarryoverTicketsByDuration' => $params['includeCarryoverTicketsByDuration'] ?? false
         ];
-        
+
         // Для режима "weeks" включаем границы недель в ключ
         if ($normalized['periodMode'] === 'weeks') {
             $normalized['weekStartUtc'] = $params['weekStartUtc'] ?? null;
@@ -333,7 +333,52 @@ class GraphAdmissionClosureCache
         $prefix = $normalized['periodMode'] === 'weeks' ? 'weeks' : 'months';
         return $prefix . '_' . $hash;
     }
-    
+
+    /**
+     * Генерация универсального ключа для weeks режима
+     *
+     * TASK-076: Второй вариант - универсальный кеш для weeks режима
+     * Создает ключ с стандартными параметрами, используемыми в интерфейсе
+     *
+     * @param string|null $weekStartUtc Начало недели (опционально, по умолчанию текущая неделя)
+     * @param string|null $weekEndUtc Конец недели (опционально, по умолчанию текущая неделя)
+     * @return string Универсальный ключ кеша
+     */
+    public static function generateUniversalKey(?string $weekStartUtc = null, ?string $weekEndUtc = null): string
+    {
+        // Если границы недели не переданы, используем текущую неделю
+        if ($weekStartUtc === null || $weekEndUtc === null) {
+            $tz = new DateTimeZone('UTC');
+            $now = new DateTimeImmutable('now', $tz);
+            $isoYear = (int)$now->format('o');
+            $isoWeek = (int)$now->format('W');
+
+            $weekStart = (new DateTimeImmutable('now', $tz))
+                ->setISODate($isoYear, $isoWeek, 1)
+                ->setTime(0, 0, 0);
+            $weekEnd = $weekStart
+                ->modify('+6 days')
+                ->setTime(23, 59, 59);
+
+            $weekStartUtc = $weekStart->format('Y-m-d\TH:i:s\Z');
+            $weekEndUtc = $weekEnd->format('Y-m-d\TH:i:s\Z');
+        }
+
+        // Стандартные параметры, используемые в интерфейсе weeks режима
+        $universalParams = [
+            'product' => '1C',
+            'periodMode' => 'weeks',
+            'weekStartUtc' => $weekStartUtc,
+            'weekEndUtc' => $weekEndUtc,
+            'includeTickets' => true,                    // Как в интерфейсе
+            'includeNewTicketsByStages' => true,         // Как в интерфейсе
+            'includeCarryoverTickets' => false,          // По умолчанию
+            'includeCarryoverTicketsByDuration' => true  // Как в интерфейсе
+        ];
+
+        return self::generateKey($universalParams);
+    }
+
     /**
      * Проверка истечения срока действия кеша
      * 

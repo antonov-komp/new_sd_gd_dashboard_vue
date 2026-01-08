@@ -11,6 +11,19 @@
 
 import { getApiUrl } from '@/utils/path-utils.js';
 
+/**
+ * Получение номера недели по ISO 8601
+ * @param {Date} date Дата
+ * @returns {number} Номер недели
+ */
+function getISOWeek(date) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+}
+
 export class CacheCreationService {
   /**
    * Создание кеша для модуля
@@ -96,18 +109,50 @@ export class CacheCreationService {
    */
   static getDefaultParams(moduleId) {
     // График приёма/закрытий 1С
-    // TASK-076: Исправление для совместимости с реальным использованием модуля
+    // TASK-076: Второй вариант - универсальный кеш для weeks режима
     if (moduleId.includes('graph-admission-closure')) {
       const mode = moduleId.includes('weeks') ? 'weeks' : 'months';
-      return {
-        product: '1C',
-        periodMode: mode,
-        // Для months режима модуль использует includeTickets: true (см. GraphAdmissionClosureMonthsDashboard.vue)
-        includeTickets: mode === 'months' ? true : false,
-        includeNewTicketsByStages: false,
-        includeCarryoverTickets: mode === 'months' ? true : false,
-        includeCarryoverTicketsByDuration: false
-      };
+
+      if (mode === 'weeks') {
+        // Для weeks режима используем универсальные параметры, совместимые с интерфейсом
+        // Получаем границы текущей недели
+        const now = new Date();
+        const tz = 'UTC';
+        const isoYear = now.getUTCFullYear();
+        const isoWeek = getISOWeek(now);
+
+        // Вычисляем начало и конец недели
+        const weekStart = new Date(isoYear, 0, 1 + (isoWeek - 1) * 7);
+        const dayOfWeek = weekStart.getUTCDay();
+        const diff = weekStart.getUTCDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+        weekStart.setUTCDate(diff);
+        weekStart.setUTCHours(0, 0, 0, 0);
+
+        const weekEnd = new Date(weekStart);
+        weekEnd.setUTCDate(weekStart.getUTCDate() + 6);
+        weekEnd.setUTCHours(23, 59, 59, 999);
+
+        return {
+          product: '1C',
+          periodMode: 'weeks',
+          weekStartUtc: weekStart.toISOString(),
+          weekEndUtc: weekEnd.toISOString(),
+          includeTickets: true,                    // Как в интерфейсе
+          includeNewTicketsByStages: true,         // Как в интерфейсе
+          includeCarryoverTickets: false,          // По умолчанию
+          includeCarryoverTicketsByDuration: true  // Как в интерфейсе
+        };
+      } else {
+        // Для months режима используем стандартные параметры
+        return {
+          product: '1C',
+          periodMode: 'months',
+          includeTickets: true, // Для months модуль использует true
+          includeNewTicketsByStages: false,
+          includeCarryoverTickets: true, // Для months по умолчанию true
+          includeCarryoverTicketsByDuration: false
+        };
+      }
     }
     
     // Трудозатраты на Тикеты сектора 1С

@@ -57,29 +57,50 @@ class GraphAdmissionClosureService
         $weeks = $this->dateHelper->getFourWeeksBounds($weekStart, $weekEnd);
 
         // TASK-068-03: Проверка кеша для режима "weeks" (если не forceRefresh)
-        // TASK-076: Использование предварительно созданных кешей
+        // TASK-076: Использование предварительно созданных кешей + универсальный кеш
         if (!$forceRefresh) {
             $cacheKey = $this->getCacheKeyForWeeks($payload, $weekStart, $weekEnd);
-            
+            $universalCacheKey = $this->getUniversalCacheKeyForWeeks($weekStart, $weekEnd);
+
+            // Сначала проверяем точное совпадение параметров
             $cachedData = $this->cacheStore->get($cacheKey);
             if ($cachedData !== null) {
                 // TASK-068-04: Логирование времени при cache hit
-                // TASK-076: Добавление информации об использовании кеша
                 $cacheResponseTime = microtime(true) - $weeksModeStartTime;
-                error_log("[Cache] Cache hit for key: {$cacheKey}");
-                error_log("[Cache] Using pre-created cache for key: {$cacheKey}");
+                error_log("[Cache] Exact cache hit for key: {$cacheKey}");
                 error_log("[WEEKS-PERFORMANCE] Total execution time (from cache): " . round($cacheResponseTime, 3) . " seconds");
-                
+
                 // Добавляем информацию об использовании кеша в ответ
                 if (is_array($cachedData)) {
                     $cachedData['cache_used'] = true;
                     $cachedData['cache_key'] = $cacheKey;
+                    $cachedData['cache_type'] = 'exact';
                 }
-                
+
                 return $cachedData;
             }
-            
-            error_log("[Cache] Cache miss for key: {$cacheKey}");
+
+            // Если точное совпадение не найдено, проверяем универсальный кеш
+            $universalCachedData = $this->cacheStore->get($universalCacheKey);
+            if ($universalCachedData !== null) {
+                // TASK-076: Логирование использования универсального кеша
+                $cacheResponseTime = microtime(true) - $weeksModeStartTime;
+                error_log("[Cache] Universal cache hit for key: {$universalCacheKey}");
+                error_log("[Cache] Original key was: {$cacheKey}");
+                error_log("[WEEKS-PERFORMANCE] Total execution time (from universal cache): " . round($cacheResponseTime, 3) . " seconds");
+
+                // Добавляем информацию об использовании кеша в ответ
+                if (is_array($universalCachedData)) {
+                    $universalCachedData['cache_used'] = true;
+                    $universalCachedData['cache_key'] = $universalCacheKey;
+                    $universalCachedData['cache_type'] = 'universal';
+                    $universalCachedData['original_key'] = $cacheKey;
+                }
+
+                return $universalCachedData;
+            }
+
+            error_log("[Cache] Cache miss for both exact key: {$cacheKey} and universal key: {$universalCacheKey}");
         } else {
             error_log("[Cache] Force refresh requested, skipping cache check");
         }
@@ -324,7 +345,7 @@ class GraphAdmissionClosureService
         $debug = $payload['debug'] ?? false;
 
         // Проверка кеша
-        // TASK-076: Использование предварительно созданных кешей
+        // TASK-076: Использование предварительно созданных кешей + универсальный подход
         if (!$forceRefresh) {
             $cacheParams = [
                 'product' => $product,
@@ -334,9 +355,9 @@ class GraphAdmissionClosureService
                 'includeCarryoverTickets' => $includeCarryoverTickets,
                 'includeCarryoverTicketsByDuration' => $includeCarryoverTicketsByDuration
             ];
-            
+
             $cacheKey = $this->cacheStore->generateKey($cacheParams);
-            
+
             // TASK-076: Логирование параметров для отладки
             error_log("[GraphAdmissionClosureService] Months mode - checking cache");
             error_log("[GraphAdmissionClosureService] Cache params: " . json_encode($cacheParams, JSON_UNESCAPED_UNICODE));
@@ -345,16 +366,16 @@ class GraphAdmissionClosureService
             $cachedData = $this->cacheStore->get($cacheKey);
             if ($cachedData !== null) {
                 $cacheResponseTime = microtime(true) - $monthsModeStartTime;
-                error_log("[Cache] Cache hit for key: {$cacheKey}");
-                error_log("[Cache] Using pre-created cache for key: {$cacheKey}");
+                error_log("[Cache] Exact cache hit for key: {$cacheKey}");
                 error_log("[MONTHS-PERFORMANCE] Total execution time (from cache): " . round($cacheResponseTime, 3) . " seconds");
-                
+
                 // Добавляем информацию об использовании кеша в ответ
                 if (is_array($cachedData)) {
                     $cachedData['cache_used'] = true;
                     $cachedData['cache_key'] = $cacheKey;
+                    $cachedData['cache_type'] = 'exact';
                 }
-                
+
                 return $cachedData;
             }
 
@@ -622,5 +643,26 @@ class GraphAdmissionClosureService
             'includeCarryoverTickets' => $payload['includeCarryoverTickets'] ?? false,
             'includeCarryoverTicketsByDuration' => $payload['includeCarryoverTicketsByDuration'] ?? false
         ]);
+    }
+
+    /**
+     * Генерация универсального ключа кеша для weeks режима
+     *
+     * TASK-076: Второй вариант - универсальный кеш
+     * Использует стандартные параметры, совместимые с интерфейсом
+     *
+     * @param DateTimeImmutable $weekStart Начало недели
+     * @param DateTimeImmutable $weekEnd Конец недели
+     * @return string Универсальный ключ кеша
+     */
+    private function getUniversalCacheKeyForWeeks(DateTimeImmutable $weekStart, DateTimeImmutable $weekEnd): string
+    {
+        // Импортируем класс для доступа к generateUniversalKey
+        require_once __DIR__ . '/../../cache/GraphAdmissionClosureCache.php';
+
+        return GraphAdmissionClosureCache::generateUniversalKey(
+            $weekStart->format('Y-m-d\TH:i:s\Z'),
+            $weekEnd->format('Y-m-d\TH:i:s\Z')
+        );
     }
 }

@@ -241,23 +241,58 @@ function createGraphAdmissionClosureCache(string $moduleId, ?string $mode, array
     if ($mode === null) {
         $mode = strpos($moduleId, 'weeks') !== false ? 'weeks' : 'months';
     }
-    
-    // Параметры по умолчанию
-    // TASK-076: Исправление для совместимости с реальным использованием модуля
-    // Для months режима модуль использует includeTickets: true (см. GraphAdmissionClosureMonthsDashboard.vue)
-    $defaultParams = [
-        'product' => '1C',
-        'periodMode' => $mode,
-        'includeTickets' => $mode === 'months' ? true : false, // Для months модуль использует true
-        'includeNewTicketsByStages' => false,
-        'includeCarryoverTickets' => $mode === 'months' ? true : false,
-        'includeCarryoverTicketsByDuration' => false
-    ];
+
+    // TASK-076: Второй вариант - универсальный кеш для weeks режима
+    if ($mode === 'weeks') {
+        // Для weeks режима используем универсальные параметры, совместимые с интерфейсом
+        // Получаем границы текущей недели
+        $tz = new DateTimeZone('UTC');
+        $now = new DateTimeImmutable('now', $tz);
+        $isoYear = (int)$now->format('o');
+        $isoWeek = (int)$now->format('W');
+
+        $weekStart = (new DateTimeImmutable('now', $tz))
+            ->setISODate($isoYear, $isoWeek, 1)
+            ->setTime(0, 0, 0);
+        $weekEnd = $weekStart
+            ->modify('+6 days')
+            ->setTime(23, 59, 59);
+
+        $defaultParams = [
+            'product' => '1C',
+            'periodMode' => 'weeks',
+            'weekStartUtc' => $weekStart->format('Y-m-d\TH:i:s\Z'),
+            'weekEndUtc' => $weekEnd->format('Y-m-d\TH:i:s\Z'),
+            'includeTickets' => true,                    // Как в интерфейсе
+            'includeNewTicketsByStages' => true,         // Как в интерфейсе
+            'includeCarryoverTickets' => false,          // По умолчанию
+            'includeCarryoverTicketsByDuration' => true  // Как в интерфейсе
+        ];
+    } else {
+        // Для months режима используем стандартные параметры
+        // TASK-076: Исправление для совместимости с реальным использованием модуля
+        // Для months режима модуль использует includeTickets: true
+        $defaultParams = [
+            'product' => '1C',
+            'periodMode' => 'months',
+            'includeTickets' => true, // Для months модуль использует true
+            'includeNewTicketsByStages' => false,
+            'includeCarryoverTickets' => true, // Для months по умолчанию true
+            'includeCarryoverTicketsByDuration' => false
+        ];
+    }
     
     $finalParams = array_merge($defaultParams, $params);
     
-    // Генерация ключа кеша
-    $cacheKey = GraphAdmissionClosureCache::generateKey($finalParams);
+    // TASK-076: Для weeks режима используем универсальный ключ
+    if ($mode === 'weeks') {
+        $cacheKey = GraphAdmissionClosureCache::generateUniversalKey(
+            $finalParams['weekStartUtc'],
+            $finalParams['weekEndUtc']
+        );
+    } else {
+        $cacheKey = GraphAdmissionClosureCache::generateKey($finalParams);
+    }
     
     // TASK-076: Логирование параметров для отладки
     error_log("[CacheCreate] Module: {$moduleId}, Mode: {$mode}");
