@@ -67,8 +67,11 @@ export class CacheManagementService {
    * @returns {Promise<Object>} Объект с categorized и metadata
    */
   static async getCacheStatus() {
+    console.log('[CacheManagementService] getCacheStatus() called');
     try {
       const apiUrl = getApiUrl('/api/admin/cache-status.php');
+      console.log('[CacheManagementService] API URL:', apiUrl);
+
       const response = await fetch(apiUrl, {
         method: 'GET',
         headers: {
@@ -77,16 +80,24 @@ export class CacheManagementService {
         }
       });
 
+      console.log('[CacheManagementService] Response status:', response.status);
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const result = await response.json();
+      console.log('[CacheManagementService] API result:', result);
 
       if (result.success) {
         const modules = result.modules || [];
+        console.log('[CacheManagementService] Raw modules count:', modules.length);
+
         // Возвращаем результат категоризации вместо простого массива
-        return this.categorizeAndSortModules(modules);
+        const categorized = this.categorizeAndSortModules(modules);
+        console.log('[CacheManagementService] Categorized result:', categorized);
+
+        return categorized;
       } else {
         throw new Error(result.error || 'Failed to get cache status');
       }

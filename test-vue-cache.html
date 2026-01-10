@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест CacheManagement компонента</title>
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.2.45/dist/vue.global.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 20px; border: 1px solid #ccc; border-radius: 8px; }
+        .success { border-color: #28a745; background: #d4edda; }
+        .error { border-color: #dc3545; background: #f8d7da; }
+        .module { padding: 10px; margin: 5px 0; background: white; border: 1px solid #eee; border-radius: 4px; }
+        .primary { border-left: 4px solid #007bff; }
+        .secondary { border-left: 4px solid #6c757d; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <h1>🧪 Тест CacheManagement компонента</h1>
+
+        <div class="test-section">
+            <h2>1. Проверка API</h2>
+            <button @click="testAPI">Проверить API cache-status.php</button>
+            <div v-if="apiResult" class="test-result" :class="{ success: apiResult.success, error: !apiResult.success }">
+                <pre>{{ JSON.stringify(apiResult, null, 2) }}</pre>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>2. Проверка категоризации</h2>
+            <button @click="testCategorization" :disabled="!apiResult || !apiResult.success">Протестировать категоризацию</button>
+            <div v-if="categorizedResult">
+                <h3>Основные модули ({{ categorizedResult.primaryModules.length }})</h3>
+                <div v-for="module in categorizedResult.primaryModules" :key="module.id" class="module primary">
+                    <strong>{{ module.name }}</strong> ({{ module.id }})
+                </div>
+
+                <h3>Побочные модули ({{ categorizedResult.secondaryModules.length }})</h3>
+                <div v-for="module in categorizedResult.secondaryModules" :key="module.id" class="module secondary">
+                    <strong>{{ module.name }}</strong> ({{ module.id }})
+                </div>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>3. Результаты теста</h2>
+            <div v-if="testResults">
+                <p><strong>Всего модулей:</strong> {{ testResults.total }}</p>
+                <p><strong>Основных:</strong> {{ testResults.primary }}</p>
+                <p><strong>Побочных:</strong> {{ testResults.secondary }}</p>
+                <p><strong>Статус:</strong> <span :class="{ success: testResults.success, error: !testResults.success }">{{ testResults.message }}</span></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref } = Vue;
+
+        // Мокаем getApiUrl функцию
+        window.getApiUrl = (path) => {
+            const baseUrl = window.location.origin + '/rest_api_aps/sd_it_gen_plan';
+            return baseUrl + path;
+        };
+
+        // Простая версия CacheManagementService для тестирования
+        class CacheManagementService {
+            static PRIMARY_MODULE_IDS = [
+                'dashboard-sector-1c',
+                'graph-state',
+                'graph-admission-closure-weeks',
+                'graph-admission-closure-months',
+                'time-tracking-default',
+                'time-tracking-detailed',
+                'time-tracking-summary'
+            ];
+
+            static async getCacheStatus() {
+                try {
+                    const apiUrl = getApiUrl('/api/admin/cache-status.php');
+                    console.log('API URL:', apiUrl);
+
+                    const response = await fetch(apiUrl, {
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    console.log('API result:', result);
+
+                    if (result.success) {
+                        const modules = result.modules || [];
+                        console.log('Raw modules count:', modules.length);
+
+                        const categorized = this.categorizeAndSortModules(modules);
+                        console.log('Categorized result:', categorized);
+
+                        return categorized;
+                    } else {
+                        throw new Error(result.error || 'Failed to get cache status');
+                    }
+                } catch (error) {
+                    console.error('Error getting cache status:', error);
+                    throw error;
+                }
+            }
+
+            static categorizeAndSortModules(modules) {
+                const primaryModules = [];
+                const secondaryModules = [];
+
+                modules.forEach(module => {
+                    if (this.PRIMARY_MODULE_IDS.includes(module.id)) {
+                        primaryModules.push({
+                            ...module,
+                            category: 'primary',
+                            priority: this.PRIMARY_MODULE_PRIORITIES[module.id] || 999
+                        });
+                    } else {
+                        secondaryModules.push({
+                            ...module,
+                            category: 'secondary',
+                            groupType: this.getModuleType(module.id)
+                        });
+                    }
+                });
+
+                return {
+                    primaryModules: this.sortPrimaryModules(primaryModules),
+                    secondaryModules: this.sortSecondaryModules(secondaryModules),
+                    metadata: {
+                        totalModules: modules.length,
+                        primaryCount: primaryModules.length,
+                        secondaryCount: secondaryModules.length
+                    }
+                };
+            }
+
+            static PRIMARY_MODULE_PRIORITIES = {
+                'dashboard-sector-1c': 1,
+                'graph-state': 2,
+                'graph-admission-closure-weeks': 3,
+                'graph-admission-closure-months': 4,
+                'time-tracking-default': 5,
+                'time-tracking-detailed': 6,
+                'time-tracking-summary': 7
+            };
+
+            static sortPrimaryModules(modules) {
+                return modules.sort((a, b) => {
+                    const aPriority = this.PRIMARY_MODULE_PRIORITIES[a.id] || 999;
+                    const bPriority = this.PRIMARY_MODULE_PRIORITIES[b.id] || 999;
+                    return aPriority - bPriority;
+                });
+            }
+
+            static sortSecondaryModules(modules) {
+                return modules.sort((a, b) => {
+                    const aType = this.getModuleType(a.id);
+                    const bType = this.getModuleType(b.id);
+
+                    if (aType !== bType) {
+                        return aType.localeCompare(bType);
+                    }
+
+                    return a.name.localeCompare(b.name);
+                });
+            }
+
+            static getModuleType(moduleId) {
+                if (moduleId.startsWith('users-management')) return 'users';
+                if (moduleId.startsWith('user-activity')) return 'activity';
+                if (moduleId.startsWith('webhook-logs')) return 'webhooks';
+                return 'other';
+            }
+        }
+
+        createApp({
+            setup() {
+                const apiResult = ref(null);
+                const categorizedResult = ref(null);
+                const testResults = ref(null);
+
+                const testAPI = async () => {
+                    try {
+                        console.log('Testing API...');
+                        const response = await fetch(getApiUrl('/api/admin/cache-status.php'), {
+                            method: 'GET',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest'
+                            }
+                        });
+
+                        const result = await response.json();
+                        apiResult.value = {
+                            success: response.ok && result.success,
+                            status: response.status,
+                            data: result
+                        };
+
+                        console.log('API test result:', apiResult.value);
+                    } catch (error) {
+                        apiResult.value = {
+                            success: false,
+                            error: error.message
+                        };
+                        console.error('API test error:', error);
+                    }
+                };
+
+                const testCategorization = async () => {
+                    try {
+                        console.log('Testing categorization...');
+                        const result = await CacheManagementService.getCacheStatus();
+                        categorizedResult.value = result;
+
+                        testResults.value = {
+                            total: result.metadata.totalModules,
+                            primary: result.metadata.primaryCount,
+                            secondary: result.metadata.secondaryCount,
+                            success: result.metadata.totalModules > 0,
+                            message: result.metadata.totalModules > 0 ? 'Тест пройден успешно' : 'Модули не найдены'
+                        };
+
+                        console.log('Categorization test result:', testResults.value);
+                    } catch (error) {
+                        testResults.value = {
+                            success: false,
+                            message: 'Ошибка категоризации: ' + error.message
+                        };
+                        console.error('Categorization test error:', error);
+                    }
+                };
+
+                return {
+                    apiResult,
+                    categorizedResult,
+                    testResults,
+                    testAPI,
+                    testCategorization
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

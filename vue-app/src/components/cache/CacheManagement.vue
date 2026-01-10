@@ -96,6 +96,13 @@
       </div>
     </div>
 
+    <!-- Сообщение об ошибке -->
+    <div v-if="error" class="error-message">
+      <h3>❌ Ошибка загрузки модулей кеша</h3>
+      <p>{{ error }}</p>
+      <button @click="loadModules" class="retry-btn">Повторить попытку</button>
+    </div>
+
     <!-- Общий статус загрузки -->
     <div v-if="loading" class="loading-overlay">
       <div class="loading-spinner"></div>
@@ -107,6 +114,7 @@
 <script>
 import { ref, computed, onMounted, watch } from 'vue';
 import { CacheManagementService } from '@/services/cache-management-service.js';
+import { getApiUrl } from '@/utils/path-utils.js';
 import { sortModuleGroups } from '@/utils/cache-helpers.js';
 import CacheModuleCard from './CacheModuleCard.vue';
 
@@ -156,20 +164,28 @@ export default {
 
     // Методы
     const loadModules = async () => {
+      console.log('[CacheManagement] loadModules() called');
       loading.value = true;
       error.value = null;
 
       try {
+        console.log('[CacheManagement] Calling CacheManagementService.getCacheStatus()...');
+
         // CacheManagementService.getCacheStatus() уже возвращает categorized данные
         const categorized = await CacheManagementService.getCacheStatus();
+        console.log('[CacheManagement] Categorized result:', categorized);
 
         primaryModules.value = categorized.primaryModules || [];
         secondaryModules.value = categorized.secondaryModules || [];
+
+        console.log('[CacheManagement] Primary modules:', primaryModules.value.length);
+        console.log('[CacheManagement] Secondary modules:', secondaryModules.value.length);
       } catch (err) {
         console.error('[CacheManagement] Error loading modules:', err);
         error.value = err.message;
       } finally {
         loading.value = false;
+        console.log('[CacheManagement] loadModules() completed');
       }
     };
 
@@ -544,6 +560,38 @@ export default {
   .divider-content {
     padding: 0;
   }
+}
+
+.error-message {
+  background: #f8d7da;
+  border: 1px solid #f5c6cb;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+  color: #721c24;
+}
+
+.error-message h3 {
+  margin: 0 0 10px 0;
+  color: #721c24;
+}
+
+.error-message p {
+  margin: 0 0 15px 0;
+}
+
+.retry-btn {
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.retry-btn:hover {
+  background: #c82333;
 }
 
 @media (max-width: 480px) {
