@@ -138,9 +138,11 @@ export class CacheCreationService {
           weekStartUtc: weekStart.toISOString(),
           weekEndUtc: weekEnd.toISOString(),
           includeTickets: true,                    // Как в интерфейсе
-          includeNewTicketsByStages: true,         // Как в интерфейсе
-          includeCarryoverTickets: false,          // По умолчанию
-          includeCarryoverTicketsByDuration: true  // Как в интерфейсе
+          includeNewTicketsByStages: true,         // TASK-081: Для полных данных как в интерфейсе
+          includeCarryoverTickets: true,           // TASK-081: Исправлено для соответствия интерфейсу
+          includeCarryoverTicketsByDuration: true, // TASK-081: Для полных данных как в интерфейсе
+          useCache: true,                          // TASK-081: Как в интерфейсе
+          forceRefresh: true                       // TASK-081: Всегда создавать свежий кеш
         };
       } else {
         // Для months режима используем стандартные параметры

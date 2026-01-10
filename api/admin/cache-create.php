@@ -264,9 +264,11 @@ function createGraphAdmissionClosureCache(string $moduleId, ?string $mode, array
             'weekStartUtc' => $weekStart->format('Y-m-d\TH:i:s\Z'),
             'weekEndUtc' => $weekEnd->format('Y-m-d\TH:i:s\Z'),
             'includeTickets' => true,                    // Как в интерфейсе
-            'includeNewTicketsByStages' => true,         // Как в интерфейсе
+            'includeNewTicketsByStages' => true,         // TASK-081: Для полных данных как в интерфейсе
             'includeCarryoverTickets' => true,           // TASK-080: Исправлено с false на true для соответствия интерфейсу
-            'includeCarryoverTicketsByDuration' => true  // Как в интерфейсе
+            'includeCarryoverTicketsByDuration' => true, // TASK-081: Для полных данных как в интерфейсе
+            'useCache' => true,                          // TASK-081: Как в интерфейсе
+            'forceRefresh' => false                      // TASK-081: Как в интерфейсе
         ];
     } else {
         // Для months режима используем стандартные параметры
@@ -336,9 +338,14 @@ function createGraphAdmissionClosureCache(string $moduleId, ?string $mode, array
     $service = new GraphAdmissionClosureService($bitrixClient, $aggregator, $cacheStore, $config, $dateHelper);
     
     // Получение данных и сохранение в кеш
-    // Используем forceRefresh=false, чтобы не перезаписывать существующий кеш
-    $finalParams['forceRefresh'] = false;
+    // TASK-081: Используем forceRefresh=true для ручного создания, чтобы всегда создавать свежий полный кеш
+    $finalParams['forceRefresh'] = true;
     
+    error_log("[CACHE-CREATE] === Manual cache creation started ===");
+    error_log("[CACHE-CREATE] Module: {$moduleId}, Mode: {$mode}");
+    error_log("[CACHE-CREATE] Creation time: " . date('Y-m-d H:i:s T'));
+    error_log("[CACHE-CREATE] Generated key: {$cacheKey}");
+    error_log("[CACHE-CREATE] Final params: " . json_encode($finalParams, JSON_UNESCAPED_UNICODE));
     error_log("[CacheCreate] Creating cache for module: {$moduleId}, mode: {$mode}, key: {$cacheKey}");
     
     // Обновление статуса: загрузка данных
@@ -356,6 +363,8 @@ function createGraphAdmissionClosureCache(string $moduleId, ?string $mode, array
     // Проверка успешности создания
     if (isset($data['success']) && $data['success'] === true) {
         // Кеш уже сохранён через service->handle(), просто возвращаем результат
+        error_log("[CACHE-CREATE] ✓ Cache created successfully for key: {$cacheKey}");
+        error_log("[CACHE-CREATE] === Manual cache creation completed ===");
         error_log("[CacheCreate] Cache created successfully for key: {$cacheKey}");
         
         return [

@@ -58,15 +58,26 @@ class GraphAdmissionClosureService
 
         // TASK-068-03: Проверка кеша для режима "weeks" (если не forceRefresh)
         // TASK-076: Использование предварительно созданных кешей + универсальный кеш
+        // TASK-081: Детальное логирование для диагностики cache miss
+        error_log("[CACHE-DEBUG] === Cache check started ===");
+        error_log("[CACHE-DEBUG] Request time: " . date('Y-m-d H:i:s T'));
+        error_log("[CACHE-DEBUG] Payload: " . json_encode($payload, JSON_UNESCAPED_UNICODE));
+        error_log("[CACHE-DEBUG] Week bounds: {$weekStart->format('Y-m-d H:i:s T')} - {$weekEnd->format('Y-m-d H:i:s T')}");
+
         if (!$forceRefresh) {
             $cacheKey = $this->getCacheKeyForWeeks($payload, $weekStart, $weekEnd);
             $universalCacheKey = $this->getUniversalCacheKeyForWeeks($weekStart, $weekEnd);
 
+            error_log("[CACHE-DEBUG] Generated exact key: {$cacheKey}");
+            error_log("[CACHE-DEBUG] Generated universal key: {$universalCacheKey}");
+
             // Сначала проверяем точное совпадение параметров
+            error_log("[CACHE-DEBUG] Checking exact cache key: {$cacheKey}");
             $cachedData = $this->cacheStore->get($cacheKey);
             if ($cachedData !== null) {
                 // TASK-068-04: Логирование времени при cache hit
                 $cacheResponseTime = microtime(true) - $weeksModeStartTime;
+                error_log("[CACHE-DEBUG] ✓ Exact cache HIT for key: {$cacheKey}");
                 error_log("[Cache] Exact cache hit for key: {$cacheKey}");
                 error_log("[WEEKS-PERFORMANCE] Total execution time (from cache): " . round($cacheResponseTime, 3) . " seconds");
 
@@ -77,14 +88,19 @@ class GraphAdmissionClosureService
                     $cachedData['cache_type'] = 'exact';
                 }
 
+                error_log("[CACHE-DEBUG] === Cache check completed (exact hit) ===");
                 return $cachedData;
+            } else {
+                error_log("[CACHE-DEBUG] ✗ Exact cache MISS for key: {$cacheKey}");
             }
 
             // Если точное совпадение не найдено, проверяем универсальный кеш
+            error_log("[CACHE-DEBUG] Checking universal cache key: {$universalCacheKey}");
             $universalCachedData = $this->cacheStore->get($universalCacheKey);
             if ($universalCachedData !== null) {
                 // TASK-076: Логирование использования универсального кеша
                 $cacheResponseTime = microtime(true) - $weeksModeStartTime;
+                error_log("[CACHE-DEBUG] ✓ Universal cache HIT for key: {$universalCacheKey}");
                 error_log("[Cache] Universal cache hit for key: {$universalCacheKey}");
                 error_log("[Cache] Original key was: {$cacheKey}");
                 // TASK-080: Логирование параметров при использовании универсального кеша
@@ -102,9 +118,13 @@ class GraphAdmissionClosureService
                     $universalCachedData['original_key'] = $cacheKey;
                 }
 
+                error_log("[CACHE-DEBUG] === Cache check completed (universal hit) ===");
                 return $universalCachedData;
+            } else {
+                error_log("[CACHE-DEBUG] ✗ Universal cache MISS for key: {$universalCacheKey}");
             }
 
+            error_log("[CACHE-DEBUG] ✗✗ DOUBLE cache MISS - will load from Bitrix24");
             error_log("[Cache] Cache miss for both exact key: {$cacheKey} and universal key: {$universalCacheKey}");
         } else {
             error_log("[Cache] Force refresh requested, skipping cache check");
@@ -296,10 +316,12 @@ class GraphAdmissionClosureService
             $wasCached = $this->cacheStore->get($cacheKey) !== null;
             
             if ($this->cacheStore->set($cacheKey, $response, 120)) {
+                error_log("[CACHE-DEBUG] Cache saved with TTL=120s for key: {$cacheKey}");
                 error_log("[Cache] Cache saved for key: {$cacheKey}");
-                
+
                 // TASK-076: Логирование обновления кеша
                 if ($wasCached) {
+                    error_log("[CACHE-DEBUG] Cache updated (was existing) for key: {$cacheKey}");
                     error_log("[Cache] Cache updated for key: {$cacheKey} (auto refresh)");
                 } else {
                     error_log("[Cache] Cache created for key: {$cacheKey}");
