@@ -157,9 +157,26 @@ export class CacheCreationService {
       }
     }
     
+    // TASK-082: Дашборд сектора 1С
+    if (moduleId.includes('dashboard-sector-1c')) {
+      return {
+        forceRefresh: true,
+        ttl: 600 // 10 минут
+      };
+    }
+
+    // TASK-082: График состояния
+    if (moduleId.includes('graph-state')) {
+      return {
+        type: 'current', // Тип слепка
+        forceRefresh: true,
+        ttl: 3600 // 1 час
+      };
+    }
+
     // Трудозатраты на Тикеты сектора 1С
     if (moduleId.includes('time-tracking')) {
-      const mode = moduleId.includes('detailed') ? 'detailed' : 
+      const mode = moduleId.includes('detailed') ? 'detailed' :
                   moduleId.includes('summary') ? 'summary' : 'default';
       return {
         product: '1C',
@@ -167,7 +184,7 @@ export class CacheCreationService {
         summary: mode === 'summary'
       };
     }
-    
+
     return {};
   }
 }

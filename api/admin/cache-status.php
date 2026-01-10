@@ -31,6 +31,10 @@ require_once $_SERVER['DOCUMENT_ROOT'] . '/rest_api_aps/sd_it_gen_plan/api/cache
 require_once $_SERVER['DOCUMENT_ROOT'] . '/rest_api_aps/sd_it_gen_plan/api/cache/UserActivityCache.php';
 require_once $_SERVER['DOCUMENT_ROOT'] . '/rest_api_aps/sd_it_gen_plan/api/cache/WebhookLogsCache.php';
 
+// TASK-082: Новые кеш-менеджеры для backend кеширования
+require_once $_SERVER['DOCUMENT_ROOT'] . '/rest_api_aps/sd_it_gen_plan/api/cache/DashboardSector1CCache.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/rest_api_aps/sd_it_gen_plan/api/cache/GraphStateCache.php';
+
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 
@@ -242,6 +246,40 @@ try {
             'status_text' => $cacheInfo['status_text']
         ];
     }
+
+    // TASK-082: Модуль Dashboard Sector 1C
+    $dashboardSectorDir = __DIR__ . '/../cache/dashboard-sector-1c';
+    $dashboardSectorCacheInfo = getCacheInfo($dashboardSectorDir, 600);
+    $dashboardSectorModule = [
+        'id' => 'dashboard-sector-1c',
+        'name' => 'Дашборд сектора 1С',
+        'cache_dir' => 'api/cache/dashboard-sector-1c',
+        'status' => $dashboardSectorCacheInfo['status'],
+        'file_count' => $dashboardSectorCacheInfo['file_count'],
+        'total_size' => $dashboardSectorCacheInfo['total_size'],
+        'ttl' => 600,
+        'created_at' => $dashboardSectorCacheInfo['created_at'],
+        'expires_at' => $dashboardSectorCacheInfo['expires_at'],
+        'status_text' => $dashboardSectorCacheInfo['status_text']
+    ];
+    $modules[] = $dashboardSectorModule;
+
+    // TASK-082: Модуль Graph State
+    $graphStateDir = __DIR__ . '/../cache/graph-state';
+    $graphStateCacheInfo = getCacheInfo($graphStateDir, 3600);
+    $graphStateModule = [
+        'id' => 'graph-state',
+        'name' => 'График состояния',
+        'cache_dir' => 'api/cache/graph-state',
+        'status' => $graphStateCacheInfo['status'],
+        'file_count' => $graphStateCacheInfo['file_count'],
+        'total_size' => $graphStateCacheInfo['total_size'],
+        'ttl' => 3600,
+        'created_at' => $graphStateCacheInfo['created_at'],
+        'expires_at' => $graphStateCacheInfo['expires_at'],
+        'status_text' => $graphStateCacheInfo['status_text']
+    ];
+    $modules[] = $graphStateModule;
     
     http_response_code(200);
     echo json_encode([

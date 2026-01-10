@@ -38,6 +38,7 @@ import {
 import { Logger } from './utils/logger.js';
 import { clearSectorCache } from './utils/sector-helper.js';
 import { getDiagnosticsService, isDiagnosticsEnabled } from './utils/diagnostics-service.js';
+import { CacheNotificationService } from '@/services/cache-notification-service.js';
 
 /**
  * Сервис для работы с дашбордом сектора 1С
@@ -45,7 +46,7 @@ import { getDiagnosticsService, isDiagnosticsEnabled } from './utils/diagnostics
 export class DashboardSector1CService {
   /**
    * Получение данных сектора 1С
-   * 
+   *
    * Логика:
    * 1. Проверяем кеш данных сектора
    * 2. Если кеш есть - возвращаем из кеша
@@ -56,12 +57,15 @@ export class DashboardSector1CService {
    *    - Получаем данные только этих сотрудников (с кешированием)
    *    - Раскладываем тикеты по этапам и сотрудникам
    *    - Сохраняем результат в кеш
-   * 
-   * @param {boolean} useCache - Использовать кеш (по умолчанию true)
+   *
+   * @param {boolean} useCache - Использовать in-memory кеш (по умолчанию true)
+   * @param {boolean} useBackendCache - Использовать backend кеш через API (по умолчанию false)
    * @param {Function|null} onProgress - Колбэк для отслеживания прогресса (опционально)
    * @returns {Promise<object>} Данные сектора (stages, employees, zeroPointTickets)
    */
-  static async getSectorData(useCache = true, onProgress = null) {
+  static async getSectorData(useCache = true, useBackendCache = false, onProgress = null) {
+    let cacheWasCreated = false; // Флаг для отслеживания создания кеша
+
     // Сбрасываем диагностику перед загрузкой (если включена)
     try {
       if (isDiagnosticsEnabled()) {
@@ -81,15 +85,65 @@ export class DashboardSector1CService {
         description: 'Инициализация загрузки...'
       }));
     }
-    
-    // Проверяем кеш
+
+    // TASK-082: Проверяем backend кеш, если включен
+    if (useBackendCache) {
+      try {
+        if (onProgress) {
+          onProgress(createProgressDetails('backend_cache_check', 5, {
+            description: 'Проверка backend кеша...'
+          }));
+        }
+
+        // Вызываем API для получения данных сектора с backend кешированием
+        const response = await fetch('/api/services/dashboard-sector-1c.php', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: 'getSectorDataCached',
+            params: {
+              forceRefresh: false, // Используем кеш
+              ttl: 600
+            }
+          })
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success && result.data) {
+            if (onProgress) {
+              onProgress(createProgressDetails('backend_cache_hit', 100, {
+                description: 'Данные загружены из backend кеша'
+              }));
+            }
+
+            // Проверяем, был ли кеш создан только что (cache_created = true)
+            if (result.cache_created === true) {
+              CacheNotificationService.notifyCacheCreationSuccess('Дашборд сектора 1С (backend)');
+            }
+
+            return result.data;
+          }
+        }
+
+        // Если backend кеш не сработал, продолжаем с обычной логикой
+        Logger.warn('Backend cache miss or error, falling back to frontend logic', 'DashboardSector1CService');
+      } catch (backendError) {
+        Logger.warn('Backend cache request failed, falling back to frontend logic', 'DashboardSector1CService', backendError);
+        // Продолжаем с обычной логикой
+      }
+    }
+
+    // Проверяем in-memory кеш
     if (useCache) {
       const cacheKey = CacheManager.getSectorDataCacheKey();
       const cached = CacheManager.get(cacheKey);
       if (cached !== null) {
         if (onProgress) {
           onProgress(createProgressDetails('cache_hit', 100, {
-            description: 'Данные загружены из кеша'
+            description: 'Данные загружены из in-memory кеша'
           }));
         }
         return cached;
@@ -205,12 +259,18 @@ export class DashboardSector1CService {
       if (useCache) {
         const cacheKey = CacheManager.getSectorDataCacheKey();
         CacheManager.set(cacheKey, result, CacheManager.TICKETS_TTL);
+        cacheWasCreated = true; // Отмечаем, что кеш был создан
       }
 
       if (onProgress) {
         onProgress(createProgressDetails('complete', 100, {
           description: 'Загрузка завершена'
         }));
+      }
+
+      // Показываем уведомление о создании кеша, если он был создан автоматически
+      if (cacheWasCreated && !useBackendCache) {
+        CacheNotificationService.notifyCacheCreationSuccess('Дашборд сектора 1С');
       }
 
       return result;

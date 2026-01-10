@@ -203,7 +203,8 @@ class DatePeriodHelper
         }
 
         $createdDt = (new DateTimeImmutable('@' . $ts))->setTimezone(new DateTimeZone('UTC'));
-        $diff = $weekStart->diff($createdDt);
+        $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+        $diff = $now->diff($createdDt);
         $days = (int)$diff->format('%a');
 
         if ($days < 14) {

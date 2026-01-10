@@ -16,24 +16,25 @@ import { normalizeSectorDataToSnapshot } from './snapshot-normalizer.js';
 class SectorDataAdapter {
   /**
    * Получить данные сектора для создания слепка
-   * 
+   *
    * Использует существующий сервис DashboardSector1CService.getSectorData()
    * и нормализует данные в формат слепка версии 1.0
-   * 
+   *
    * @param {Object} options - Опции получения данных
-   * @param {boolean} options.useCache - Использовать кеш (по умолчанию true)
+   * @param {boolean} options.useCache - Использовать in-memory кеш (по умолчанию true)
+   * @param {boolean} options.useBackendCache - Использовать backend кеш через API (по умолчанию false)
    * @param {Function|null} options.onProgress - Колбэк для отслеживания прогресса
    * @param {boolean} options.normalize - Нормализовать данные в формат слепка (по умолчанию true)
    * @param {boolean} options.includeTicketDetails - Включать детальную информацию о тикетах (по умолчанию false)
    * @returns {Promise<Object>} Данные сектора в формате для создания слепка
-   * 
+   *
    * @example
-   * // Получение данных с кешированием и нормализацией
+   * // Получение данных с backend кешированием
    * const sectorData = await SectorDataAdapter.getSectorDataForSnapshot({
-   *   useCache: true,
+   *   useBackendCache: true,
    *   normalize: true
    * });
-   * 
+   *
    * @example
    * // Получение данных с отслеживанием прогресса
    * const sectorData = await SectorDataAdapter.getSectorDataForSnapshot({
@@ -43,7 +44,7 @@ class SectorDataAdapter {
    *   },
    *   normalize: true
    * });
-   * 
+   *
    * @example
    * // Получение данных без нормализации (сырые данные)
    * const rawData = await SectorDataAdapter.getSectorDataForSnapshot({
@@ -53,6 +54,7 @@ class SectorDataAdapter {
   static async getSectorDataForSnapshot(options = {}) {
     const {
       useCache = true,
+      useBackendCache = false,
       onProgress = null,
       normalize = true,
       includeTicketDetails = false
@@ -62,6 +64,7 @@ class SectorDataAdapter {
       // Вызываем существующий сервис для получения данных сектора
       const sectorData = await DashboardSector1CService.getSectorData(
         useCache,
+        useBackendCache,
         onProgress
       );
 

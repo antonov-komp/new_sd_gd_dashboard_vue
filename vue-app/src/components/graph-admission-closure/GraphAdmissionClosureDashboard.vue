@@ -188,13 +188,16 @@ const showPeriodModeInfo = ref(true); // Показываем попап сра�
 // TASK-062: Метаданные выбранной недели для попапов (текущая или предыдущая)
 const selectedWeekMeta = ref(null);
 
-// TASK-070: Предзагруженные данные для попапов
+// TASK-070 + PERF-OPTIMIZATION: Предзагруженные данные для попапов по неделям
 const preloadedPopupData = ref({
+  // Структура: weekNumber -> данные
+  weeks: new Map(),
+  // Для обратной совместимости
   currentWeek: {
     newTicketsByStages: null,
     carryoverTicketsByDuration: null,
-    responsibleCreatedThisWeek: null,  // Для ResponsibleModal (уже частично загружено)
-    responsibleCreatedOtherWeek: null  // Для ResponsibleModal (уже частично загружено)
+    responsibleCreatedThisWeek: null,
+    responsibleCreatedOtherWeek: null
   },
   previousWeek: {
     newTicketsByStages: null,
@@ -385,14 +388,48 @@ async function loadData() {
     console.log('[TASK-070] closedTicketsCreatedThisWeek:', data.closedTicketsCreatedThisWeek);
     console.log('[TASK-070] closedTicketsCreatedOtherWeek:', data.closedTicketsCreatedOtherWeek);
     
-    // TASK-070: Сохраняем предзагруженные данные для текущей недели
+    // TASK-070 + PERF-OPTIMIZATION: Сохраняем предзагруженные данные для всех недель
+    const weeks = meta?.weeks || [];
+    console.log('[PERF-OPTIMIZATION] Preloading popup data for', weeks.length, 'weeks');
+
+    // Заполняем данные для каждой недели
+    weeks.forEach((week, index) => {
+      if (!preloadedPopupData.value.weeks.has(week.weekNumber)) {
+        preloadedPopupData.value.weeks.set(week.weekNumber, {
+          newTicketsByStages: null,
+          carryoverTicketsByDuration: null,
+          responsibleCreatedThisWeek: null,
+          responsibleCreatedOtherWeek: null,
+          weekMeta: week
+        });
+      }
+
+      const weekData = preloadedPopupData.value.weeks.get(week.weekNumber);
+
+      // Для текущей недели (последней в массиве) сохраняем полные данные
+      if (index === weeks.length - 1) {
+        if (data.newTicketsByStages) {
+          weekData.newTicketsByStages = data.newTicketsByStages;
+          console.log('[PERF-OPTIMIZATION] Preloaded newTicketsByStages for week', week.weekNumber, ':', data.newTicketsByStages.length, 'stages');
+        }
+        if (data.carryoverTicketsByDuration) {
+          weekData.carryoverTicketsByDuration = data.carryoverTicketsByDuration;
+          console.log('[PERF-OPTIMIZATION] Preloaded carryoverTicketsByDuration for week', week.weekNumber, ':', data.carryoverTicketsByDuration.length, 'categories');
+        }
+      }
+    });
+
+    // Для обратной совместимости сохраняем в currentWeek
     if (data.newTicketsByStages) {
       preloadedPopupData.value.currentWeek.newTicketsByStages = data.newTicketsByStages;
-      console.log('[TASK-070] Preloaded newTicketsByStages for current week:', data.newTicketsByStages.length, 'stages');
     }
     if (data.carryoverTicketsByDuration) {
       preloadedPopupData.value.currentWeek.carryoverTicketsByDuration = data.carryoverTicketsByDuration;
-      console.log('[TASK-070] Preloaded carryoverTicketsByDuration for current week:', data.carryoverTicketsByDuration.length, 'categories');
+    }
+
+    // PERF-OPTIMIZATION: Предзагружаем данные для других недель асинхронно
+    if (weeks.length > 1) {
+      preloadOtherWeeksData(weeks.slice(0, -1)); // Все недели кроме текущей
     }
     // TASK-070: Сохраняем данные для ResponsibleModal (уже загружены в первом запросе)
     if (data.responsibleCreatedThisWeek) {
@@ -567,29 +604,85 @@ function getPreloadedStagesData(weekMeta) {
  * @returns {Array|null} Предзагруженные данные категорий сроков или null
  */
 function getPreloadedCarryoverData(weekMeta) {
-  if (!weekMeta || !chartMeta.value) {
+  if (!weekMeta) {
     return null;
   }
-  
-  // Определяем текущую неделю: последний элемент из weeks или weekNumber из chartMeta
+
+  // Проверяем новую структуру Map
+  const weekData = preloadedPopupData.value.weeks.get(weekMeta.weekNumber);
+  if (weekData?.carryoverTicketsByDuration && Array.isArray(weekData.carryoverTicketsByDuration)) {
+    console.log('[PERF-OPTIMIZATION] Using preloaded carryover data for week', weekMeta.weekNumber, ':', weekData.carryoverTicketsByDuration.length, 'categories');
+    return weekData.carryoverTicketsByDuration;
+  }
+
+  // Fallback для обратной совместимости
   const weeks = chartMeta.value?.weeks || [];
-  const currentWeekNumber = weeks.length > 0 
-    ? weeks[weeks.length - 1].weekNumber 
+  const currentWeekNumber = weeks.length > 0
+    ? weeks[weeks.length - 1].weekNumber
     : chartMeta.value.weekNumber;
-  
+
   const isCurrentWeek = weekMeta.weekNumber === currentWeekNumber;
-  const data = isCurrentWeek 
+  const fallbackData = isCurrentWeek
     ? preloadedPopupData.value.currentWeek.carryoverTicketsByDuration
     : preloadedPopupData.value.previousWeek.carryoverTicketsByDuration;
-  
-  // Валидация: проверяем, что данные есть и это массив
-  if (Array.isArray(data) && data.length > 0) {
-    console.log('[TASK-070] Using preloaded carryover data for week', weekMeta.weekNumber, ':', data.length, 'categories');
-    return data;
+
+  if (Array.isArray(fallbackData) && fallbackData.length > 0) {
+    console.log('[TASK-070] Using fallback preloaded carryover data for week', weekMeta.weekNumber, ':', fallbackData.length, 'categories');
+    return fallbackData;
   }
-  
-  console.log('[TASK-070] No preloaded carryover data for week', weekMeta.weekNumber, ', will use API fallback');
+
+  console.log('[PERF-ISSUE] No preloaded carryover data for week', weekMeta.weekNumber, ', will use slow API fallback');
   return null;
+}
+
+/**
+ * PERF-OPTIMIZATION: Предзагрузка данных для других недель графика
+ * Загружает данные попапов для недель, кроме текущей, в фоне
+ */
+async function preloadOtherWeeksData(otherWeeks) {
+  if (!otherWeeks || otherWeeks.length === 0) return;
+
+  console.log('[PERF-OPTIMIZATION] Starting background preload for', otherWeeks.length, 'weeks');
+
+  // Предзагружаем данные для каждой недели асинхронно, но с задержкой между запросами
+  for (const week of otherWeeks) {
+    try {
+      // Небольшая задержка между запросами, чтобы не перегружать API
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      console.log('[PERF-OPTIMIZATION] Preloading data for week', week.weekNumber);
+
+      const weekData = await fetchAdmissionClosureStats({
+        product: '1C',
+        periodMode: 'weeks',
+        weekStartUtc: week.weekStartUtc,
+        weekEndUtc: week.weekEndUtc,
+        includeNewTicketsByStages: true,
+        includeCarryoverTickets: true,
+        includeCarryoverTicketsByDuration: true,
+        includeTickets: false // Не загружаем полные тикеты, только метаданные
+      });
+
+      // Сохраняем предзагруженные данные
+      const popupWeekData = {
+        newTicketsByStages: weekData.data.newTicketsByStages || null,
+        carryoverTicketsByDuration: weekData.data.carryoverTicketsByDuration || null,
+        responsibleCreatedThisWeek: null, // Для других недель не предзагружаем
+        responsibleCreatedOtherWeek: null,
+        weekMeta: week
+      };
+
+      preloadedPopupData.value.weeks.set(week.weekNumber, popupWeekData);
+
+      console.log('[PERF-OPTIMIZATION] Successfully preloaded data for week', week.weekNumber);
+
+    } catch (error) {
+      console.warn('[PERF-OPTIMIZATION] Failed to preload data for week', week.weekNumber, ':', error);
+      // Продолжаем с другими неделями
+    }
+  }
+
+  console.log('[PERF-OPTIMIZATION] Background preload completed');
 }
 
 /**

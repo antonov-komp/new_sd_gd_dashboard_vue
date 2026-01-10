@@ -31,13 +31,20 @@
  * - https://context7.com/bitrix24/rest/
  */
 
-require_once $_SERVER['DOCUMENT_ROOT'] . '/rest_api_aps/sd_it_gen_plan/api/cache/GraphAdmissionClosureCache.php';
-require_once $_SERVER['DOCUMENT_ROOT'] . '/rest_api_aps/sd_it_gen_plan/api/graph-admission-closure/cache/CacheStore.php';
-require_once $_SERVER['DOCUMENT_ROOT'] . '/rest_api_aps/sd_it_gen_plan/api/graph-admission-closure/service/GraphAdmissionClosureService.php';
-require_once $_SERVER['DOCUMENT_ROOT'] . '/rest_api_aps/sd_it_gen_plan/api/graph-admission-closure/bitrix/BitrixClient.php';
-require_once $_SERVER['DOCUMENT_ROOT'] . '/rest_api_aps/sd_it_gen_plan/api/graph-admission-closure/domain/Aggregator.php';
-require_once $_SERVER['DOCUMENT_ROOT'] . '/rest_api_aps/sd_it_gen_plan/api/graph-admission-closure/config/Config.php';
-require_once $_SERVER['DOCUMENT_ROOT'] . '/rest_api_aps/sd_it_gen_plan/api/graph-admission-closure/util/DatePeriodHelper.php';
+// Определяем базовый путь проекта
+$projectRoot = dirname(__DIR__, 2); // Поднимаемся на 2 уровня выше от api/admin/
+
+require_once $projectRoot . '/api/cache/GraphAdmissionClosureCache.php';
+require_once $projectRoot . '/api/graph-admission-closure/cache/CacheStore.php';
+require_once $projectRoot . '/api/graph-admission-closure/service/GraphAdmissionClosureService.php';
+require_once $projectRoot . '/api/graph-admission-closure/bitrix/BitrixClient.php';
+require_once $projectRoot . '/api/graph-admission-closure/domain/Aggregator.php';
+require_once $projectRoot . '/api/graph-admission-closure/config/Config.php';
+require_once $projectRoot . '/api/graph-admission-closure/util/DatePeriodHelper.php';
+
+// TASK-082: Новые сервисы для backend кеширования
+require_once $projectRoot . '/api/services/DashboardSector1CService.php';
+require_once $projectRoot . '/api/services/GraphStateService.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
@@ -179,11 +186,21 @@ function createCacheForModule(string $moduleId, ?string $mode, array $params, ?s
         return createGraphAdmissionClosureCache($moduleId, $mode, $params, $taskId, $statusFile);
     }
     
+    // TASK-082: Дашборд сектора 1С
+    if (strpos($moduleId, 'dashboard-sector-1c') === 0) {
+        return createDashboardSectorCache($moduleId, $mode, $params, $taskId, $statusFile);
+    }
+
+    // TASK-082: График состояния
+    if (strpos($moduleId, 'graph-state') === 0) {
+        return createGraphStateCache($moduleId, $mode, $params, $taskId, $statusFile);
+    }
+
     // Трудозатраты на Тикеты сектора 1С
     if (strpos($moduleId, 'time-tracking') === 0) {
         return createTimeTrackingCache($moduleId, $mode, $params, $taskId, $statusFile);
     }
-    
+
     return [
         'success' => false,
         'error' => 'Unknown module: ' . $moduleId
@@ -384,8 +401,184 @@ function createGraphAdmissionClosureCache(string $moduleId, ?string $mode, array
 }
 
 /**
+ * TASK-082: Создание кеша для DashboardSector1C
+ *
+ * @param string $moduleId ID модуля
+ * @param string|null $mode Режим кеша
+ * @param array $params Параметры для создания кеша
+ * @param string|null $taskId ID задачи для отслеживания прогресса
+ * @param string|null $statusFile Путь к файлу статуса
+ * @return array Результат создания кеша
+ */
+function createDashboardSectorCache(string $moduleId, ?string $mode, array $params, ?string $taskId = null, ?string $statusFile = null): array
+{
+    // Генерация ключа кеша
+    $cacheKey = \DashboardSector1CCache::generateSectorDataKey();
+
+    // Обновление статуса: проверка существования кеша
+    if ($statusFile) {
+        updateTaskStatus($statusFile, 10, 'Проверка существования кеша...', $cacheKey);
+    }
+
+    // Проверка существования кеша
+    $existingCache = \DashboardSector1CCache::getSectorData();
+    if ($existingCache !== null) {
+        if ($statusFile) {
+            updateTaskStatus($statusFile, 100, 'Кеш уже существует', $cacheKey);
+        }
+        return [
+            'success' => true,
+            'message' => 'Кеш дашборда сектора 1С уже существует',
+            'cache_key' => $cacheKey,
+            'module_id' => $moduleId,
+            'already_exists' => true
+        ];
+    }
+
+    // Обновление статуса: инициализация сервиса
+    if ($statusFile) {
+        updateTaskStatus($statusFile, 20, 'Инициализация сервиса...', $cacheKey);
+    }
+
+    error_log("[CACHE-CREATE] === Manual cache creation started for Dashboard Sector 1C ===");
+    error_log("[CACHE-CREATE] Module: {$moduleId}, Cache key: {$cacheKey}");
+    error_log("[CACHE-CREATE] Creation time: " . date('Y-m-d H:i:s T'));
+
+    // Обновление статуса: загрузка данных
+    if ($statusFile) {
+        updateTaskStatus($statusFile, 30, 'Загрузка данных сектора 1С из Bitrix24...', $cacheKey);
+    }
+
+    try {
+        // Создаём кеш через сервис (всегда forceRefresh для ручного создания)
+        $finalParams = array_merge($params, [
+            'forceRefresh' => true,
+            'ttl' => $params['ttl'] ?? 600 // 10 минут по умолчанию
+        ]);
+
+        $data = \DashboardSector1CService::getSectorDataCached($finalParams);
+
+        // Проверяем успешность создания
+        if ($data && is_array($data) && isset($data['stages'])) {
+            error_log("[CACHE-CREATE] ✓ Cache created successfully for Dashboard Sector 1C, key: {$cacheKey}");
+            error_log("[CACHE-CREATE] === Manual cache creation completed for Dashboard Sector 1C ===");
+
+            return [
+                'success' => true,
+                'message' => 'Кеш дашборда сектора 1С успешно создан',
+                'cache_key' => $cacheKey,
+                'module_id' => $moduleId,
+                'already_exists' => false
+            ];
+        } else {
+            error_log("[CACHE-CREATE] Failed to create cache: service returned invalid data");
+            return [
+                'success' => false,
+                'error' => 'Failed to create cache: service returned invalid data'
+            ];
+        }
+    } catch (\Exception $e) {
+        error_log("[CACHE-CREATE] Exception during cache creation: " . $e->getMessage());
+        return [
+            'success' => false,
+            'error' => 'Exception during cache creation: ' . $e->getMessage()
+        ];
+    }
+}
+
+/**
+ * TASK-082: Создание кеша для GraphState
+ *
+ * @param string $moduleId ID модуля
+ * @param string|null $mode Режим кеша
+ * @param array $params Параметры для создания кеша
+ * @param string|null $taskId ID задачи для отслеживания прогресса
+ * @param string|null $statusFile Путь к файлу статуса
+ * @return array Результат создания кеша
+ */
+function createGraphStateCache(string $moduleId, ?string $mode, array $params, ?string $taskId = null, ?string $statusFile = null): array
+{
+    // Определение типа слепка
+    $snapshotType = $params['type'] ?? 'current';
+
+    // Генерация ключа кеша
+    $cacheKey = \GraphStateCache::generateSnapshotDataKey($snapshotType);
+
+    // Обновление статуса: проверка существования кеша
+    if ($statusFile) {
+        updateTaskStatus($statusFile, 10, 'Проверка существования кеша...', $cacheKey);
+    }
+
+    // Проверка существования кеша
+    $existingCache = \GraphStateCache::getSnapshotData($snapshotType);
+    if ($existingCache !== null) {
+        if ($statusFile) {
+            updateTaskStatus($statusFile, 100, 'Кеш уже существует', $cacheKey);
+        }
+        return [
+            'success' => true,
+            'message' => 'Кеш графика состояния уже существует',
+            'cache_key' => $cacheKey,
+            'module_id' => $moduleId,
+            'already_exists' => true
+        ];
+    }
+
+    // Обновление статуса: инициализация сервиса
+    if ($statusFile) {
+        updateTaskStatus($statusFile, 20, 'Инициализация сервиса...', $cacheKey);
+    }
+
+    error_log("[CACHE-CREATE] === Manual cache creation started for Graph State ===");
+    error_log("[CACHE-CREATE] Module: {$moduleId}, Type: {$snapshotType}, Cache key: {$cacheKey}");
+    error_log("[CACHE-CREATE] Creation time: " . date('Y-m-d H:i:s T'));
+
+    // Обновление статуса: загрузка данных
+    if ($statusFile) {
+        updateTaskStatus($statusFile, 30, 'Загрузка данных слепков из Bitrix24...', $cacheKey);
+    }
+
+    try {
+        // Создаём кеш через сервис (всегда forceRefresh для ручного создания)
+        $finalParams = array_merge($params, [
+            'forceRefresh' => true,
+            'type' => $snapshotType,
+            'ttl' => $params['ttl'] ?? 3600 // 1 час по умолчанию
+        ]);
+
+        $data = \GraphStateService::getSnapshotDataCached($finalParams);
+
+        // Проверяем успешность создания
+        if ($data && is_array($data) && isset($data['meta'])) {
+            error_log("[CACHE-CREATE] ✓ Cache created successfully for Graph State, key: {$cacheKey}");
+            error_log("[CACHE-CREATE] === Manual cache creation completed for Graph State ===");
+
+            return [
+                'success' => true,
+                'message' => 'Кеш графика состояния успешно создан',
+                'cache_key' => $cacheKey,
+                'module_id' => $moduleId,
+                'already_exists' => false
+            ];
+        } else {
+            error_log("[CACHE-CREATE] Failed to create cache: service returned invalid data");
+            return [
+                'success' => false,
+                'error' => 'Failed to create cache: service returned invalid data'
+            ];
+        }
+    } catch (\Exception $e) {
+        error_log("[CACHE-CREATE] Exception during cache creation: " . $e->getMessage());
+        return [
+            'success' => false,
+            'error' => 'Exception during cache creation: ' . $e->getMessage()
+        ];
+    }
+}
+
+/**
  * Создание кеша для TimeTrackingCache
- * 
+ *
  * @param string $moduleId ID модуля
  * @param string|null $mode Режим кеша
  * @param array $params Параметры для создания кеша
@@ -405,7 +598,7 @@ function createTimeTrackingCache(string $moduleId, ?string $mode, array $params,
             $mode = 'default';
         }
     }
-    
+
     // TODO: Реализовать создание кеша через TimeTrackingService
     // Пока возвращаем ошибку, так как TimeTrackingCache может не существовать
     return [

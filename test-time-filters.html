@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест фильтрации по времени - TASK-083</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f7fa;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #e1e8ed;
+            border-radius: 6px;
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #34495e;
+        }
+        .result {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-family: monospace;
+        }
+        .success {
+            border-left: 4px solid #28a745;
+        }
+        .error {
+            border-left: 4px solid #dc3545;
+        }
+        .warning {
+            border-left: 4px solid #ffc107;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .ticket-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #e1e8ed;
+            border-radius: 4px;
+            padding: 10px;
+            margin-top: 10px;
+        }
+        .ticket-item {
+            padding: 5px;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 12px;
+        }
+        .ticket-item:last-child {
+            border-bottom: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Тест фильтрации по времени - TASK-083</h1>
+
+        <div class="test-section">
+            <h3>📋 Тестовые данные</h3>
+            <p>Создано <span id="test-data-count">0</span> тестовых тикетов с разными датами создания:</p>
+            <div id="test-data-list" class="ticket-list"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>🔍 Тестирование фильтрации</h3>
+            <button onclick="runAllTests()">Запустить все тесты</button>
+            <button onclick="testOneMonth()">Один месяц</button>
+            <button onclick="testTwoMonths()">Два месяца</button>
+            <button onclick="testSixMonthsPlus()">Более полугода</button>
+            <button onclick="testOneYearPlus()">Более года</button>
+            <div id="test-results"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>⚡ Тест производительности</h3>
+            <button onclick="runPerformanceTest()">Тест с 1000 тикетами</button>
+            <div id="performance-result"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>📊 Результаты всех фильтров</h3>
+            <div id="all-filters-result"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Импорт тестовых данных и функций фильтрации
+        import { testTickets, generateTestTickets } from './vue-app/src/test-data.js';
+        import { filterTicketsByTimePeriod, TIME_FILTERS, TIME_FILTER_LABELS, getTicketsCountByPeriods } from './vue-app/src/utils/time-filters.js';
+
+        let currentTestData = testTickets;
+
+        // Инициализация
+        document.addEventListener('DOMContentLoaded', function() {
+            displayTestData();
+        });
+
+        function displayTestData() {
+            const countElement = document.getElementById('test-data-count');
+            const listElement = document.getElementById('test-data-list');
+
+            countElement.textContent = currentTestData.length;
+
+            listElement.innerHTML = currentTestData.map(ticket => `
+                <div class="ticket-item">
+                    <strong>${ticket.id}</strong> -
+                    ${new Date(ticket.created_at).toLocaleDateString('ru-RU')}
+                    (${getDaysAgo(ticket.created_at)} дней назад)
+                </div>
+            `).join('');
+        }
+
+        function getDaysAgo(dateString) {
+            const date = new Date(dateString);
+            const now = new Date();
+            const diffTime = Math.abs(now - date);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            return diffDays;
+        }
+
+        function runAllTests() {
+            const results = document.getElementById('test-results');
+            results.innerHTML = '<h4>Выполняются тесты...</h4>';
+
+            setTimeout(() => {
+                const testResults = [];
+
+                // Тест "Один месяц"
+                const oneMonthResult = filterTicketsByTimePeriod(currentTestData, TIME_FILTERS.ONE_MONTH);
+                testResults.push({
+                    name: 'Один месяц (≤30 дней)',
+                    expected: 1,
+                    actual: oneMonthResult.length,
+                    success: oneMonthResult.length === 1,
+                    tickets: oneMonthResult
+                });
+
+                // Тест "Два месяца"
+                const twoMonthsResult = filterTicketsByTimePeriod(currentTestData, TIME_FILTERS.TWO_MONTHS);
+                testResults.push({
+                    name: 'Два месяца (≤60 дней)',
+                    expected: 2,
+                    actual: twoMonthsResult.length,
+                    success: twoMonthsResult.length === 2,
+                    tickets: twoMonthsResult
+                });
+
+                // Тест "Более полугода"
+                const sixMonthsResult = filterTicketsByTimePeriod(currentTestData, TIME_FILTERS.SIX_MONTHS_PLUS);
+                testResults.push({
+                    name: 'Более полугода (>180 дней)',
+                    expected: 2,
+                    actual: sixMonthsResult.length,
+                    success: sixMonthsResult.length === 2,
+                    tickets: sixMonthsResult
+                });
+
+                // Тест "Более года"
+                const oneYearResult = filterTicketsByTimePeriod(currentTestData, TIME_FILTERS.ONE_YEAR_PLUS);
+                testResults.push({
+                    name: 'Более года (>365 дней)',
+                    expected: 1,
+                    actual: oneYearResult.length,
+                    success: oneYearResult.length === 1,
+                    tickets: oneYearResult
+                });
+
+                displayTestResults(testResults);
+            }, 100);
+        }
+
+        function testOneMonth() {
+            runSingleTest(TIME_FILTERS.ONE_MONTH, 1);
+        }
+
+        function testTwoMonths() {
+            runSingleTest(TIME_FILTERS.TWO_MONTHS, 2);
+        }
+
+        function testSixMonthsPlus() {
+            runSingleTest(TIME_FILTERS.SIX_MONTHS_PLUS, 2);
+        }
+
+        function testOneYearPlus() {
+            runSingleTest(TIME_FILTERS.ONE_YEAR_PLUS, 1);
+        }
+
+        function runSingleTest(filterType, expectedCount) {
+            const startTime = performance.now();
+            const result = filterTicketsByTimePeriod(currentTestData, filterType);
+            const endTime = performance.now();
+
+            const results = document.getElementById('test-results');
+            results.innerHTML = `
+                <div class="result ${result.length === expectedCount ? 'success' : 'error'}">
+                    <h4>${TIME_FILTER_LABELS[filterType]}</h4>
+                    <p><strong>Ожидалось:</strong> ${expectedCount} тикетов</p>
+                    <p><strong>Получено:</strong> ${result.length} тикетов</p>
+                    <p><strong>Время выполнения:</strong> ${(endTime - startTime).toFixed(2)}ms</p>
+                    <div class="ticket-list">
+                        ${result.map(ticket =>
+                            `<div class="ticket-item">${ticket.id} - ${new Date(ticket.created_at).toLocaleDateString('ru-RU')}</div>`
+                        ).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function displayTestResults(testResults) {
+            const results = document.getElementById('test-results');
+
+            results.innerHTML = testResults.map(test => `
+                <div class="result ${test.success ? 'success' : 'error'}">
+                    <h4>${test.name}</h4>
+                    <p><strong>Ожидалось:</strong> ${test.expected} тикетов</p>
+                    <p><strong>Получено:</strong> ${test.actual} тикетов</p>
+                    <p><strong>Статус:</strong> ${test.success ? '✅ Пройден' : '❌ Провал'}</p>
+                    <div class="ticket-list">
+                        ${test.tickets.map(ticket =>
+                            `<div class="ticket-item">${ticket.id} - ${new Date(ticket.created_at).toLocaleDateString('ru-RU')}</div>`
+                        ).join('')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function runPerformanceTest() {
+            const resultElement = document.getElementById('performance-result');
+
+            // Генерируем большой набор данных
+            const largeDataset = generateTestTickets({ count: 1000 });
+
+            resultElement.innerHTML = '<p>Выполняется тест производительности...</p>';
+
+            setTimeout(() => {
+                const startTime = performance.now();
+
+                // Выполняем фильтрацию
+                const results = {};
+                Object.values(TIME_FILTERS).forEach(filterType => {
+                    results[filterType] = filterTicketsByTimePeriod(largeDataset, filterType);
+                });
+
+                const endTime = performance.now();
+                const totalTime = endTime - startTime;
+
+                resultElement.innerHTML = `
+                    <div class="result ${totalTime < 500 ? 'success' : 'warning'}">
+                        <h4>Тест производительности (1000 тикетов)</h4>
+                        <p><strong>Общее время:</strong> ${totalTime.toFixed(2)}ms</p>
+                        <p><strong>Среднее время на фильтр:</strong> ${(totalTime / Object.keys(TIME_FILTERS).length).toFixed(2)}ms</p>
+                        <p><strong>Статус:</strong> ${totalTime < 500 ? '✅ Хорошо' : '⚠️ Медленно'}</p>
+                        <ul>
+                            ${Object.entries(results).map(([filterType, tickets]) =>
+                                `<li>${TIME_FILTER_LABELS[filterType]}: ${tickets.length} тикетов</li>`
+                            ).join('')}
+                        </ul>
+                    </div>
+                `;
+            }, 100);
+        }
+
+        // Отображаем результаты всех фильтров
+        function updateAllFiltersResult() {
+            const resultElement = document.getElementById('all-filters-result');
+            const counts = getTicketsCountByPeriods(currentTestData);
+
+            resultElement.innerHTML = `
+                <div class="result success">
+                    <h4>Распределение тикетов по фильтрам</h4>
+                    <ul>
+                        ${Object.entries(counts).map(([filterType, count]) =>
+                            `<li><strong>${TIME_FILTER_LABELS[filterType]}:</strong> ${count} тикетов</li>`
+                        ).join('')}
+                    </ul>
+                    <p><strong>Всего тикетов:</strong> ${currentTestData.length}</p>
+                </div>
+            `;
+        }
+
+        // Обновляем результаты при загрузке
+        setTimeout(updateAllFiltersResult, 100);
+
+        // Экспортируем функции для глобального доступа
+        window.runAllTests = runAllTests;
+        window.testOneMonth = testOneMonth;
+        window.testTwoMonths = testTwoMonths;
+        window.testSixMonthsPlus = testSixMonthsPlus;
+        window.testOneYearPlus = testOneYearPlus;
+        window.runPerformanceTest = runPerformanceTest;
+    </script>
+</body>
+</html>

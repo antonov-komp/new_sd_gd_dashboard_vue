@@ -27,6 +27,10 @@ require_once $_SERVER['DOCUMENT_ROOT'] . '/rest_api_aps/sd_it_gen_plan/api/cache
 require_once $_SERVER['DOCUMENT_ROOT'] . '/rest_api_aps/sd_it_gen_plan/api/cache/UserActivityCache.php';
 require_once $_SERVER['DOCUMENT_ROOT'] . '/rest_api_aps/sd_it_gen_plan/api/cache/WebhookLogsCache.php';
 
+// TASK-082: Новые кеш-менеджеры для backend кеширования
+require_once $_SERVER['DOCUMENT_ROOT'] . '/rest_api_aps/sd_it_gen_plan/api/cache/DashboardSector1CCache.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/rest_api_aps/sd_it_gen_plan/api/cache/GraphStateCache.php';
+
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
@@ -126,6 +130,20 @@ try {
         $clearedModules[] = 'webhook-logs-api';
         $clearedModules[] = 'webhook-logs-realtime';
         $clearedModules[] = 'webhook-logs-stats';
+
+        // TASK-082: Очистка новых модулей
+        \DashboardSector1CCache::clearSectorCache();
+        $clearedModules[] = 'dashboard-sector-1c';
+
+        \GraphStateCache::clearGraphStateCache();
+        $clearedModules[] = 'graph-state';
+
+        // Очистка кэша графика приема и закрытия (все режимы)
+        $graphCacheDir = __DIR__ . '/../cache/graph-admission-closure';
+        clearCacheDirectory($graphCacheDir . '/months');
+        clearCacheDirectory($graphCacheDir . '/weeks');
+        $clearedModules[] = 'graph-admission-closure-months';
+        $clearedModules[] = 'graph-admission-closure-weeks';
         
     } else {
         // Очистка конкретного модуля или режима
@@ -240,7 +258,29 @@ try {
                 $clearedModules[] = 'webhook-logs-realtime';
                 $clearedModules[] = 'webhook-logs-stats';
                 break;
-                
+
+            // TASK-082: Очистка Dashboard Sector 1C
+            case 'dashboard-sector-1c':
+                \DashboardSector1CCache::clearSectorCache();
+                $clearedModules[] = $moduleId;
+                break;
+
+            // TASK-082: Очистка Graph State
+            case 'graph-state':
+                \GraphStateCache::clearGraphStateCache();
+                $clearedModules[] = $moduleId;
+                break;
+
+            // Очистка кэша графика приема и закрытия
+            case 'graph-admission-closure':
+                // Очистка всего модуля (все режимы)
+                $graphCacheDir = __DIR__ . '/../cache/graph-admission-closure';
+                clearCacheDirectory($graphCacheDir . '/months');
+                clearCacheDirectory($graphCacheDir . '/weeks');
+                $clearedModules[] = 'graph-admission-closure-months';
+                $clearedModules[] = 'graph-admission-closure-weeks';
+                break;
+
             default:
                 http_response_code(400);
                 echo json_encode([
