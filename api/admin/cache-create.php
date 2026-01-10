@@ -265,7 +265,7 @@ function createGraphAdmissionClosureCache(string $moduleId, ?string $mode, array
             'weekEndUtc' => $weekEnd->format('Y-m-d\TH:i:s\Z'),
             'includeTickets' => true,                    // Как в интерфейсе
             'includeNewTicketsByStages' => true,         // Как в интерфейсе
-            'includeCarryoverTickets' => false,          // По умолчанию
+            'includeCarryoverTickets' => true,           // TASK-080: Исправлено с false на true для соответствия интерфейсу
             'includeCarryoverTicketsByDuration' => true  // Как в интерфейсе
         ];
     } else {
@@ -290,10 +290,13 @@ function createGraphAdmissionClosureCache(string $moduleId, ?string $mode, array
             $finalParams['weekStartUtc'],
             $finalParams['weekEndUtc']
         );
+        // TASK-080: Логирование типа кеша для универсального
+        error_log("[CacheCreate] Using UNIVERSAL cache for weeks mode");
     } else {
         $cacheKey = GraphAdmissionClosureCache::generateKey($finalParams);
+        error_log("[CacheCreate] Using EXACT cache for {$mode} mode");
     }
-    
+
     // TASK-076: Логирование параметров для отладки
     error_log("[CacheCreate] Module: {$moduleId}, Mode: {$mode}");
     error_log("[CacheCreate] Final params: " . json_encode($finalParams, JSON_UNESCAPED_UNICODE));

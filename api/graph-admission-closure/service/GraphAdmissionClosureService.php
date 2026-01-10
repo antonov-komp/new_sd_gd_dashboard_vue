@@ -87,6 +87,11 @@ class GraphAdmissionClosureService
                 $cacheResponseTime = microtime(true) - $weeksModeStartTime;
                 error_log("[Cache] Universal cache hit for key: {$universalCacheKey}");
                 error_log("[Cache] Original key was: {$cacheKey}");
+                // TASK-080: Логирование параметров при использовании универсального кеша
+                error_log("[Cache] Universal cache params: includeCarryoverTickets=" . ($includeCarryoverTickets ? 'true' : 'false') .
+                         ", includeTickets=" . ($includeTickets ? 'true' : 'false') .
+                         ", includeNewTicketsByStages=" . ($includeNewTicketsByStages ? 'true' : 'false') .
+                         ", includeCarryoverTicketsByDuration=" . ($includeCarryoverTicketsByDuration ? 'true' : 'false'));
                 error_log("[WEEKS-PERFORMANCE] Total execution time (from universal cache): " . round($cacheResponseTime, 3) . " seconds");
 
                 // Добавляем информацию об использовании кеша в ответ

@@ -375,8 +375,9 @@ class GraphAdmissionClosureCache
             'weekEndUtc' => $weekEndUtc,
             'includeTickets' => true,                    // Как в интерфейсе
             'includeNewTicketsByStages' => true,         // Как в интерфейсе
-            'includeCarryoverTickets' => false,          // По умолчанию
-            'includeCarryoverTicketsByDuration' => true  // Как в интерфейсе
+            'includeCarryoverTickets' => true,           // TASK-080: Исправлено с false на true для соответствия интерфейсу
+            'includeCarryoverTicketsByDuration' => true, // Как в интерфейсе
+            '_cache_version' => 'v2'                      // TASK-080: Версия кеша для инвалидации старых кешей
         ];
 
         return self::generateKey($universalParams);

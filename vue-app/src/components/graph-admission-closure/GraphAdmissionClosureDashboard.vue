@@ -312,6 +312,7 @@ async function loadData() {
         weekEndUtc,
         includeTickets: true,                    // TASK-047: Включаем тикеты для вкладки "По сотрудникам"
         includeNewTicketsByStages: true,          // TASK-070: Предзагрузка для StagesModal
+        includeCarryoverTickets: true,             // TASK-080: Включаем переходящие тикеты для консистентности с универсальным кешем
         includeCarryoverTicketsByDuration: true   // TASK-070: Предзагрузка для CarryoverDurationModal
       })
     ]);
@@ -459,6 +460,7 @@ async function loadData() {
         weekEndUtc: prevWeekEnd,
         includeTickets: true,                    // Для ResponsibleModal
         includeNewTicketsByStages: true,          // Для StagesModal
+        includeCarryoverTickets: true,             // TASK-080: Включаем переходящие тикеты для консистентности
         includeCarryoverTicketsByDuration: true   // Для CarryoverDurationModal
       }).then(result => {
         console.log('[TASK-070] Preload successful for previous week');
