@@ -31,6 +31,17 @@
           <div class="dashboard-header">
             <div class="header-content">
               <div class="breadcrumbs-row">
+                <!-- Кнопка Главная -->
+                <button
+                  class="btn-home-link"
+                  type="button"
+                  @click="handleGoHome"
+                  title="Перейти на главную страницу"
+                  aria-label="Перейти на главную страницу"
+                >
+                  Главная
+                </button>
+                <span class="breadcrumb-separator" aria-hidden="true">/</span>
                 <button
                   class="btn-back-link"
                   type="button"
@@ -249,6 +260,13 @@ function handleBack(event) {
   } finally {
     isNavigatingBack.value = false;
   }
+}
+
+/**
+ * Переход на главную страницу
+ */
+function handleGoHome() {
+  router.push('/');
 }
 
 const filters = ref({
@@ -1240,6 +1258,32 @@ function getPeriodBounds() {
   align-items: center;
   gap: var(--spacing-sm, 8px);
   margin-bottom: var(--spacing-xs, 4px);
+}
+
+.btn-home-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  border-radius: 4px;
+  border: 1px solid var(--b24-border-light, #e5e7eb);
+  background: var(--b24-bg-white, #ffffff);
+  color: var(--b24-primary, #3b82f6);
+  cursor: pointer;
+  transition: all var(--transition-base, 0.2s);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.btn-home-link:hover {
+  background-color: var(--b24-bg-light, #f5f7fb);
+  border-color: var(--b24-primary, #3b82f6);
+}
+
+.btn-home-link:focus {
+  outline: 2px solid var(--b24-primary, #3b82f6);
+  outline-offset: 2px;
 }
 
 .btn-back-link {

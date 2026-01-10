@@ -2,6 +2,21 @@
   <div class="dashboard-sector-1c" :class="{ 'is-dragging': draggedTicket }">
     <!-- Заголовок -->
     <div class="dashboard-header">
+      <!-- Хлебные крошки -->
+      <div class="breadcrumbs-row">
+        <button
+          class="btn-home-link"
+          type="button"
+          @click="handleGoHome"
+          title="Перейти на главную страницу"
+          aria-label="Перейти на главную страницу"
+        >
+          Главная
+        </button>
+        <span class="breadcrumb-separator">/</span>
+        <span class="breadcrumb-current">Дашборд сектора 1С</span>
+      </div>
+
       <BackButton variant="header" />
       <h1>Дашборд - Сектор 1С</h1>
       <div class="header-actions">
@@ -270,6 +285,13 @@ export default {
       router.push({ name: 'dashboard-tickets-time-tracking' });
     };
 
+    /**
+     * Переход на главную страницу
+     */
+    const handleGoHome = () => {
+      router.push('/');
+    };
+
     // Извлекаем loadingProgress для удобства доступа
     const loadingProgress = actions.loadingProgress;
 
@@ -333,7 +355,8 @@ export default {
       navigateToGraphState,
       navigateToAdmissionClosure,
       navigateToTimeTracking,
-      
+      handleGoHome,
+
       // Диагностика
       isDiagnosticsEnabled: isDiagnosticsEnabledFlag,
       enableDiagnostics,
@@ -377,6 +400,50 @@ export default {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   flex-wrap: wrap; /* Позволяет кнопкам переноситься на новую строку на маленьких экранах */
   width: 100%;
+}
+
+.breadcrumbs-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.btn-home-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+  background: #f5f5f5;
+  color: #007bff;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.btn-home-link:hover {
+  background: #e0e0e0;
+  border-color: #007bff;
+}
+
+.btn-home-link:focus {
+  outline: 2px solid #007bff;
+  outline-offset: 2px;
+}
+
+.breadcrumb-separator {
+  color: #6c757d;
+  margin: 0 4px;
+}
+
+.breadcrumb-current {
+  color: #333;
+  font-weight: 500;
 }
 
 .header-actions {

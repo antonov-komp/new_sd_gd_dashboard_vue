@@ -230,13 +230,6 @@ export default {
       return frequency.text;
     });
 
-    const formattedCreatedAt = computed(() => {
-      return formatCacheCreatedAt(props.module.created_at);
-    });
-
-    const formattedExpiresAt = computed(() => {
-      return formatCacheExpiresAt(props.module.expires_at);
-    });
     
     const formattedCreatedAt = computed(() => {
       if (!props.module.created_at) {

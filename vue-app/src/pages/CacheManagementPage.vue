@@ -24,23 +24,8 @@
     </div>
     
     <div v-else class="cache-content">
-      <CacheStats :modules="modules" />
-      
-      <div class="modules-list">
-        <CacheModuleCard
-          v-for="module in modules"
-          :key="module.id"
-          :module="module"
-          @clear="handleClearCache"
-          @refresh="loadCacheStatus"
-        />
-      </div>
-      
-      <CacheActions
-        :modules="modules"
-        @clear-all="handleClearAllCache"
-        @refresh="loadCacheStatus"
-      />
+      <!-- Новый иерархический интерфейс управления кешем -->
+      <CacheManagement />
     </div>
   </div>
 </template>
@@ -48,17 +33,12 @@
 <script>
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { CacheManagementService } from '@/services/cache-management-service.js';
-import CacheStats from '@/components/cache/CacheStats.vue';
-import CacheModuleCard from '@/components/cache/CacheModuleCard.vue';
-import CacheActions from '@/components/cache/CacheActions.vue';
+import CacheManagement from '@/components/cache/CacheManagement.vue';
 
 export default {
   name: 'CacheManagementPage',
   components: {
-    CacheStats,
-    CacheModuleCard,
-    CacheActions
+    CacheManagement
   },
   beforeCreate() {
     console.log('[CacheManagementPage] beforeCreate() called');
@@ -70,56 +50,22 @@ export default {
     console.log('[CacheManagementPage] beforeMount() called');
   },
   setup() {
-    console.log('[CacheManagementPage] setup() called');
+    console.log('[CacheManagementPage] setup() called with new hierarchical UI');
     const router = useRouter();
-    const modules = ref([]);
     const loading = ref(false);
     const error = ref(null);
-    
-    const loadCacheStatus = async () => {
-      console.log('[CacheManagementPage] loadCacheStatus() called');
-      loading.value = true;
-      error.value = null;
-      
-      try {
-        console.log('[CacheManagementPage] Calling CacheManagementService.getCacheStatus()...');
-        modules.value = await CacheManagementService.getCacheStatus();
-        console.log('[CacheManagementPage] Cache status loaded:', modules.value.length, 'modules');
-      } catch (err) {
-        error.value = err.message || 'Ошибка загрузки статуса кеша';
-        console.error('[CacheManagementPage] Error:', err);
-      } finally {
-        loading.value = false;
-        console.log('[CacheManagementPage] loadCacheStatus() completed, loading:', loading.value);
-      }
-    };
-    
-    const handleClearCache = async (moduleId) => {
-      // Перезагружаем статус после очистки
-      await loadCacheStatus();
-    };
-    
-    const handleClearAllCache = async () => {
-      // Перезагружаем статус после очистки
-      await loadCacheStatus();
-    };
-    
+
     const goBack = () => {
       router.push({ name: 'index' });
     };
-    
+
     onMounted(() => {
-      console.log('[CacheManagementPage] onMounted() called');
-      loadCacheStatus();
+      console.log('[CacheManagementPage] onMounted() called - hierarchical cache management ready');
     });
-    
+
     return {
-      modules,
       loading,
       error,
-      handleClearCache,
-      handleClearAllCache,
-      loadCacheStatus,
       goBack
     };
   }

@@ -3,6 +3,17 @@
     <!-- Breadcrumbs -->
     <div class="dashboard-header">
       <div class="breadcrumbs-row">
+        <!-- Кнопка Главная -->
+        <button
+          class="btn-home-link"
+          type="button"
+          @click="handleGoHome"
+          title="Перейти на главную страницу"
+          aria-label="Перейти на главную страницу"
+        >
+          Главная
+        </button>
+        <span class="breadcrumb-separator">/</span>
         <button
           class="btn-back-link"
           type="button"
@@ -204,18 +215,25 @@ const handleBack = () => {
   if (isNavigatingBack.value) {
     return;
   }
-  
+
   isNavigatingBack.value = true;
-  
+
   if (hasHistory.value) {
     router.go(-1);
   } else {
     router.push({ name: 'dashboard-sector-1c' });
   }
-  
+
   setTimeout(() => {
     isNavigatingBack.value = false;
   }, 300);
+};
+
+/**
+ * Переход на главную страницу
+ */
+const handleGoHome = () => {
+  router.push('/');
 };
 
 // Lifecycle
@@ -237,6 +255,32 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.btn-home-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  border-radius: 4px;
+  border: 1px solid #dee2e6;
+  background: #ffffff;
+  color: #007bff;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.btn-home-link:hover {
+  background-color: #f8f9fa;
+  border-color: #007bff;
+}
+
+.btn-home-link:focus {
+  outline: 2px solid #007bff;
+  outline-offset: 2px;
 }
 
 .btn-back-link {

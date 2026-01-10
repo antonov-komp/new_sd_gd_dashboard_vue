@@ -160,18 +160,11 @@ export default {
       error.value = null;
 
       try {
-        const response = await CacheManagementService.getCacheStatus();
+        // CacheManagementService.getCacheStatus() уже возвращает categorized данные
+        const categorized = await CacheManagementService.getCacheStatus();
 
-        if (response.success) {
-          const categorized = CacheManagementService.categorizeAndSortModules(
-            response.modules,
-            { forceRefresh: true }
-          );
-          primaryModules.value = categorized.primaryModules;
-          secondaryModules.value = categorized.secondaryModules;
-        } else {
-          throw new Error(response.error || 'Failed to load modules');
-        }
+        primaryModules.value = categorized.primaryModules || [];
+        secondaryModules.value = categorized.secondaryModules || [];
       } catch (err) {
         console.error('[CacheManagement] Error loading modules:', err);
         error.value = err.message;

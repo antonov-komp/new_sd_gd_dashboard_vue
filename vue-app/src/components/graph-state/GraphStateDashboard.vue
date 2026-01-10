@@ -28,6 +28,17 @@
     <div class="dashboard-header">
       <div class="header-content">
         <div class="breadcrumbs-row">
+          <!-- Кнопка Главная -->
+          <button
+            class="btn-home-link"
+            type="button"
+            @click="handleGoHome"
+            title="Перейти на главную страницу"
+            aria-label="Перейти на главную страницу"
+          >
+            Главная
+          </button>
+          <span class="breadcrumb-separator" aria-hidden="true">/</span>
           <button
             class="btn-back-link"
             type="button"
@@ -443,6 +454,13 @@ function handleBack(event) {
 }
 
 /**
+ * Переход на главную страницу
+ */
+function handleGoHome() {
+  router.push('/');
+}
+
+/**
  * Обработка изменения размера окна
  */
 function handleResize() {
@@ -505,6 +523,32 @@ onUnmounted(() => {
   align-items: center;
   gap: var(--spacing-sm);
   margin-bottom: var(--spacing-xs);
+}
+
+.btn-home-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  border-radius: 4px;
+  border: 1px solid var(--b24-border-light);
+  background: var(--b24-bg-white);
+  color: var(--b24-primary);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.btn-home-link:hover {
+  background-color: var(--b24-bg-light, #f5f7fb);
+  border-color: var(--b24-primary);
+}
+
+.btn-home-link:focus {
+  outline: 2px solid var(--b24-primary);
+  outline-offset: 2px;
 }
 
 .btn-back-link {
