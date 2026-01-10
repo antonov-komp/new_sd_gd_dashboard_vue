@@ -121,7 +121,7 @@ class Aggregator
                             $newTicketsByStagesAgg[$stageId]['tickets'][] = [
                                 'id' => (int)$ticket['id'],
                                 'title' => $ticket['title'] ?? 'Без названия',
-                                'createdTime' => $ticket['createdTime'] ?? null,
+                                'createdAt' => $ticket['createdTime'] ?? null,
                                 'stageId' => $stageId,
                                 'assignedById' => $responsibleId
                             ];
@@ -192,7 +192,7 @@ class Aggregator
                         $responsibleCreatedThisWeekAgg[$responsibleKey]['tickets'][] = [
                             'id' => (int)$ticket['id'],
                             'title' => $ticket['title'] ?? 'Без названия',
-                            'createdTime' => $createdTime,
+                            'createdAt' => $createdTime,
                             'movedTime' => $movedTime,
                             'stageId' => $stageId,
                             'assignedById' => $responsibleId
@@ -215,7 +215,7 @@ class Aggregator
                         $responsibleCreatedOtherWeekAgg[$responsibleKey]['tickets'][] = [
                             'id' => (int)$ticket['id'],
                             'title' => $ticket['title'] ?? 'Без названия',
-                            'createdTime' => $createdTime,
+                            'createdAt' => $createdTime,
                             'movedTime' => $movedTime,
                             'stageId' => $stageId,
                             'assignedById' => $responsibleId
@@ -265,7 +265,7 @@ class Aggregator
                             $carryoverTicketsByDurationAgg[$category]['tickets'][] = [
                                 'id' => (int)$ticket['id'],
                                 'title' => $ticket['title'] ?? 'Без названия',
-                                'createdTime' => $createdTime,
+                                'createdAt' => $createdTime,
                                 'stageId' => $stageId,
                                 'assignedById' => $responsibleId
                             ];

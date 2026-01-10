@@ -226,7 +226,8 @@ export default {
     });
 
     const usageFrequency = computed(() => {
-      const frequency = getUsageFrequency(props.priority);
+      const priority = props.priority || 999;
+      const frequency = getUsageFrequency(priority);
       return frequency.text;
     });
 

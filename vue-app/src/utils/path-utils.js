@@ -38,19 +38,19 @@ export function getBasePath() {
 
 /**
  * Получить полный URL для API endpoint
- * 
+ *
  * @param {string} endpoint - Относительный путь к endpoint (например, '/api/bitrix24.php')
  * @returns {string} Полный путь к endpoint
- * 
+ *
  * @example
  * getApiUrl('/api/bitrix24.php') // '/rest_api_aps/sd_it_gen_plan/api/bitrix24.php'
  */
 export function getApiUrl(endpoint) {
   const basePath = getBasePath();
-  
+
   // Убираем начальный слэш из endpoint, если есть
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
-  
+
   return `${basePath}/${cleanEndpoint}`;
 }
 

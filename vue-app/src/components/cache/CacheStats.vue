@@ -1,5 +1,5 @@
 <template>
-  <div class="cache-stats">
+  <div v-if="(modules || []).length > 0" class="cache-stats">
     <h2 class="stats-title">📊 Статистика кеша по категориям</h2>
 
     <div class="stats-overview">
@@ -88,6 +88,9 @@
       </div>
     </div>
   </div>
+  <div v-else class="cache-stats-loading">
+    <p>📊 Загрузка статистики...</p>
+  </div>
 </template>
 
 <script>
@@ -100,35 +103,45 @@ export default {
   props: {
     modules: {
       type: Array,
-      required: true,
+      required: false,
       default: () => []
     }
   },
   setup(props) {
+    console.log('[CacheStats] setup called with modules:', props.modules);
+
+    const modules = computed(() => props.modules || []);
+
     const primaryModules = computed(() => {
-      return props.modules.filter(module =>
+      console.log('[CacheStats] Computing primaryModules, total modules:', modules.value?.length || 0);
+      const result = modules.value.filter(module =>
         CacheManagementService.PRIMARY_MODULE_IDS.includes(module.id)
       );
+      console.log('[CacheStats] Primary modules count:', result.length);
+      return result;
     });
 
     const secondaryModules = computed(() => {
-      return props.modules.filter(module =>
+      console.log('[CacheStats] Computing secondaryModules, total modules:', modules.value?.length || 0);
+      const result = modules.value.filter(module =>
         !CacheManagementService.PRIMARY_MODULE_IDS.includes(module.id)
       );
+      console.log('[CacheStats] Secondary modules count:', result.length);
+      return result;
     });
 
-    const primaryModulesCount = computed(() => primaryModules.value.length);
-    const secondaryModulesCount = computed(() => secondaryModules.value.length);
-    const totalModules = computed(() => props.modules.length);
+    const primaryModulesCount = computed(() => primaryModules.value?.length || 0);
+    const secondaryModulesCount = computed(() => secondaryModules.value?.length || 0);
+    const totalModules = computed(() => modules.value?.length || 0);
 
     const totalFiles = computed(() => {
-      return props.modules.reduce((sum, module) => {
+      return modules.value.reduce((sum, module) => {
         return sum + (module.file_count || 0);
       }, 0);
     });
 
     const totalSize = computed(() => {
-      return props.modules.reduce((sum, module) => {
+      return (props.modules || []).reduce((sum, module) => {
         return sum + (module.total_size || 0);
       }, 0);
     });
@@ -138,27 +151,28 @@ export default {
     });
 
     const avgTTL = computed(() => {
-      if (props.modules.length === 0) {
+      const modules = props.modules || [];
+      if (modules.length === 0) {
         return '0 мин';
       }
 
-      const totalTTL = props.modules.reduce((sum, module) => {
+      const totalTTL = modules.reduce((sum, module) => {
         return sum + (module.ttl || 0);
       }, 0);
 
-      const avg = Math.round(totalTTL / props.modules.length);
+      const avg = Math.round(totalTTL / modules.length);
       return CacheManagementService.formatTTL(avg);
     });
 
     const activeModules = computed(() => {
-      return props.modules.filter(module => module.status === 'active').length;
+      return (modules.value || []).filter(module => module.status === 'active').length;
     });
 
     const groupStats = computed(() => {
-      if (secondaryModulesCount.value === 0) return [];
+      if ((secondaryModulesCount.value || 0) === 0) return [];
 
       const groups = {};
-      secondaryModules.value.forEach(module => {
+      (secondaryModules.value || []).forEach(module => {
         const type = CacheManagementService.getModuleType(module.id);
         if (!groups[type]) {
           const config = CacheManagementService.getModuleTypeConfig(type);
@@ -172,11 +186,11 @@ export default {
         groups[type].count++;
       });
 
-      const totalSecondary = secondaryModulesCount.value;
+      const totalSecondary = secondaryModulesCount.value || 0;
       return Object.values(groups)
         .map(group => ({
           ...group,
-          percentage: Math.round((group.count / totalSecondary) * 100)
+          percentage: totalSecondary > 0 ? Math.round((group.count / totalSecondary) * 100) : 0
         }))
         .sort((a, b) => b.count - a.count);
     });
@@ -192,6 +206,7 @@ export default {
     };
 
     return {
+      modules,
       primaryModulesCount,
       secondaryModulesCount,
       totalModules,

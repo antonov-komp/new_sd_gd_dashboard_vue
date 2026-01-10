@@ -24,8 +24,8 @@
     </div>
     
     <div v-else class="cache-content">
-      <!-- Тестовый компонент для проверки работы Vue -->
-      <CacheManagementTest />
+      <!-- Новый иерархический интерфейс управления кешем -->
+      <CacheManagement />
     </div>
   </div>
 </template>
@@ -33,12 +33,12 @@
 <script>
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import CacheManagementTest from '@/components/cache/CacheManagementTest.vue';
+import CacheManagement from '@/components/cache/CacheManagement.vue';
 
 export default {
   name: 'CacheManagementPage',
   components: {
-    CacheManagementTest
+    CacheManagement
   },
   beforeCreate() {
     console.log('[CacheManagementPage] beforeCreate() called');

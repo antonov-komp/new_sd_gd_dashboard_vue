@@ -70,22 +70,6 @@
           </header>
 
           <section class="modal__body">
-            <!-- TASK-083: Контролы сортировки по времени -->
-            <div class="time-sort-controls">
-              <h4 class="time-sort-title">Показать тикеты:</h4>
-              <div class="time-sort-buttons">
-                <button
-                  v-for="mode in sortModes"
-                  :key="mode.key"
-                  :class="['time-sort-btn', { active: sortMode === mode.key }]"
-                  @click="handleSortChange(mode.key)"
-                >
-                  {{ mode.label }}
-                  <span class="count">({{ mode.count }})</span>
-                </button>
-              </div>
-            </div>
-
             <!-- Transition для состояний загрузки, ошибки, пустого состояния и списка -->
             <Transition name="loading" mode="out-in">
               <!-- Индикатор загрузки -->
@@ -104,10 +88,10 @@
               </div>
               
               <!-- Пустое состояние -->
-              <div v-else-if="filteredTickets.length === 0" key="empty" class="empty-state">
+              <div v-else-if="tickets.length === 0" key="empty" class="empty-state">
                 <div class="empty-state-icon">📋</div>
                 <p class="empty-state-message">
-                  В категории «{{ selectedCategory?.durationLabel }}» нет тикетов за выбранный период ({{ TIME_FILTER_LABELS[sortMode] }})
+                  В категории «{{ selectedCategory?.durationLabel }}» нет тикетов
                 </p>
               </div>
               
@@ -115,7 +99,7 @@
               <div v-else key="tickets" class="tickets-list-container">
                 <TransitionGroup name="ticket" tag="div" class="tickets-list">
                   <TicketCard
-                    v-for="(ticket, index) in filteredTickets"
+                    v-for="(ticket, index) in tickets"
                     :key="ticket.id"
                     :ticket="ticket"
                     :draggable="false"
@@ -137,7 +121,6 @@ import { computed, ref, watch } from 'vue';
 import { fetchAdmissionClosureStats } from '@/services/graph-admission-closure/admissionClosureService.js';
 import { getTicketIframeUrl } from '@/services/dashboard-sector-1c/utils/constants.js';
 import TicketCard from '@/components/dashboard/TicketCard.vue';
-import { filterTicketsByTimePeriod, TIME_FILTERS, TIME_FILTER_LABELS } from '@/utils/time-filters.js';
 import { cachedFetchCarryoverData } from '@/utils/api-cache.js';
 
 const props = defineProps({
@@ -173,45 +156,11 @@ const isLoadingCategories = ref(false);
 const error = ref(null);
 const durationCategories = ref([]);
 
-// TASK-083: Сортировка по времени в попапах
-const sortMode = ref(TIME_FILTERS.ONE_MONTH);
-
 /**
  * Проверка наличия данных
  */
 const hasData = computed(() => {
   return durationCategories.value.length > 0 && durationCategories.value.some(c => c.count > 0);
-});
-
-/**
- * TASK-083: Отфильтрованные тикеты по временному периоду
- */
-const filteredTickets = computed(() => {
-  if (!tickets.value || tickets.value.length === 0) return [];
-
-  try {
-    const startTime = performance.now();
-    const filtered = filterTicketsByTimePeriod(tickets.value, sortMode.value);
-    const endTime = performance.now();
-
-    console.log(`[CarryoverDurationModal] Filtering took ${(endTime - startTime).toFixed(2)}ms, results: ${filtered.length}`);
-
-    return filtered;
-  } catch (error) {
-    console.error('[CarryoverDurationModal] Error filtering tickets:', error);
-    return [];
-  }
-});
-
-/**
- * TASK-083: Конфигурация режимов сортировки
- */
-const sortModes = computed(() => {
-  return Object.keys(TIME_FILTER_LABELS).map(key => ({
-    key,
-    label: TIME_FILTER_LABELS[key],
-    count: filterTicketsByTimePeriod(tickets.value, key).length
-  }));
 });
 
 /**
@@ -352,23 +301,6 @@ function goBack() {
   error.value = null;
 }
 
-/**
- * TASK-083: Обработка изменения режима сортировки
- */
-function handleSortChange(newMode) {
-  console.log(`[CarryoverDurationModal] Sort mode changed: ${sortMode.value} -> ${newMode}`);
-
-  const startTime = performance.now();
-  sortMode.value = newMode;
-
-  // Даем Vue время на реактивное обновление
-  setTimeout(() => {
-    const filtered = filteredTickets.value;
-    const endTime = performance.now();
-
-    console.log(`[CarryoverDurationModal] Filtering completed in ${(endTime - startTime).toFixed(2)}ms, ${filtered.length} tickets shown`);
-  }, 0);
-}
 
 /**
  * Обработка клика на тикет
@@ -969,78 +901,5 @@ watch([() => props.weekNumber, () => props.preloadedData], async ([newWeekNumber
   }
 }
 
-/* TASK-083: Стили для контролов сортировки по времени */
-.time-sort-controls {
-  margin-bottom: 16px;
-  padding: 12px 16px;
-  background-color: #f8fafc;
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
-}
-
-.time-sort-title {
-  margin: 0 0 8px 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: #374151;
-}
-
-.time-sort-buttons {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.time-sort-btn {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 10px;
-  border: 2px solid #d1d5db;
-  border-radius: 6px;
-  background: white;
-  color: #6b7280;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.time-sort-btn:hover {
-  border-color: #9ca3af;
-  background-color: #f9fafb;
-}
-
-.time-sort-btn.active {
-  border-color: #3b82f6;
-  background-color: #eff6ff;
-  color: #1d4ed8;
-}
-
-.time-sort-btn .count {
-  font-size: 11px;
-  opacity: 0.8;
-}
-
-.time-sort-btn.active .count {
-  opacity: 1;
-  color: #1d4ed8;
-}
-
-/* Адаптивность для контролов сортировки */
-@media (max-width: 640px) {
-  .time-sort-controls {
-    padding: 8px 12px;
-  }
-
-  .time-sort-buttons {
-    gap: 6px;
-  }
-
-  .time-sort-btn {
-    padding: 4px 8px;
-    font-size: 11px;
-  }
-}
 </style>
 

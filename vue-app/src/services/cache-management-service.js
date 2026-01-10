@@ -20,11 +20,11 @@ export class CacheManagementService {
   static PRIMARY_MODULE_IDS = [
     'dashboard-sector-1c',        // 1. Дашборд сектора 1С
     'graph-state',                // 2. График состояния
-    'graph-admission-closure-weeks',  // 3. График 4 недели (оперативный)
-    'graph-admission-closure-months', // 4. График 3 месяца (стратегический)
-    'time-tracking-default',      // 5. Трудозатраты (по умолчанию)
-    'time-tracking-detailed',     // 6. Трудозатраты (детальный режим)
-    'time-tracking-summary'       // 7. Трудозатраты (сводный режим)
+    'graph-admission-closure-weeks',  // 3. График приема-закрытия (4 недели)
+    'graph-admission-closure-months', // 4. График приема-закрытия (3 месяца)
+    'time-tracking-default',      // 5. Трудозатраты на тикеты сектора 1С (по умолчанию)
+    'time-tracking-detailed',     // 6. Трудозатраты на тикеты сектора 1С (детальный)
+    'time-tracking-summary'       // 7. Трудозатраты на тикеты сектора 1С (сводный)
   ];
 
   // Приоритеты основных модулей (для индикации)
@@ -33,9 +33,9 @@ export class CacheManagementService {
     'graph-state': 2,
     'graph-admission-closure-weeks': 3,
     'graph-admission-closure-months': 4,
-    'time-tracking-default': 5,
-    'time-tracking-detailed': 6,
-    'time-tracking-summary': 7
+    'time-tracking-default': 5,    // Трудозатраты - группа из 3 режимов
+    'time-tracking-detailed': 6,   // Все имеют одинаковый базовый приоритет 5
+    'time-tracking-summary': 7     // Но разные под-приоритеты для сортировки
   };
 
   // Типы побочных модулей для группировки
@@ -67,10 +67,8 @@ export class CacheManagementService {
    * @returns {Promise<Object>} Объект с categorized и metadata
    */
   static async getCacheStatus() {
-    console.log('[CacheManagementService] getCacheStatus() called');
     try {
       const apiUrl = getApiUrl('/api/admin/cache-status.php');
-      console.log('[CacheManagementService] API URL:', apiUrl);
 
       const response = await fetch(apiUrl, {
         method: 'GET',
@@ -80,24 +78,25 @@ export class CacheManagementService {
         }
       });
 
-      console.log('[CacheManagementService] Response status:', response.status);
-
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
       }
 
       const result = await response.json();
-      console.log('[CacheManagementService] API result:', result);
 
       if (result.success) {
         const modules = result.modules || [];
-        console.log('[CacheManagementService] Raw modules count:', modules.length);
 
-        // Возвращаем результат категоризации вместо простого массива
-        const categorized = this.categorizeAndSortModules(modules);
-        console.log('[CacheManagementService] Categorized result:', categorized);
+        if (modules.length === 0) {
+          return {
+            primaryModules: [],
+            secondaryModules: [],
+            metadata: { totalModules: 0, primaryCount: 0, secondaryCount: 0 }
+          };
+        }
 
-        return categorized;
+        return this.categorizeAndSortModules(modules);
       } else {
         throw new Error(result.error || 'Failed to get cache status');
       }
@@ -374,8 +373,14 @@ export class CacheManagementService {
       return null;
     }
 
-    cached.metadata.cached = true;
-    return cached.data;
+    // Возвращаем данные с пометкой, что они из кеша
+    return {
+      ...cached.data,
+      metadata: {
+        ...cached.data.metadata,
+        cached: true
+      }
+    };
   }
 
   /**
@@ -383,7 +388,13 @@ export class CacheManagementService {
    */
   static setCachedResult(key, data) {
     this.categorizationCache.set(key, {
-      data,
+      data: {
+        ...data,
+        metadata: {
+          ...data.metadata,
+          cached: false
+        }
+      },
       timestamp: Date.now()
     });
 

@@ -1,7 +1,7 @@
 <template>
   <div class="cache-management">
     <!-- Заголовок с описанием -->
-    <div class="header-section">
+    <div v-if="!loading && !error" class="header-section">
       <h1>🗑️ Ручное управление кешем</h1>
       <p class="description">
         Управление кешем системы сгруппировано по важности для удобства администрирования
@@ -11,37 +11,70 @@
           <strong>{{ totalModules }}</strong> всего модулей
         </span>
         <span class="stat-item">
-          <strong>{{ primaryModules.length }}</strong> основных
+          <strong>{{ logicalPrimaryCount }}</strong> основных
         </span>
         <span class="stat-item">
-          <strong>{{ secondaryModules.length }}</strong> дополнительных
+          <strong>{{ (secondaryModules || []).length }}</strong> дополнительных
         </span>
       </div>
     </div>
 
+    <!-- Детальная статистика кеша (временно отключена для отладки) -->
+    <!-- <CacheStats v-if="totalModules > 0" :modules="(primaryModules || []).concat(secondaryModules || [])" /> -->
+
     <!-- Основные модули с расширенной информацией -->
-    <div class="cache-section primary-modules" :class="{ 'empty': primaryModules.length === 0 }">
+    <div v-if="!loading && !error" class="cache-section primary-modules" :class="{ 'empty': (primaryModules || []).length === 0 }">
       <div class="section-header">
         <h2>🏆 Основные модули кеша</h2>
         <div class="section-meta">
-          <span class="module-count">{{ primaryModules.length }}</span>
+          <span class="module-count">{{ logicalPrimaryCount }}</span>
           <span class="section-badge primary">Приоритет</span>
         </div>
       </div>
       <p class="section-description">
-        Модули для оперативного анализа и мониторинга системы. Используются чаще всего.
+        5 основных модулей для оперативного анализа и мониторинга системы: дашборд сектора 1С, график состояния, графики приема-закрытия и трудозатраты на тикеты сектора 1С.
       </p>
 
-      <div v-if="primaryModules.length > 0" class="modules-grid">
-        <CacheModuleCard
-          v-for="module in primaryModules"
-          :key="module.id"
-          :module="module"
-          :is-primary="true"
-          :priority="getModulePriority(module.id)"
-          @clear="handleModuleClear"
-          @refresh="refreshModules"
-        />
+      <div v-if="(primaryModules || []).length > 0" class="modules-container">
+        <!-- Debug info -->
+        <div style="background: #f0f8ff; padding: 10px; margin: 10px 0; border: 1px solid #007bff; border-radius: 4px;">
+          <strong>DEBUG: Primary modules loaded: {{ primaryModules.length }}</strong><br>
+          <strong>Individual modules: {{ individualPrimaryModules.length }}</strong><br>
+          <strong>Time tracking modules: {{ timeTrackingModules.length }}</strong><br>
+          <strong>IDs:</strong> {{ primaryModules.map(m => m.id).join(', ') }}
+        </div>
+
+        <!-- Отдельные основные модули -->
+        <div class="modules-grid" v-if="individualPrimaryModules.length > 0">
+          <h4>Индивидуальные основные модули ({{ individualPrimaryModules.length }})</h4>
+          <div v-for="module in individualPrimaryModules" :key="module.id" style="border: 2px solid #007bff; margin: 5px; padding: 10px;">
+            <strong>{{ module.name }}</strong> ({{ module.id }}) - Priority: {{ module.priority }}
+            <button @click="handleCreateMock(module)" style="background: #28a745; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">
+              ➕ Создать кеш ({{ module.name }})
+            </button>
+            <button @click="handleClearMock(module)" style="background: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-left: 10px;">
+              🗑️ Очистить кеш ({{ module.name }})
+            </button>
+          </div>
+        </div>
+
+        <!-- Группа трудозатрат -->
+        <div v-if="(timeTrackingModules || []).length > 0" class="time-tracking-group">
+          <h3 class="group-title">⏱️ Трудозатраты на тикеты сектора 1С</h3>
+          <p class="group-description">Анализ времени работы с задачами в разных режимах отображения</p>
+          <div class="modules-grid">
+            <h4>Модули трудозатрат ({{ timeTrackingModules.length }})</h4>
+            <div v-for="module in timeTrackingModules" :key="module.id" style="border: 2px solid #28a745; margin: 5px; padding: 10px;">
+              <strong>{{ module.name }}</strong> ({{ module.id }}) - Priority: {{ module.priority }}
+              <button @click="handleCreateMock(module)" style="background: #28a745; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">
+                ➕ Создать кеш ({{ module.name }})
+              </button>
+              <button @click="handleClearMock(module)" style="background: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-left: 10px;">
+                🗑️ Очистить кеш ({{ module.name }})
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
       <div v-else class="empty-state">
         <p>⚠️ Основные модули кеша не найдены</p>
@@ -50,7 +83,7 @@
     </div>
 
     <!-- Стильный разделитель с анимацией -->
-    <div v-if="secondaryModules.length > 0" class="section-divider">
+    <div v-if="!loading && !error && (secondaryModules || []).length > 0" class="section-divider">
       <div class="divider-line"></div>
       <div class="divider-content">
         <span class="divider-icon">🔧</span>
@@ -61,11 +94,11 @@
     </div>
 
     <!-- Побочные модули с группировкой -->
-    <div v-if="secondaryModules.length > 0" class="cache-section secondary-modules">
+    <div v-if="!loading && !error && (secondaryModules || []).length > 0" class="cache-section secondary-modules">
       <div class="section-header">
         <h2>🔧 Побочные модули кеша</h2>
         <div class="section-meta">
-          <span class="module-count">{{ secondaryModules.length }}</span>
+          <span class="module-count">{{ (secondaryModules || []).length }}</span>
           <span class="section-badge secondary">Служебные</span>
         </div>
       </div>
@@ -117,25 +150,54 @@ import { CacheManagementService } from '@/services/cache-management-service.js';
 import { getApiUrl } from '@/utils/path-utils.js';
 import { sortModuleGroups } from '@/utils/cache-helpers.js';
 import CacheModuleCard from './CacheModuleCard.vue';
+import CacheStats from './CacheStats.vue';
 
 export default {
   name: 'CacheManagement',
-  components: { CacheModuleCard },
+  components: { CacheModuleCard, CacheStats },
   setup() {
     // Реактивные данные
     const primaryModules = ref([]);
     const secondaryModules = ref([]);
-    const loading = ref(false);
+    const loading = ref(true); // Начинаем с loading = true
     const error = ref(null);
 
     // Вычисляемые свойства
     const totalModules = computed(() =>
-      primaryModules.value.length + secondaryModules.value.length
+      (primaryModules.value?.length || 0) + (secondaryModules.value?.length || 0)
     );
+
+    // Логическое количество основных модулей (5: дашборд, график состояния, 2 графика приема-закрытия, трудозатраты)
+    const logicalPrimaryCount = computed(() => {
+      const individualCount = individualPrimaryModules.value?.length || 0;
+      const timeTrackingCount = (timeTrackingModules.value?.length || 0) > 0 ? 1 : 0;
+      return individualCount + timeTrackingCount;
+    });
+
+    // Разделяем основные модули на индивидуальные и группу трудозатрат
+    const individualPrimaryModules = computed(() => {
+      const result = (primaryModules.value || []).filter(module =>
+        !module.id.includes('time-tracking')
+      );
+      console.log('[CacheManagement] individualPrimaryModules:', result.length, result.map(m => m.id));
+      return result;
+    });
+
+    const timeTrackingModules = computed(() => {
+      const result = (primaryModules.value || []).filter(module =>
+        module.id.includes('time-tracking')
+      ).sort((a, b) => {
+        // Сортировка внутри группы трудозатрат
+        const order = ['time-tracking-default', 'time-tracking-detailed', 'time-tracking-summary'];
+        return order.indexOf(a.id) - order.indexOf(b.id);
+      });
+      console.log('[CacheManagement] timeTrackingModules:', result.length, result.map(m => m.id));
+      return result;
+    });
 
     const groupedSecondaryModules = computed(() => {
       const groups = {};
-      secondaryModules.value.forEach(module => {
+      (secondaryModules.value || []).forEach(module => {
         const type = CacheManagementService.getModuleType(module.id);
         if (!groups[type]) {
           groups[type] = {
@@ -164,43 +226,104 @@ export default {
 
     // Методы
     const loadModules = async () => {
-      console.log('[CacheManagement] loadModules() called');
       loading.value = true;
       error.value = null;
 
       try {
-        console.log('[CacheManagement] Calling CacheManagementService.getCacheStatus()...');
+        // Временно используем mock данные для тестирования UI
+        const mockModules = [
+          // Основные модули (5 логических)
+          {
+            id: 'dashboard-sector-1c',
+            name: 'Дашборд сектора 1С',
+            status: 'active',
+            file_count: 5,
+            total_size: 1024000,
+            ttl: 600
+          },
+          {
+            id: 'graph-state',
+            name: 'График состояния',
+            status: 'active',
+            file_count: 3,
+            total_size: 512000,
+            ttl: 3600
+          },
+          {
+            id: 'graph-admission-closure-weeks',
+            name: 'График приёма/закрытий 1С (4 недели)',
+            status: 'active',
+            file_count: 8,
+            total_size: 2048000,
+            ttl: 300
+          },
+          {
+            id: 'graph-admission-closure-months',
+            name: 'График приёма/закрытий 1С (3 месяца)',
+            status: 'active',
+            file_count: 12,
+            total_size: 3072000,
+            ttl: 300
+          },
+          // Трудозатраты на тикеты сектора 1С (3 режима - одна логическая группа)
+          {
+            id: 'time-tracking-default',
+            name: 'Трудозатраты (режим по умолчанию)',
+            status: 'active',
+            file_count: 4,
+            total_size: 768000,
+            ttl: 300
+          },
+          {
+            id: 'time-tracking-detailed',
+            name: 'Трудозатраты (детальный режим)',
+            status: 'active',
+            file_count: 6,
+            total_size: 1536000,
+            ttl: 120
+          },
+          {
+            id: 'time-tracking-summary',
+            name: 'Трудозатраты (сводный режим)',
+            status: 'active',
+            file_count: 2,
+            total_size: 384000,
+            ttl: 600
+          },
+          // Побочные модули
+          {
+            id: 'users-management-departments',
+            name: 'Управление пользователями (отделы)',
+            status: 'active',
+            file_count: 2,
+            total_size: 256000,
+            ttl: 3600
+          },
+          {
+            id: 'webhook-logs-api',
+            name: 'Логи вебхуков (API запросы)',
+            status: 'active',
+            file_count: 15,
+            total_size: 5120000,
+            ttl: 300
+          }
+        ];
 
-        // CacheManagementService.getCacheStatus() уже возвращает categorized данные
-        const categorized = await CacheManagementService.getCacheStatus();
-        console.log('[CacheManagement] Categorized result:', categorized);
+        const categorized = CacheManagementService.categorizeAndSortModules(mockModules);
 
         primaryModules.value = categorized.primaryModules || [];
         secondaryModules.value = categorized.secondaryModules || [];
 
-        console.log('[CacheManagement] Primary modules:', primaryModules.value.length);
-        console.log('[CacheManagement] Secondary modules:', secondaryModules.value.length);
+        console.log('[CacheManagement] Primary modules:', primaryModules.value.length, primaryModules.value.map(m => ({id: m.id, name: m.name})));
+        console.log('[CacheManagement] Secondary modules:', secondaryModules.value.length, secondaryModules.value.map(m => ({id: m.id, name: m.name})));
       } catch (err) {
         console.error('[CacheManagement] Error loading modules:', err);
         error.value = err.message;
       } finally {
         loading.value = false;
-        console.log('[CacheManagement] loadModules() completed');
       }
     };
 
-    const getModulePriority = (moduleId) => {
-      const priorities = {
-        'dashboard-sector-1c': 1,
-        'graph-state': 2,
-        'graph-admission-closure-weeks': 3,
-        'graph-admission-closure-months': 4,
-        'time-tracking-default': 5,
-        'time-tracking-detailed': 6,
-        'time-tracking-summary': 7
-      };
-      return priorities[moduleId] || 999;
-    };
 
     const getGroupTitle = (type) => {
       const titles = {
@@ -216,6 +339,16 @@ export default {
       // Логика очистки модуля с подтверждением
       console.log(`[CacheManagement] Clearing module: ${moduleId}`);
       await loadModules(); // Перезагрузка после очистки
+    };
+
+    const handleCreateMock = async (module) => {
+      console.log(`[CacheManagement] Creating cache for: ${module.name} (${module.id})`);
+      alert(`Создание кеша для модуля: ${module.name}\nID: ${module.id}\nЭто mock функция для тестирования интерфейса.`);
+    };
+
+    const handleClearMock = async (module) => {
+      console.log(`[CacheManagement] Clearing cache for: ${module.name} (${module.id})`);
+      alert(`Очистка кеша для модуля: ${module.name}\nID: ${module.id}\nЭто mock функция для тестирования интерфейса.`);
     };
 
     const refreshModules = () => {
@@ -234,7 +367,12 @@ export default {
       error,
       totalModules,
       groupedSecondaryModules,
+      individualPrimaryModules,
+      timeTrackingModules,
+      logicalPrimaryCount,
       handleModuleClear,
+      handleCreateMock,
+      handleClearMock,
       refreshModules
     };
   }
@@ -370,11 +508,37 @@ export default {
   line-height: 1.5;
 }
 
+.modules-container {
+  padding: 25px;
+}
+
 .modules-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
   gap: 20px;
-  padding: 25px;
+  margin-bottom: 30px;
+}
+
+.time-tracking-group {
+  border: 2px solid #007bff;
+  border-radius: 12px;
+  padding: 20px;
+  background: linear-gradient(135deg, #f0f8ff 0%, #ffffff 100%);
+  margin-bottom: 20px;
+}
+
+.group-title {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #007bff;
+}
+
+.group-description {
+  margin: 0 0 15px 0;
+  font-size: 14px;
+  color: #666;
+  font-style: italic;
 }
 
 .section-divider {
