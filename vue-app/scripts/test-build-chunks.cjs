@@ -34,10 +34,17 @@ function testBuildChunks() {
     return stats.size > 5 * 1024 && stats.size < 15 * 1024; // 5-15KB для bitrix-core
   });
 
+  const hasTicketUtils = files.some(file => {
+    if (!file.endsWith('.js') || file.includes('main')) return false;
+    const stats = fs.statSync(path.join(distPath, file));
+    return stats.size > 5 * 1024 && stats.size < 10 * 1024 && file.includes('ticketListUtils'); // 5-10KB для ticket-utils
+  });
+
   const missingChunks = [];
   if (!hasVueVendor) missingChunks.push('vue-vendor');
   if (!hasChartsVendor) missingChunks.push('charts-vendor');
   if (!hasBitrixCore) missingChunks.push('bitrix24-core');
+  if (!hasTicketUtils) missingChunks.push('ticket-utils');
 
   if (missingChunks.length > 0) {
     console.error('❌ Отсутствующие vendor chunks:', missingChunks);

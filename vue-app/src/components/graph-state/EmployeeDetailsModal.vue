@@ -472,7 +472,7 @@ import {
   groupTicketsByDateCategory,
   groupTicketsByDepartment
 } from '@/utils/graph-state/popupNavigationUtils.js';
-import { filterTicketsByDepartment } from '@/utils/graph-state/ticketListUtils.js';
+// import { filterTicketsByDepartment } from '@/utils/graph-state/ticketListUtils.js'; // Moved to lazy loading
 import { useNotifications } from '@/composables/useNotifications.js';
 import TicketDetailsService from '@/services/graph-state/TicketDetailsService.js';
 import { mapStageId } from '@/services/dashboard-sector-1c/mappers/stage-mapper.js';
@@ -1263,7 +1263,10 @@ async function handleEmployeeClick(employee, event = null) {
 
   try {
     console.log('[EmployeeDetailsModal] Loading tickets for employee:', employee.id, 'stage:', level1Data.value.stageId);
-    
+
+    // Динамическая загрузка ticketListUtils для избежания конфликтов импортов
+    const { filterTicketsByDepartment } = await import('@/utils/lazy-services.js').then(module => module.LazyServiceLoader.loadTicketListUtils());
+
     // Получить тикеты сотрудника на стадии
     const tickets = await getEmployeeTicketsForStage(
       employee.id,

@@ -46,6 +46,9 @@ export default defineConfig(({ mode }) => ({
           if (id.includes('src/services/graph-admission-closure') || id.includes('admissionClosureService')) {
             return 'admission-graphs';
           }
+          if (id.includes('src/utils/graph-state/ticketListUtils')) {
+            return 'ticket-utils';
+          }
           if (id.includes('src/services/graph-state')) {
             return 'graph-state-core';
           }
