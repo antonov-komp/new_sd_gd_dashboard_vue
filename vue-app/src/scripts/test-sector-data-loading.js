@@ -76,8 +76,9 @@ export class SectorDataLoadingTester {
       // Ждем инициализации сервиса
       await this.waitForServiceInitialization(service);
 
-      // Получаем данные сектора
-      const sectorData = await service.getSectorDashboardData();
+      // Получаем данные сектора с параметрами пагинации
+      const options = this.getSectorOptions(sectorId);
+      const sectorData = await service.getSectorDashboardData(options);
 
       // Проверяем корректность данных
       const validationResult = this.validateSectorData(sectorData, sectorId);
@@ -103,6 +104,66 @@ export class SectorDataLoadingTester {
         error: error.message,
         stack: error.stack
       };
+    }
+  }
+
+  /**
+   * Получение параметров для тестирования сектора
+   *
+   * @param {string} sectorId - ID сектора
+   * @returns {object} Параметры тестирования
+   */
+  getSectorOptions(sectorId) {
+    const baseOptions = {
+      forceRefresh: true, // Всегда свежие данные для тестирования
+      pagination: {
+        enabled: false // По умолчанию пагинация отключена
+      }
+    };
+
+    // Специфические параметры для каждого сектора
+    switch (sectorId) {
+      case '1c':
+        // Сектор 1С имеет большое количество данных (60/13/13)
+        // Включаем пагинацию для оптимизации загрузки
+        return {
+          ...baseOptions,
+          pagination: {
+            enabled: true,
+            pageSize: 50, // Загружаем по 50 элементов за раз
+            stages: ['formed', 'review', 'execution'] // Четко определяем три стадии
+          },
+          // Параметры для сектора 1С
+          useCache: false, // Отключаем кеш для точного тестирования
+          useBackendCache: false
+        };
+
+      case 'pdm':
+        return {
+          ...baseOptions,
+          pagination: {
+            enabled: false // Маленький объем данных
+          }
+        };
+
+      case 'bitrix24':
+        return {
+          ...baseOptions,
+          pagination: {
+            enabled: false // Маленький объем данных
+          }
+        };
+
+      case 'infrastructure':
+        return {
+          ...baseOptions,
+          pagination: {
+            enabled: false // Маленький объем данных
+          }
+        };
+
+      default:
+        return baseOptions;
     }
   }
 
@@ -161,6 +222,28 @@ export class SectorDataLoadingTester {
         warnings.push(`Стадия ${expectedStage} отсутствует в данных сектора`);
       }
     });
+
+    // Специфическая проверка для сектора 1С (ожидаем 60/13/13)
+    if (sectorId === '1c') {
+      const stageMetrics = {};
+      sectorData.stages.forEach(stage => {
+        stageMetrics[stage.id] = stage.tickets?.length || 0;
+      });
+
+      // Проверяем ожидаемые метрики для сектора 1С
+      const expectedMetrics = {
+        formed: 60,    // Первая стадия: 60 элементов
+        review: 13,    // Вторая стадия: 13 элементов
+        execution: 13  // Третья стадия: 13 элементов
+      };
+
+      Object.entries(expectedMetrics).forEach(([stageId, expectedCount]) => {
+        const actualCount = stageMetrics[stageId] || 0;
+        if (actualCount !== expectedCount) {
+          warnings.push(`Стадия ${stageId}: ожидалось ${expectedCount} элементов, получено ${actualCount}`);
+        }
+      });
+    }
 
     // Проверяем корректность метаданных
     if (sectorData.metadata.sectorId !== sectorId) {
@@ -232,6 +315,12 @@ export class SectorDataLoadingTester {
     );
 
     console.log(`   Всего: ${result.metrics.totalTickets} тикетов, ${result.metrics.totalEmployees} сотрудников`);
+
+    // Специфическая информация для сектора 1С
+    if (result.sectorId === '1c') {
+      const stageCounts = Object.values(result.metrics.stages).map(s => s.ticketCount);
+      console.log(`   📊 Распределение: ${stageCounts.join('/')}`);
+    }
 
     // Выводим предупреждения валидации, если есть
     if (result.validation.warnings && result.validation.warnings.length > 0) {

@@ -142,9 +142,35 @@
               </div>
             </div>
             <div class="stage-content">
-              <p>Этапы сектора находятся в разработке</p>
+              <div v-if="stage.tickets && stage.tickets.length > 0" class="tickets-list">
+                <div
+                  v-for="ticket in stage.tickets.slice(0, 3)"
+                  :key="ticket.id"
+                  class="ticket-item"
+                >
+                  <span class="ticket-id">#{{ ticket.id }}</span>
+                  <span class="ticket-title">{{ ticket.title }}</span>
+                </div>
+                <div v-if="stage.tickets.length > 3" class="more-tickets">
+                  ...и еще {{ stage.tickets.length - 3 }} тикетов
+                </div>
+              </div>
+              <div v-else class="no-tickets">
+                Нет активных тикетов
+              </div>
             </div>
           </div>
+        </div>
+
+        <!-- Сообщение о загрузке или отсутствии данных -->
+        <div v-else-if="isLoading" class="loading-message">
+          Загрузка данных сектора...
+        </div>
+        <div v-else-if="error" class="error-message">
+          Ошибка загрузки: {{ error }}
+        </div>
+        <div v-else class="empty-message">
+          Нет данных для отображения
         </div>
 
         <!-- Пустое состояние -->
@@ -808,13 +834,64 @@ export default {
 
 .stage-content {
   padding: 20px;
+}
+
+.tickets-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ticket-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  background: #f8f9fa;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.ticket-id {
+  font-weight: bold;
+  color: #007bff;
+}
+
+.ticket-title {
+  flex: 1;
+  color: #495057;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.more-tickets {
+  font-size: 12px;
+  color: #6c757d;
   text-align: center;
+  margin-top: 8px;
+}
+
+.no-tickets {
+  color: #6c757d;
+  font-style: italic;
+  text-align: center;
+}
+
+.loading-message,
+.error-message,
+.empty-message {
+  text-align: center;
+  padding: 40px;
+  font-size: 16px;
   color: #6c757d;
 }
 
-.stage-content p {
-  margin: 0;
-  font-style: italic;
+.error-message {
+  color: #dc3545;
+  background: #f8d7da;
+  border: 1px solid #f5c6cb;
+  border-radius: 4px;
 }
 
 /* Адаптивность для новых элементов */

@@ -49,8 +49,9 @@ export class SectorServiceFactory {
   static createServiceInstance(sectorId) {
     switch (sectorId) {
       case '1c':
-        // Для сектора 1С используем существующий сервис
-        console.log('[SectorServiceFactory] Creating DashboardSector1CService for sector 1c');
+        // Для сектора 1С создаем специальный адаптер, который использует DashboardSector1CService
+        console.log('[SectorServiceFactory] Creating Sector1CAdapter for sector 1c');
+        const { DashboardSector1CService } = require('@/services/dashboard-sector-1c/index.js');
         return new DashboardSector1CService();
 
       case 'pdm':

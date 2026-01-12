@@ -17,19 +17,11 @@ import { SectorDataNormalizer } from './sectors/SectorDataNormalizer.js';
 export class UniversalSectorDashboardService {
   constructor(sectorId) {
     this.sectorId = sectorId;
-    this.sectorService = null;
     this.cache = new Map();
 
-    // Инициализируем сервис сектора
-    this.initialize();
-  }
-
-  /**
-   * Инициализация сервиса сектора
-   */
-  async initialize() {
+    // Синхронно инициализируем сервис сектора
     try {
-      this.sectorService = SectorServiceFactory.create(this.sectorId);
+      this.sectorService = SectorServiceFactory.create(sectorId);
       console.log(`[UniversalSectorDashboardService] Initialized for sector: ${this.sectorId}`);
     } catch (error) {
       console.error(`[UniversalSectorDashboardService] Failed to initialize for sector ${this.sectorId}:`, error);
