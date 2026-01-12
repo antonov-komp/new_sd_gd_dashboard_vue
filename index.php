@@ -51,7 +51,11 @@ require_once(__DIR__ . '/crest.php');
         if (empty($scriptMatch[1])) {
             preg_match('/<script[^>]+crossorigin[^>]+src="([^"]+)"[^>]*>/i', $distHtml, $scriptMatch);
         }
-        preg_match('/<link[^>]+href="([^"]+)"[^>]*>/i', $distHtml, $styleMatch);
+        // Ищем все modulepreload ссылки
+        preg_match_all('/<link[^>]+rel=["\']modulepreload["\'][^>]+href="([^"]+)"[^>]*>/i', $distHtml, $modulepreloadMatches);
+
+        // Ищем именно stylesheet, а не modulepreload
+        preg_match('/<link[^>]+rel=["\']stylesheet["\'][^>]+href="([^"]+)"[^>]*>/i', $distHtml, $styleMatch);
         
         // Базовый путь для ресурсов (определяется автоматически на основе текущего пути)
         $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
@@ -65,6 +69,13 @@ require_once(__DIR__ . '/crest.php');
             $basePath = '/' . $basePath;
         }
         
+        // Выводим все modulepreload ссылки
+        if (!empty($modulepreloadMatches[1])) {
+            foreach ($modulepreloadMatches[1] as $modulepreloadHref) {
+                echo '<link rel="modulepreload" crossorigin href="' . htmlspecialchars($modulepreloadHref) . '">' . "\n";
+            }
+        }
+
         if (!empty($scriptMatch[1])) {
             // Пути теперь относительные (./assets/...), тег <base> обработает их правильно
             // Просто выводим путь как есть
