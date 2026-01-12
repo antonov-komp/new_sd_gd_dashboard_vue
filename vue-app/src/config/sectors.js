@@ -24,10 +24,8 @@ export const SECTORS_CONFIG = {
         description: 'Панель управления сектором 1С с основными метриками',
         icon: '⚙️',
         component: 'SectorDashboard',
-        componentPath: '@/components/SectorDashboard.vue',
         route: '/dashboard/sector-1c',
-        category: 'management',
-        props: { sectorId: '1c' }
+        category: 'management'
       },
       {
         id: 'tickets-management-sector-1c',
@@ -35,7 +33,6 @@ export const SECTORS_CONFIG = {
         description: 'Управление заявками и задачами сектора 1С',
         icon: '📋',
         component: 'TicketsTimeTrackingDashboard',
-        componentPath: '@/components/tickets-time-tracking/TicketsTimeTrackingDashboard.vue',
         route: '/tickets/time-tracking',
         category: 'tickets'
       },
@@ -45,7 +42,6 @@ export const SECTORS_CONFIG = {
         description: 'Визуализация текущего состояния систем сектора 1С',
         icon: '📊',
         component: 'GraphStateDashboard',
-        componentPath: '@/components/graph-state/GraphStateDashboard.vue',
         route: '/graph/state',
         category: 'analytics'
       },
@@ -55,7 +51,6 @@ export const SECTORS_CONFIG = {
         description: 'Отображение изменений состояния в секторе 1С',
         icon: '📈',
         component: 'GraphAdmissionClosureDashboard',
-        componentPath: '@/components/graph-admission-closure/GraphAdmissionClosureDashboard.vue',
         route: '/graph/admission-closure',
         category: 'analytics'
       }
@@ -81,10 +76,8 @@ export const SECTORS_CONFIG = {
         description: 'Панель управления сектором PDM с основными метриками',
         icon: '🔧',
         component: 'SectorDashboard',
-        componentPath: '@/components/SectorDashboard.vue',
         route: '/dashboard/sector-pdm',
-        category: 'management',
-        props: { sectorId: 'pdm' }
+        category: 'management'
       }
     ],
     features: ['pdm-integration'],
@@ -108,10 +101,8 @@ export const SECTORS_CONFIG = {
         description: 'Панель управления сектором Битрикс24 с основными метриками',
         icon: '🌐',
         component: 'SectorDashboard',
-        componentPath: '@/components/SectorDashboard.vue',
         route: '/dashboard/sector-bitrix24',
-        category: 'management',
-        props: { sectorId: 'bitrix24' }
+        category: 'management'
       }
     ],
     features: ['bitrix24-integration'],
@@ -135,10 +126,8 @@ export const SECTORS_CONFIG = {
         description: 'Панель управления сектором Инфраструктура с основными метриками',
         icon: '🖥️',
         component: 'SectorDashboard',
-        componentPath: '@/components/SectorDashboard.vue',
         route: '/dashboard/sector-infrastructure',
-        category: 'management',
-        props: { sectorId: 'infrastructure' }
+        category: 'management'
       }
     ],
     features: ['infrastructure-management'],

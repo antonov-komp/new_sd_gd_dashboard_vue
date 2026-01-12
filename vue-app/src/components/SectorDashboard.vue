@@ -1,5 +1,5 @@
 <template>
-  <div :class="`dashboard-sector-${sectorId}`" :class="{ 'is-dragging': draggedTicket }">
+  <div :class="[`dashboard-sector-${sectorId}`, { 'is-dragging': draggedTicket }]">
     <!-- Заголовок -->
     <div class="dashboard-header">
       <!-- Хлебные крошки -->

@@ -37,22 +37,34 @@
 
       <!-- Основной контент модуля -->
       <div v-else class="module-body">
-        <component
-          :is="moduleComponent"
-          v-bind="moduleProps"
-          ref="moduleInstance"
-          @ready="onModuleReady"
-          @error="onModuleError"
-          @navigate="onModuleNavigate"
-        />
+        <!-- ВРЕМЕННАЯ ЗАГЛУШКА -->
+        <div class="module-placeholder">
+          <div class="placeholder-icon">{{ moduleConfig.icon }}</div>
+          <h4>{{ moduleConfig.title }}</h4>
+          <p>{{ moduleConfig.description }}</p>
+          <div class="placeholder-status">
+            <span class="status-badge">В разработке</span>
+            <small>Модуль готовится к интеграции</small>
+          </div>
+          <button @click="openFullView" class="btn-open-full">
+            Открыть в полном размере
+          </button>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script>
-import { ref, computed, onMounted, defineAsyncComponent } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+
+// Импортируем компоненты статически для надежности
+import SectorDashboard from '@/components/SectorDashboard.vue'
+import TicketsTimeTrackingDashboard from '@/components/tickets-time-tracking/TicketsTimeTrackingDashboard.vue'
+import GraphStateDashboard from '@/components/graph-state/GraphStateDashboard.vue'
+import GraphAdmissionClosureDashboard from '@/components/graph-admission-closure/GraphAdmissionClosureDashboard.vue'
+import DashboardSector1C from '@/components/dashboard/DashboardSector1C.vue'
 
 export default {
   name: 'ModuleAdapter',
@@ -61,7 +73,7 @@ export default {
       type: Object,
       required: true,
       validator: (config) => {
-        return config.id && config.title && config.component && config.componentPath
+        return config.id && config.title && config.component
       }
     },
     sectorId: {
@@ -78,16 +90,19 @@ export default {
 
   setup(props, { emit }) {
     const router = useRouter()
-    const isLoading = ref(true)
+    const isLoading = ref(false) // Начинаем с false, так как компоненты уже импортированы
     const error = ref(null)
     const moduleComponent = ref(null)
     const moduleInstance = ref(null)
 
-    // Определяем, нужно ли лениво загружать компонент
-    const shouldLazyLoad = computed(() => {
-      // Для секторов всегда используем ленивую загрузку
-      return true
-    })
+    // Маппинг компонентов по именам
+    const componentMap = {
+      'SectorDashboard': SectorDashboard,
+      'TicketsTimeTrackingDashboard': TicketsTimeTrackingDashboard,
+      'GraphStateDashboard': GraphStateDashboard,
+      'GraphAdmissionClosureDashboard': GraphAdmissionClosureDashboard,
+      'DashboardSector1C': DashboardSector1C
+    }
 
     // Создаем пропсы для модуля
     const moduleProps = computed(() => {
@@ -99,10 +114,15 @@ export default {
 
       // Добавляем специфичные пропсы в зависимости от типа модуля
       switch (props.moduleConfig.component) {
+        case 'SectorDashboard':
+          return {
+            sectorId: props.sectorId // Для универсального дашборда передаем только sectorId
+          }
+
         case 'DashboardSector1C':
           return {
             ...baseProps,
-            // Специфичные пропсы для дашборда
+            // Специфичные пропсы для дашборда 1С
             showBreadcrumbs: false, // В секторе не показываем хлебные крошки
             compactMode: true
           }
@@ -141,16 +161,11 @@ export default {
         isLoading.value = true
         error.value = null
 
-        if (shouldLazyLoad.value) {
-          // Ленивая загрузка компонента
-          moduleComponent.value = defineAsyncComponent(() =>
-            import(/* @vite-ignore */ props.moduleConfig.componentPath)
-          )
-        } else {
-          // Синхронная загрузка
-          const module = await import(/* @vite-ignore */ props.moduleConfig.componentPath)
-          moduleComponent.value = module.default
-        }
+        // ВРЕМЕННО: Используем заглушку вместо реальных компонентов
+        // TODO: Включить загрузку реальных компонентов после адаптации
+        moduleComponent.value = 'div' // Заглушка
+
+        console.log(`[ModuleAdapter] Loading module ${props.moduleConfig.id} for sector ${props.sectorId} - using placeholder`);
 
         emit('module-ready', {
           moduleId: props.moduleConfig.id,
@@ -380,6 +395,74 @@ export default {
   /* Каждый модуль сам должен управлять прокруткой если нужно */
 }
 
+/* Заглушка модуля */
+.module-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  min-height: 200px;
+}
+
+.placeholder-icon {
+  font-size: 32px;
+  margin-bottom: 12px;
+  opacity: 0.6;
+}
+
+.module-placeholder h4 {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #495057;
+}
+
+.module-placeholder p {
+  margin: 0 0 16px 0;
+  color: #6c757d;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.placeholder-status {
+  margin-bottom: 20px;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  background: #fff3cd;
+  color: #856404;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.placeholder-status small {
+  display: block;
+  margin-top: 4px;
+  color: #6c757d;
+  font-size: 11px;
+}
+
+.btn-open-full {
+  padding: 8px 16px;
+  border: 1px solid #007bff;
+  border-radius: 6px;
+  background: #007bff;
+  color: white;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.btn-open-full:hover {
+  background: #0056b3;
+  border-color: #0056b3;
+}
+
 /* Адаптивность */
 @media (max-width: 768px) {
   .module-header {
@@ -403,6 +486,23 @@ export default {
 
   .module-content {
     min-height: 150px;
+  }
+
+  .module-placeholder {
+    padding: 16px;
+    min-height: 150px;
+  }
+
+  .placeholder-icon {
+    font-size: 24px;
+  }
+
+  .module-placeholder h4 {
+    font-size: 14px;
+  }
+
+  .module-placeholder p {
+    font-size: 12px;
   }
 }
 </style>
