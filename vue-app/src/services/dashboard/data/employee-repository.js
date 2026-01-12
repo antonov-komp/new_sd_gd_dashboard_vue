@@ -21,11 +21,12 @@ export class EmployeeRepository {
     try {
       Logger.info('Loading all employees from Bitrix24', 'EmployeeRepository');
 
-      const employees = await ApiClient.call('user.get', {
+      const result = await ApiClient.call('user.get', {
         filter: { 'ACTIVE': 'Y' },
         select: ['ID', 'NAME', 'LAST_NAME', 'DEPARTMENT', 'UF_*']
       });
 
+      const employees = result.result || [];
       Logger.info(`Loaded ${employees.length} employees`, 'EmployeeRepository');
       return employees;
     } catch (error) {
@@ -44,11 +45,12 @@ export class EmployeeRepository {
     try {
       Logger.info(`Loading employee ${employeeId}`, 'EmployeeRepository');
 
-      const employees = await ApiClient.call('user.get', {
+      const result = await ApiClient.call('user.get', {
         filter: { 'ID': employeeId },
         select: ['ID', 'NAME', 'LAST_NAME', 'DEPARTMENT', 'UF_*']
       });
 
+      const employees = result.result || [];
       return employees[0] || null;
     } catch (error) {
       Logger.error(`Failed to load employee ${employeeId}`, 'EmployeeRepository', error);
@@ -101,7 +103,7 @@ export class EmployeeRepository {
     try {
       Logger.info(`Loading employees for department ${departmentId}`, 'EmployeeRepository');
 
-      const employees = await ApiClient.call('user.get', {
+      const result = await ApiClient.call('user.get', {
         filter: {
           'ACTIVE': 'Y',
           'UF_DEPARTMENT': departmentId
@@ -109,6 +111,7 @@ export class EmployeeRepository {
         select: ['ID', 'NAME', 'LAST_NAME', 'DEPARTMENT', 'UF_*']
       });
 
+      const employees = result.result || [];
       Logger.info(`Loaded ${employees.length} employees for department ${departmentId}`, 'EmployeeRepository');
       return employees;
     } catch (error) {

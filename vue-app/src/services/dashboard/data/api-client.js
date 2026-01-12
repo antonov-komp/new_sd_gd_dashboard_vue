@@ -35,7 +35,7 @@ export class ApiClient {
           switch (method) {
             case 'bizproc.smartprocess.list':
               return {
-                result: [
+                items: [
                   {
                     ID: '1',
                     TITLE: 'Test Ticket 1',

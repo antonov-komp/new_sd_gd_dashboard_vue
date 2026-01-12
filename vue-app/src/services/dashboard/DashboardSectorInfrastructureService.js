@@ -8,7 +8,7 @@
  * @since 2026-01-12
  */
 
-import { DashboardSectorBaseService } from './DashboardSectorBaseService.js';
+import { DashboardSectorBaseService } from './DashboardSectorBaseServiceSimple.js';
 import { Logger } from './utils/logger.js';
 
 export class DashboardSectorInfrastructureService extends DashboardSectorBaseService {

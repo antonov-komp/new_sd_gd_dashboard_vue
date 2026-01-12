@@ -12,7 +12,6 @@
 import { TicketRepository } from './data/ticket-repository.js';
 import { EmployeeRepository } from './data/employee-repository.js';
 import { ApiClient } from './data/api-client.js';
-import { CacheManager } from './cache/cache-manager.js';
 import { ENTITY_TYPE_ID } from './utils/constants.js';
 import { getTargetStages } from './mappers/stage-mapper.js';
 import { filterTicketsBySector } from './filters/sector-filter.js';
@@ -47,26 +46,7 @@ export class DashboardSectorBaseService {
    * @returns {Promise<object>} данные сектора
    */
   async getSectorData(options = {}) {
-    const useCache = options.useCache !== false; // по умолчанию true
-    const useBackendCache = options.useBackendCache || false;
     const onProgress = options.onProgress || null;
-
-    let cacheWasCreated = false;
-
-    // Временно отключаем кеширование для тестирования
-    // TODO: Включить кеширование после исправления CacheManager
-    /*
-    // Проверяем кеш в начале
-    if (useCache) {
-      const cacheKey = CacheManager.getSectorDataCacheKey(this.sectorId);
-      const cachedData = CacheManager.get(cacheKey);
-
-      if (cachedData) {
-        Logger.info(`Using cached sector data for ${this.sectorId}`, 'DashboardSectorBaseService');
-        return cachedData;
-      }
-    }
-    */
 
     // Сбрасываем диагностику перед загрузкой
     try {
@@ -165,16 +145,8 @@ export class DashboardSectorBaseService {
         }
       };
 
-      // Временно отключаем кеширование для тестирования
+      // Кеширование временно отключено для тестирования
       // TODO: Включить кеширование после исправления CacheManager
-      /*
-      // Кешируем результат
-      if (useCache) {
-        const cacheKey = CacheManager.getSectorDataCacheKey(this.sectorId);
-        CacheManager.set(cacheKey, result);
-        Logger.info(`Sector data cached for ${this.sectorId}`, 'DashboardSectorBaseService');
-      }
-      */
 
       if (onProgress) {
         onProgress({
