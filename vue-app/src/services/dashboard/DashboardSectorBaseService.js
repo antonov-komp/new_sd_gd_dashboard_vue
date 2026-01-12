@@ -53,6 +53,21 @@ export class DashboardSectorBaseService {
 
     let cacheWasCreated = false;
 
+    // Временно отключаем кеширование для тестирования
+    // TODO: Включить кеширование после исправления CacheManager
+    /*
+    // Проверяем кеш в начале
+    if (useCache) {
+      const cacheKey = CacheManager.getSectorDataCacheKey(this.sectorId);
+      const cachedData = CacheManager.get(cacheKey);
+
+      if (cachedData) {
+        Logger.info(`Using cached sector data for ${this.sectorId}`, 'DashboardSectorBaseService');
+        return cachedData;
+      }
+    }
+    */
+
     // Сбрасываем диагностику перед загрузкой
     try {
       if (isDiagnosticsEnabled()) {
@@ -121,15 +136,7 @@ export class DashboardSectorBaseService {
       }
 
       const employeeIds = extractUniqueEmployeeIds(sectorTickets);
-      const employees = await EmployeeRepository.getEmployeesByIds(employeeIds, (empProgress) => {
-        if (onProgress) {
-          onProgress({
-            step: 'loading_employees',
-            progress: 55 + (empProgress.progress || 0) * 0.3,
-            details: empProgress.details || {}
-          });
-        }
-      });
+      const employees = await EmployeeRepository.getEmployeesByIds(employeeIds);
 
       // Шаг 3: Группируем тикеты по стадиям
       if (onProgress) {
@@ -158,12 +165,16 @@ export class DashboardSectorBaseService {
         }
       };
 
+      // Временно отключаем кеширование для тестирования
+      // TODO: Включить кеширование после исправления CacheManager
+      /*
       // Кешируем результат
       if (useCache) {
         const cacheKey = CacheManager.getSectorDataCacheKey(this.sectorId);
         CacheManager.set(cacheKey, result);
         Logger.info(`Sector data cached for ${this.sectorId}`, 'DashboardSectorBaseService');
       }
+      */
 
       if (onProgress) {
         onProgress({

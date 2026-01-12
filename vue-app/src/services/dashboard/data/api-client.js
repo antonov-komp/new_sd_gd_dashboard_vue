@@ -57,21 +57,35 @@ export class ApiClient {
               };
 
             case 'user.get':
+              const allEmployees = [
+                {
+                  ID: '1013',
+                  NAME: 'Марк',
+                  LAST_NAME: 'Тестов',
+                  DEPARTMENT: [369]
+                },
+                {
+                  ID: '1014',
+                  NAME: 'Иван',
+                  LAST_NAME: 'Разработчик',
+                  DEPARTMENT: [369]
+                },
+                {
+                  ID: '1015',
+                  NAME: 'Анна',
+                  LAST_NAME: 'Менеджер',
+                  DEPARTMENT: [369]
+                }
+              ];
+
+              // Фильтрация по ID если указан фильтр
+              let filteredEmployees = allEmployees;
+              if (params.filter && params.filter.ID) {
+                filteredEmployees = allEmployees.filter(emp => emp.ID === params.filter.ID);
+              }
+
               return {
-                result: [
-                  {
-                    ID: '1013',
-                    NAME: 'Марк',
-                    LAST_NAME: 'Тестов',
-                    DEPARTMENT: [369]
-                  },
-                  {
-                    ID: '1014',
-                    NAME: 'Иван',
-                    LAST_NAME: 'Разработчик',
-                    DEPARTMENT: [369]
-                  }
-                ]
+                result: filteredEmployees
               };
 
             default:

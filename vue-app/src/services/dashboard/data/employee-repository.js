@@ -57,6 +57,41 @@ export class EmployeeRepository {
   }
 
   /**
+   * Получение сотрудников по ID
+   *
+   * @param {Array<string>} employeeIds - Массив ID сотрудников
+   * @returns {Promise<Array>} Массив сотрудников
+   */
+  static async getEmployeesByIds(employeeIds) {
+    try {
+      Logger.info(`Loading employees by IDs: ${employeeIds.join(', ')}`, 'EmployeeRepository');
+
+      if (!employeeIds || employeeIds.length === 0) {
+        return [];
+      }
+
+      // Для каждого ID делаем отдельный запрос (в mock режиме это работает)
+      const employees = [];
+      for (const employeeId of employeeIds) {
+        try {
+          const employee = await this.getEmployeeById(employeeId);
+          if (employee) {
+            employees.push(employee);
+          }
+        } catch (error) {
+          Logger.warn(`Failed to load employee ${employeeId}, skipping`, 'EmployeeRepository');
+        }
+      }
+
+      Logger.info(`Loaded ${employees.length} employees out of ${employeeIds.length} requested`, 'EmployeeRepository');
+      return employees;
+    } catch (error) {
+      Logger.error(`Failed to load employees by IDs`, 'EmployeeRepository', error);
+      throw error;
+    }
+  }
+
+  /**
    * Получение сотрудников по отделу
    *
    * @param {string} departmentId - ID отдела

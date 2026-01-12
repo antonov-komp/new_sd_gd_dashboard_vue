@@ -18,6 +18,68 @@ export class CacheManager {
   }
 
   /**
+   * Получение ключа для кеширования данных сектора (статический метод)
+   *
+   * @param {string} sectorId - ID сектора
+   * @param {string} dataType - Тип данных (по умолчанию 'data')
+   * @returns {string} Ключ кеша
+   */
+  static getSectorDataCacheKey(sectorId, dataType = 'data') {
+    return `sector-${sectorId}-${dataType}`;
+  }
+
+  /**
+   * Сохранение данных в кеш (статический метод)
+   *
+   * @param {string} key - Ключ кеша
+   * @param {any} data - Данные для кеширования
+   * @param {number} ttl - Время жизни в миллисекундах
+   */
+  static set(key, data, ttl = 5 * 60 * 1000) {
+    try {
+      const timestamp = Date.now();
+      const cacheData = {
+        data,
+        timestamp,
+        ttl
+      };
+
+      localStorage.setItem(`cache_${key}`, JSON.stringify(cacheData));
+      Logger.debug(`Data cached with key: ${key}`, 'CacheManager');
+    } catch (error) {
+      Logger.error(`Failed to cache data with key: ${key}`, 'CacheManager', error);
+    }
+  }
+
+  /**
+   * Получение данных из кеша (статический метод)
+   *
+   * @param {string} key - Ключ кеша
+   * @returns {any} Данные из кеша или null
+   */
+  static get(key) {
+    try {
+      const cached = localStorage.getItem(`cache_${key}`);
+      if (!cached) return null;
+
+      const cacheData = JSON.parse(cached);
+      const now = Date.now();
+
+      // Проверяем TTL
+      if (now - cacheData.timestamp > cacheData.ttl) {
+        localStorage.removeItem(`cache_${key}`);
+        return null;
+      }
+
+      Logger.debug(`Cache hit for key: ${key}`, 'CacheManager');
+      return cacheData.data;
+    } catch (error) {
+      Logger.error(`Failed to get cached data for key: ${key}`, 'CacheManager', error);
+      return null;
+    }
+  }
+
+  /**
    * Получение данных из кеша
    *
    * @param {string} key - Ключ кеша
