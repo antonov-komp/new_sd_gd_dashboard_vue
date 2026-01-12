@@ -177,7 +177,7 @@ export class SectorConfigUtils {
    * Проверить, существует ли сектор
    */
   static sectorExists(sectorId) {
-    return !!SECTORS_CONFIG[sectorId];
+    return Object.values(SECTORS_CONFIG).some(sector => sector.id === sectorId);
   }
 
   /**

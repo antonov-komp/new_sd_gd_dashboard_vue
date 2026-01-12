@@ -1,5 +1,10 @@
 <template>
   <div :class="`dashboard-sector-${sectorId} ${draggedTicket ? 'is-dragging' : ''}`">
+    <!-- DEBUG: Показываем, что компонент рендерится -->
+    <div style="background: yellow; padding: 10px; margin-bottom: 10px; border: 2px solid red;">
+      🚨 DEBUG: SectorDashboard RENDERED for sector: {{ sectorId }}
+    </div>
+
     <!-- Заголовок -->
     <div class="dashboard-header">
       <!-- Хлебные крошки -->
@@ -234,12 +239,15 @@ export default {
   },
 
   setup(props) {
-    const router = useRouter();
-    const route = useRoute();
+    try {
+      console.log(`[SectorDashboard] 🎯 SETUP called for sector: ${props.sectorId}`);
 
-    // Универсальные композаблы
-    const state = useUniversalDashboardState(props.sectorId);
-    const actions = useUniversalDashboardActions(state, props.sectorId);
+      const router = useRouter();
+      const route = useRoute();
+
+      // Универсальные композаблы
+      const state = useUniversalDashboardState(props.sectorId);
+      const actions = useUniversalDashboardActions(state, props.sectorId);
 
     // Информация о текущем пользователе
     const currentUser = ref(null);
@@ -350,6 +358,23 @@ export default {
       navigateToTicketsManagement,
       getZeroPointTickets: state.getZeroPointTickets
     };
+    } catch (error) {
+      console.error(`[SectorDashboard] 💥 CRITICAL ERROR in setup for sector ${props.sectorId}:`, error);
+      console.error('[SectorDashboard] Error stack:', error.stack);
+      console.error('[SectorDashboard] Error message:', error.message);
+
+      // Возвращаем минимальный объект для предотвращения краха
+      return {
+        // Минимальные свойства для отображения ошибки
+        isLoading: false,
+        error: `Ошибка инициализации компонента: ${error.message}`,
+        stages: [],
+        employees: [],
+        totalTickets: 0,
+        sectorName: props.sectorId,
+        hasData: false
+      };
+    }
   }
 };
 </script>

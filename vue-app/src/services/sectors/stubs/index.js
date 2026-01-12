@@ -39,68 +39,77 @@ export class BaseSectorStubService {
   }
 }
 
-// Сервис-заглушка для сектора PDM
+
+import { UNIFIED_DT140_STAGES, SECTOR_FILTERS } from './constants.js';
+
+// Сервис-заглушка для сектора PDM (использует единые стадии DT140_12)
 export class SectorPDMService extends BaseSectorStubService {
   constructor() {
     super('pdm', {
       id: 'pdm',
       name: 'Сектор PDM',
       filterField: 'UF_CRM_7_TYPE_PRODUCT',
-      filterValue: 'PDM',
-      stages: {
-        'design': { name: 'Проектирование', color: '#17a2b8', order: 1 },
-        'review': { name: 'Проверка', color: '#ffc107', order: 2 },
-        'implementation': { name: 'Внедрение', color: '#28a745', order: 3 }
-      }
+      filterValue: SECTOR_FILTERS.pdm,
+      stages: UNIFIED_DT140_STAGES
     });
   }
 
   async getSectorData(options = {}) {
     console.log('[SectorPDMService] getSectorData called with options:', options);
 
-    // Создаем тестовые данные для сектора PDM
+    // Создаем тестовые данные для сектора PDM: 0/27/3 (30 тикетов total)
     const testData = {
       stages: [
         {
-          id: 'design',
-          name: 'Проектирование',
-          color: '#17a2b8',
-          tickets: [
-            { id: 'pdm-1', title: 'Проектирование модуля отчетов', status: 'in_progress', assignedTo: 'user1' },
-            { id: 'pdm-2', title: 'Анализ требований', status: 'completed', assignedTo: 'user2' }
-          ],
-          employees: [
-            { id: 'user1', name: 'Иван Иванов', department: 'PDM' },
-            { id: 'user2', name: 'Мария Петрова', department: 'PDM' }
-          ]
-        },
-        {
-          id: 'review',
-          name: 'Проверка',
-          color: '#ffc107',
-          tickets: [
-            { id: 'pdm-3', title: 'Проверка кода', status: 'in_progress', assignedTo: 'user3' }
-          ],
-          employees: [
-            { id: 'user3', name: 'Алексей Сидоров', department: 'PDM' }
-          ]
-        },
-        {
-          id: 'implementation',
-          name: 'Внедрение',
-          color: '#28a745',
-          tickets: [],
+          id: 'DT140_12:UC_0VHWE2',
+          name: 'Сформировано обращение',
+          color: '#007bff',
+          tickets: [], // 0 тикетов в стадии formed
           employees: []
+        },
+        {
+          id: 'DT140_12:PREPARATION',
+          name: 'Рассмотрение ТЗ',
+          color: '#ffc107',
+          tickets: Array.from({length: 27}, (_, i) => ({
+            id: `pdm-review-${i + 1}`,
+            title: `Анализ PDM проекта ${i + 1}`,
+            status: i % 3 === 0 ? 'completed' : 'in_progress',
+            assignedTo: `user${(i % 5) + 1}`
+          })), // 27 тикетов в стадии review
+          employees: Array.from({length: 5}, (_, i) => ({
+            id: `user${i + 1}`,
+            name: `PDM Специалист ${i + 1}`,
+            department: 'PDM'
+          }))
+        },
+        {
+          id: 'DT140_12:CLIENT',
+          name: 'Исполнение',
+          color: '#28a745',
+          tickets: Array.from({length: 3}, (_, i) => ({
+            id: `pdm-exec-${i + 1}`,
+            title: `Внедрение PDM решения ${i + 1}`,
+            status: 'in_progress',
+            assignedTo: `user${(i % 2) + 1}`
+          })), // 3 тикета в стадии execution
+          employees: [
+            { id: 'user1', name: 'PDM Специалист 1', department: 'PDM' },
+            { id: 'user2', name: 'PDM Специалист 2', department: 'PDM' }
+          ]
         }
       ],
-      employees: [
-        { id: 'user1', name: 'Иван Иванов', department: 'PDM' },
-        { id: 'user2', name: 'Мария Петрова', department: 'PDM' },
-        { id: 'user3', name: 'Алексей Сидоров', department: 'PDM' }
-      ],
+      employees: Array.from({length: 7}, (_, i) => ({
+        id: `user${i + 1}`,
+        name: `PDM Специалист ${i + 1}`,
+        department: 'PDM'
+      })),
       zeroPointTickets: [],
       metadata: {
         sectorId: 'pdm',
+        totalTickets: 30, // 0 + 27 + 3
+        totalEmployees: 7,
+        filterValue: 'PDM', // UF_CRM_7_TYPE_PRODUCT = 'PDM'
         lastUpdated: new Date().toISOString()
       }
     };
@@ -115,39 +124,134 @@ export class SectorPDMService extends BaseSectorStubService {
   }
 }
 
-// Сервис-заглушка для сектора Bitrix24
+// Сервис-заглушка для сектора Bitrix24 (использует те же стадии DT140_12 что и 1С)
 export class SectorBitrix24Service extends BaseSectorStubService {
   constructor() {
     super('bitrix24', {
       id: 'bitrix24',
       name: 'Сектор Битрикс24',
       filterField: 'UF_CRM_7_TYPE_PRODUCT',
-      filterValue: 'Bitrix24',
-      stages: {
-        'analysis': { name: 'Анализ', color: '#007bff', order: 1 },
-        'development': { name: 'Разработка', color: '#ffc107', order: 2 },
-        'testing': { name: 'Тестирование', color: '#28a745', order: 3 },
-        'deployment': { name: 'Внедрение', color: '#6c757d', order: 4 }
-      }
+      filterValue: 'Bitrix24', // UF_CRM_7_TYPE_PRODUCT = 'Bitrix24'
+      stages: UNIFIED_DT140_STAGES
     });
+  }
+
+  async getSectorData(options = {}) {
+    console.log('[SectorBitrix24Service] getSectorData called with options:', options);
+
+    // Создаем тестовые данные для сектора Битрикс24 с теми же стадиями DT140_12
+    const testData = {
+      stages: [
+        {
+          id: 'DT140_12:UC_0VHWE2',
+          name: 'Сформировано обращение',
+          color: '#007bff',
+          tickets: [
+            { id: 'b24-1', title: 'Заявка на настройку портала', status: 'in_progress', assignedTo: 'user1' }
+          ],
+          employees: [
+            { id: 'user1', name: 'Иван Иванов', department: 'Bitrix24' }
+          ]
+        },
+        {
+          id: 'DT140_12:PREPARATION',
+          name: 'Рассмотрение ТЗ',
+          color: '#ffc107',
+          tickets: [],
+          employees: []
+        },
+        {
+          id: 'DT140_12:CLIENT',
+          name: 'Исполнение',
+          color: '#28a745',
+          tickets: [],
+          employees: []
+        }
+      ],
+      employees: [
+        { id: 'user1', name: 'Иван Иванов', department: 'Bitrix24' }
+      ],
+      zeroPointTickets: [],
+      metadata: {
+        sectorId: 'bitrix24',
+        lastUpdated: new Date().toISOString()
+      }
+    };
+
+    console.log('[SectorBitrix24Service] Returning test data:', {
+      stages: testData.stages?.length || 0,
+      employees: testData.employees?.length || 0,
+      totalTickets: testData.stages?.reduce((sum, stage) => sum + (stage.tickets?.length || 0), 0) || 0
+    });
+
+    return testData;
   }
 }
 
-// Сервис-заглушка для сектора Infrastructure
+// Сервис-заглушка для сектора Infrastructure (использует единые стадии DT140_12)
 export class SectorInfrastructureService extends BaseSectorStubService {
   constructor() {
     super('infrastructure', {
       id: 'infrastructure',
       name: 'Сектор Инфраструктура',
       filterField: 'UF_CRM_7_TYPE_PRODUCT',
-      filterValues: ['Железо', 'Прочее'],
-      stages: {
-        'request': { name: 'Заявка', color: '#6c757d', order: 1 },
-        'assessment': { name: 'Оценка', color: '#ffc107', order: 2 },
-        'procurement': { name: 'Закупка', color: '#17a2b8', order: 3 },
-        'deployment': { name: 'Внедрение', color: '#28a745', order: 4 }
-      }
+      filterValues: ['Железо', 'Прочее'], // UF_CRM_7_TYPE_PRODUCT IN ('Железо', 'Прочее')
+      stages: UNIFIED_DT140_STAGES
     });
+  }
+
+  async getSectorData(options = {}) {
+    console.log('[SectorInfrastructureService] getSectorData called with options:', options);
+
+    // Создаем тестовые данные для сектора Infrastructure: 0/0/1 (1 тикет total)
+    const testData = {
+      stages: [
+        {
+          id: 'DT140_12:UC_0VHWE2',
+          name: 'Сформировано обращение',
+          color: '#007bff',
+          tickets: [], // 0 тикетов в стадии formed
+          employees: []
+        },
+        {
+          id: 'DT140_12:PREPARATION',
+          name: 'Рассмотрение ТЗ',
+          color: '#ffc107',
+          tickets: [], // 0 тикетов в стадии review
+          employees: []
+        },
+        {
+          id: 'DT140_12:CLIENT',
+          name: 'Исполнение',
+          color: '#28a745',
+          tickets: [
+            { id: 'infra-1', title: 'Замена серверного оборудования', status: 'in_progress', assignedTo: 'infra-user1' }
+          ], // 1 тикет в стадии execution
+          employees: [
+            { id: 'infra-user1', name: 'Системный администратор', department: 'Infrastructure' }
+          ]
+        }
+      ],
+      employees: [
+        { id: 'infra-user1', name: 'Системный администратор', department: 'Infrastructure' }
+      ],
+      zeroPointTickets: [],
+      metadata: {
+        sectorId: 'infrastructure',
+        totalTickets: 1, // 0 + 0 + 1
+        totalEmployees: 1,
+        filterValues: ['Железо', 'Прочее'], // UF_CRM_7_TYPE_PRODUCT IN ('Железо', 'Прочее')
+        lastUpdated: new Date().toISOString()
+      }
+    };
+
+    console.log('[SectorInfrastructureService] Returning test data:', {
+      stages: testData.stages?.length || 0,
+      employees: testData.employees?.length || 0,
+      totalTickets: testData.stages?.reduce((sum, stage) => sum + (stage.tickets?.length || 0), 0) || 0
+    });
+
+    return testData;
   }
 }
 

@@ -190,31 +190,30 @@ class MockUniversalSectorDashboardService {
       'bitrix24': {
         stages: [
           {
-            id: 'formed',
-            name: 'Создание заявки',
+            id: 'DT140_12:UC_0VHWE2',
+            name: 'Сформировано обращение',
             employees: [
               { id: 'b24_1', name: 'Сергей Волков', email: 'sergey@example.com' }
             ],
             tickets: [
-              { id: 'b24_1', title: 'Настройка портала', assignedTo: 'b24_1', priority: 'medium' }
+              { id: 'b24_1', title: 'Настройка портала Битрикс24', assignedTo: 'b24_1', priority: 'medium' }
             ]
           },
           {
-            id: 'review',
-            name: 'Анализ',
+            id: 'DT140_12:PREPARATION',
+            name: 'Рассмотрение ТЗ',
             employees: [],
             tickets: []
           },
           {
-            id: 'execution',
-            name: 'Реализация',
+            id: 'DT140_12:CLIENT',
+            name: 'Исполнение',
             employees: [],
             tickets: []
           }
         ],
         employees: [
-          { id: 'b24_1', name: 'Сергей Волков', email: 'sergey@example.com' },
-          { id: 'b24_2', name: 'Татьяна Романова', email: 'tatiana@example.com' }
+          { id: 'b24_1', name: 'Сергей Волков', email: 'sergey@example.com' }
         ],
         zeroPointTickets: {
           formed: [],
@@ -224,37 +223,37 @@ class MockUniversalSectorDashboardService {
         metadata: {
           sectorId: 'bitrix24',
           totalTickets: 1,
-          totalEmployees: 2,
+          totalEmployees: 1,
           lastUpdated: new Date().toISOString()
         }
       },
       'infrastructure': {
         stages: [
           {
-            id: 'formed',
-            name: 'Регистрация проблемы',
+            id: 'DT140_12:UC_0VHWE2',
+            name: 'Сформировано обращение',
             employees: [],
-            tickets: []
+            tickets: [] // 0 тикетов в стадии formed
           },
           {
-            id: 'review',
-            name: 'Диагностика',
+            id: 'DT140_12:PREPARATION',
+            name: 'Рассмотрение ТЗ',
             employees: [],
-            tickets: []
+            tickets: [] // 0 тикетов в стадии review
           },
           {
-            id: 'execution',
-            name: 'Решение',
+            id: 'DT140_12:CLIENT',
+            name: 'Исполнение',
             employees: [
-              { id: 'infra1', name: 'Андрей Павлов', email: 'andrey@example.com' }
+              { id: 'infra-user1', name: 'Системный администратор', department: 'Infrastructure' }
             ],
             tickets: [
-              { id: 'infra1', title: 'Замена сервера', assignedTo: 'infra1', priority: 'high' }
-            ]
+              { id: 'infra-1', title: 'Замена серверного оборудования', assignedTo: 'infra-user1', priority: 'high' }
+            ] // 1 тикет в стадии execution
           }
         ],
         employees: [
-          { id: 'infra1', name: 'Андрей Павлов', email: 'andrey@example.com' }
+          { id: 'infra-user1', name: 'Системный администратор', department: 'Infrastructure' }
         ],
         zeroPointTickets: {
           formed: [],
@@ -263,8 +262,9 @@ class MockUniversalSectorDashboardService {
         },
         metadata: {
           sectorId: 'infrastructure',
-          totalTickets: 1,
+          totalTickets: 1, // 0 + 0 + 1
           totalEmployees: 1,
+          filterValues: ['Железо', 'Прочее'], // UF_CRM_7_TYPE_PRODUCT IN ('Железо', 'Прочее')
           lastUpdated: new Date().toISOString()
         }
       }

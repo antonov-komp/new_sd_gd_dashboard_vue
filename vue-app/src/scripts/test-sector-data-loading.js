@@ -29,6 +29,7 @@ export class SectorDataLoadingTester {
   async runAllSectorTests() {
     console.log('%c🎯 РЕЗУЛЬТАТЫ ТЕСТИРОВАНИЯ СЕКТОРОВ', 'font-size: 16px; font-weight: bold; color: #007bff');
     console.log('========================================');
+    console.log('ℹ️  Получение реальных данных из системы...');
 
     for (const sectorId of this.sectors) {
       try {
@@ -69,16 +70,30 @@ export class SectorDataLoadingTester {
   async testSector(sectorId) {
     const startTime = performance.now();
 
+    console.log(`[TEST] Начинаем тестирование сектора: ${sectorId}`);
+
     try {
       // Получаем сервис сектора
       const service = UniversalSectorDashboardFactory.getService(sectorId);
+      console.log(`[TEST] Сервис сектора ${sectorId} получен:`, service.constructor.name);
 
       // Ждем инициализации сервиса
       await this.waitForServiceInitialization(service);
 
+      // Очищаем кеш перед получением свежих данных
+      service.clearCache();
+      console.log(`[TEST] Кеш очищен для сектора ${sectorId}`);
+
       // Получаем данные сектора с параметрами пагинации и отключенным кешем
       const options = this.getSectorOptions(sectorId);
+      console.log(`[TEST] Опции для сектора ${sectorId}:`, options);
+
       const sectorData = await service.getSectorDashboardData(options);
+      console.log(`[TEST] Получены данные сектора ${sectorId}:`, {
+        stagesCount: sectorData.stages?.length || 0,
+        totalTickets: sectorData.metadata?.totalTickets || 0,
+        stages: sectorData.stages?.map(s => ({ id: s.id, name: s.name, tickets: s.tickets?.length || 0 })) || []
+      });
 
       // Проверяем корректность данных
       const validationResult = this.validateSectorData(sectorData, sectorId);
@@ -105,6 +120,37 @@ export class SectorDataLoadingTester {
         stack: error.stack
       };
     }
+  }
+
+  /**
+   * Маппинг ID стадий сектора на ID дашборда
+   *
+   * @param {string} stageId - ID этапа сектора
+   * @returns {string} ID этапа дашборда
+   */
+  mapStageIdToDashboardId(stageId) {
+    // Маппинг для всех секторов (DT140_12:...)
+    const stageMappings = {
+      // Сектор 1С
+      'DT140_12:UC_0VHWE2': 'formed',    // Сформировано обращение
+      'DT140_12:PREPARATION': 'review',   // Рассмотрение ТЗ
+      'DT140_12:CLIENT': 'execution',     // Исполнение
+
+      // Общие маппинги (если сектора используют похожие ID)
+      'formed': 'formed',
+      'review': 'review',
+      'execution': 'execution',
+      'request': 'formed',
+      'assessment': 'review',
+      'deployment': 'execution',
+
+      // Для сектора PDM (заглушка)
+      'design': 'formed',
+      'review': 'review',
+      'implementation': 'execution'
+    };
+
+    return stageMappings[stageId] || stageId;
   }
 
   /**
@@ -147,10 +193,11 @@ export class SectorDataLoadingTester {
         };
 
       case 'bitrix24':
+        // Сектор Битрикс24 теперь использует те же стадии DT140_12 что и 1С
         return {
           ...baseOptions,
           pagination: {
-            enabled: false // Маленький объем данных
+            enabled: false // Маленький объем данных (заглушка)
           }
         };
 
@@ -245,19 +292,52 @@ export class SectorDataLoadingTester {
       });
     }
 
-    // Специфическая проверка для сектора PDM (ожидаем 0/27/3)
+      // Специфическая проверка для сектора PDM (ожидаем 0/27/3 с едиными стадиями DT140_12)
     if (sectorId === 'pdm') {
       const stageMetrics = {};
       sectorData.stages.forEach(stage => {
-        stageMetrics[stage.id] = stage.tickets?.length || 0;
+        const dashboardStageId = this.mapStageIdToDashboardId(stage.id);
+        stageMetrics[dashboardStageId] = stage.tickets?.length || 0;
       });
 
       // Проверяем ожидаемые метрики для сектора PDM
       const expectedMetrics = {
-        formed: 0,     // Первая стадия: 0 элементов
-        review: 27,    // Вторая стадия: 27 элементов
-        execution: 3   // Третья стадия: 3 элементов
+        formed: 0,     // DT140_12:UC_0VHWE2 → formed: 0 элементов
+        review: 27,    // DT140_12:PREPARATION → review: 27 элементов
+        execution: 3   // DT140_12:CLIENT → execution: 3 элементов
       };
+
+      Object.entries(expectedMetrics).forEach(([stageId, expectedCount]) => {
+        const actualCount = stageMetrics[stageId] || 0;
+        if (actualCount !== expectedCount) {
+          warnings.push(`Стадия ${stageId}: ожидалось ${expectedCount} элементов, получено ${actualCount}`);
+        }
+      });
+    }
+
+    // Специфическая проверка для сектора Битрикс24 (ожидаем 1/0/0 с едиными стадиями DT140_12)
+    if (sectorId === 'bitrix24') {
+      console.log('[TEST] Проверяем данные сектора Битрикс24:', {
+        stagesCount: sectorData.stages?.length || 0,
+        stages: sectorData.stages?.map(s => ({ id: s.id, ticketsCount: s.tickets?.length || 0 })) || []
+      });
+
+      const stageMetrics = {};
+      sectorData.stages.forEach(stage => {
+        const dashboardStageId = this.mapStageIdToDashboardId(stage.id);
+        stageMetrics[dashboardStageId] = stage.tickets?.length || 0;
+        console.log(`[TEST] Стадия ${stage.id} (${dashboardStageId}): ${stage.tickets?.length || 0} тикетов`);
+      });
+
+      // Проверяем ожидаемые метрики для сектора Битрикс24
+      const expectedMetrics = {
+        formed: 1,     // DT140_12:UC_0VHWE2 → formed: 1 элемент
+        review: 0,     // DT140_12:PREPARATION → review: 0 элементов
+        execution: 0   // DT140_12:CLIENT → execution: 0 элементов
+      };
+
+      console.log('[TEST] Ожидаемые метрики:', expectedMetrics);
+      console.log('[TEST] Фактические метрики:', stageMetrics);
 
       Object.entries(expectedMetrics).forEach(([stageId, expectedCount]) => {
         const actualCount = stageMetrics[stageId] || 0;
@@ -339,9 +419,33 @@ export class SectorDataLoadingTester {
     console.log(`   Всего: ${result.metrics.totalTickets} тикетов, ${result.metrics.totalEmployees} сотрудников`);
 
     // Специфическая информация для секторов с известным распределением
-    if (result.sectorId === '1c' || result.sectorId === 'pdm') {
+    if (result.sectorId === '1c' || result.sectorId === 'pdm' || result.sectorId === 'bitrix24') {
       const stageCounts = Object.values(result.metrics.stages).map(s => s.ticketCount);
       console.log(`   📊 Распределение: ${stageCounts.join('/')}`);
+
+      // Проверяем соответствие ожидаемым данным
+      if (result.sectorId === '1c') {
+        const expected = [60, 13, 13];
+        const actual = stageCounts;
+        const matches = expected.every((exp, i) => exp === actual[i]);
+        if (!matches) {
+          console.warn(`   ⚠️  Несоответствие ожидаемым данным 1С: ожидалось ${expected.join('/')}, получено ${actual.join('/')}`);
+        }
+      } else if (result.sectorId === 'pdm') {
+        const expected = [0, 27, 3];
+        const actual = stageCounts;
+        const matches = expected.every((exp, i) => exp === actual[i]);
+        if (!matches) {
+          console.warn(`   ⚠️  Несоответствие ожидаемым данным PDM: ожидалось ${expected.join('/')}, получено ${actual.join('/')}`);
+        }
+      } else if (result.sectorId === 'bitrix24') {
+        const expected = [1, 0, 0];
+        const actual = stageCounts;
+        const matches = expected.every((exp, i) => exp === actual[i]);
+        if (!matches) {
+          console.warn(`   ⚠️  Несоответствие ожидаемым данным Битрикс24: ожидалось ${expected.join('/')}, получено ${actual.join('/')}`);
+        }
+      }
     }
 
     // Выводим предупреждения валидации, если есть

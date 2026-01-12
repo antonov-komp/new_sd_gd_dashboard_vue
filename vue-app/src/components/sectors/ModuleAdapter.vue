@@ -161,11 +161,19 @@ export default {
         isLoading.value = true
         error.value = null
 
-        // ВРЕМЕННО: Используем заглушку вместо реальных компонентов
-        // TODO: Включить загрузку реальных компонентов после адаптации
-        moduleComponent.value = 'div' // Заглушка
+        // Определяем, какой компонент использовать
+        const componentName = props.moduleConfig.component
 
-        console.log(`[ModuleAdapter] Loading module ${props.moduleConfig.id} for sector ${props.sectorId} - using placeholder`);
+        if (componentMap[componentName]) {
+          // Используем реальный компонент из componentMap
+          moduleComponent.value = componentMap[componentName]
+          console.log(`[ModuleAdapter] ✅ Loading real component ${componentName} for module ${props.moduleConfig.id} in sector ${props.sectorId}`);
+          console.log(`[ModuleAdapter] Component loaded:`, moduleComponent.value);
+        } else {
+          // Используем placeholder для неизвестных компонентов
+          moduleComponent.value = 'div'
+          console.log(`[ModuleAdapter] ⚠️ Loading module ${props.moduleConfig.id} for sector ${props.sectorId} - using placeholder (component ${componentName} not found)`);
+        }
 
         emit('module-ready', {
           moduleId: props.moduleConfig.id,

@@ -149,9 +149,9 @@ export class UniversalSectorDashboardService {
    * @returns {string} ID этапа дашборда
    */
   mapStageIdToDashboardId(stageId) {
-    // Маппинг для сектора 1С (DT140_12:...)
+    // ГЛОБАЛЬНЫЕ стадии DT140_12 для ВСЕХ секторов
     const stageMappings = {
-      // Сектор 1С
+      // Основные стадии DT140_12 (едины для всех секторов)
       'DT140_12:UC_0VHWE2': 'formed',    // Сформировано обращение
       'DT140_12:PREPARATION': 'review',   // Рассмотрение ТЗ
       'DT140_12:CLIENT': 'execution',     // Исполнение

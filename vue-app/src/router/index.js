@@ -83,12 +83,16 @@ const routes = [
       const { SECTORS_CONFIG, SectorConfigUtils } = require('@/config/sectors.js');
       const sectorId = to.params.sectorId;
 
+      console.log(`[Router] beforeEnter: checking sector ${sectorId}`);
+      console.log(`[Router] Available sectors:`, Object.values(SECTORS_CONFIG).map(s => s.id));
+
       if (!SectorConfigUtils.sectorExists(sectorId)) {
-        console.warn(`Sector ${sectorId} does not exist, redirecting to index`);
+        console.warn(`[Router] Sector ${sectorId} does not exist, redirecting to index`);
         next({ name: 'index' });
         return;
       }
 
+      console.log(`[Router] Sector ${sectorId} exists, allowing navigation`);
       next();
     }
   },
