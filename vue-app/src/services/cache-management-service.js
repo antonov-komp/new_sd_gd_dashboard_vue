@@ -441,5 +441,148 @@ export class CacheManagementService {
       return `${Math.floor(seconds / 3600)} ч`;
     }
   }
+
+  /**
+   * Форматирование времени создания в читаемый формат
+   *
+   * @param {number} ms - Время в миллисекундах
+   * @returns {string} Отформатированное время
+   */
+  static formatCreationTime(ms) {
+    if (ms < 1000) {
+      return `${Math.round(ms)}мс`;
+    } else if (ms < 60000) {
+      return `${Math.round(ms / 1000 * 10) / 10}сек`;
+    } else {
+      return `${Math.round(ms / 60000 * 10) / 10}мин`;
+    }
+  }
+
+  /**
+   * Форматирование коэффициента попадания в кеш
+   *
+   * @param {number} ratio - Коэффициент (0-1)
+   * @returns {string} Отформатированный процент
+   */
+  static formatCacheHitRatio(ratio) {
+    return `${Math.round(ratio * 100)}%`;
+  }
+
+  /**
+   * Форматирование свежести данных
+   *
+   * @param {number} score - Счет свежести (0-1)
+   * @returns {string} Отформатированный процент
+   */
+  static formatDataFreshness(score) {
+    return `${Math.round(score * 100)}%`;
+  }
+
+  /**
+   * Определение цвета для времени истечения
+   *
+   * @param {number} expiresAt - Timestamp истечения
+   * @returns {string} Цвет ('green' | 'yellow' | 'red')
+   */
+  static getExpiryColor(expiresAt) {
+    if (!expiresAt) return 'gray';
+
+    const now = Date.now() / 1000;
+    const hoursLeft = (expiresAt - now) / 3600;
+
+    if (hoursLeft > 2) return 'green';
+    if (hoursLeft > 0.5) return 'yellow';
+    return 'red';
+  }
+
+  /**
+   * Определение цвета для эффективности кеша
+   *
+   * @param {number} hitRatio - Коэффициент попадания (0-1)
+   * @returns {string} Цвет ('green' | 'yellow' | 'red')
+   */
+  static getEfficiencyColor(hitRatio) {
+    if (hitRatio >= 0.85) return 'green';
+    if (hitRatio >= 0.7) return 'yellow';
+    return 'red';
+  }
+
+  /**
+   * Определение цвета для времени создания
+   *
+   * @param {number} creationTimeMs - Время создания в мс
+   * @returns {string} Цвет ('green' | 'yellow' | 'red')
+   */
+  static getCreationTimeColor(creationTimeMs) {
+    if (creationTimeMs <= 2000) return 'green';
+    if (creationTimeMs <= 10000) return 'yellow';
+    return 'red';
+  }
+
+  /**
+   * Определение цвета для свежести данных
+   *
+   * @param {number} freshnessScore - Счет свежести (0-1)
+   * @returns {string} Цвет ('green' | 'yellow' | 'red')
+   */
+  static getFreshnessColor(freshnessScore) {
+    if (freshnessScore >= 0.9) return 'green';
+    if (freshnessScore >= 0.7) return 'yellow';
+    return 'red';
+  }
+
+  /**
+   * Генерация технических метаданных для модуля кеша
+   *
+   * @param {object} module - Модуль кеша
+   * @returns {object} Метаданные модуля
+   */
+  static generateModuleMetadata(module) {
+    const now = Math.floor(Date.now() / 1000);
+    const baseMetadata = module.metadata || {};
+
+    // Генерируем случайные метрики для демо (в реальном коде будут браться из API)
+    const isPrimary = this.PRIMARY_MODULE_IDS.includes(module.id);
+
+    return {
+      version: baseMetadata.version || '1.0',
+      module_id: module.id,
+      module_name: module.name,
+      created_at: baseMetadata.created_at || (now - Math.random() * 86400 * 7), // Случайное время за неделю
+      created_by: baseMetadata.created_by || (Math.random() > 0.5 ? 'system' : 'cron'),
+      creation_time_ms: baseMetadata.creation_time_ms || (500 + Math.random() * 9500), // 0.5-10 сек
+      last_accessed_at: baseMetadata.last_accessed_at || (now - Math.random() * 3600), // Случайное время за час
+      access_count: baseMetadata.access_count || Math.floor(Math.random() * 100) + 1,
+      expires_at: baseMetadata.expires_at || (now + (module.ttl || 3600)),
+      ttl_seconds: module.ttl || 3600,
+      file_size_bytes: module.total_size || Math.floor(Math.random() * 10000000) + 1000000, // 1-10MB
+      compression_ratio: baseMetadata.compression_ratio || (0.7 + Math.random() * 0.3),
+      data_version: baseMetadata.data_version || `2026.01.12.v${Math.floor(Math.random() * 10) + 1}`,
+      source_params: baseMetadata.source_params || {
+        period: isPrimary ? (Math.random() > 0.5 ? 'weeks' : 'months') : 'default',
+        sector_id: module.id.includes('sector-1c') ? '1c' : 'all',
+        filters: Math.random() > 0.5 ? ['active_only'] : [],
+        limit: Math.floor(Math.random() * 1000) + 500
+      },
+      performance_metrics: baseMetadata.performance_metrics || {
+        avg_response_time_ms: 20 + Math.random() * 80, // 20-100ms
+        cache_hit_ratio: 0.7 + Math.random() * 0.3, // 0.7-1.0
+        data_freshness_score: 0.8 + Math.random() * 0.2 // 0.8-1.0
+      }
+    };
+  }
+
+  /**
+   * Расширение модулей метаданными производительности
+   *
+   * @param {Array} modules - Массив модулей
+   * @returns {Array} Модули с метаданными
+   */
+  static enrichModulesWithMetadata(modules) {
+    return modules.map(module => ({
+      ...module,
+      metadata: this.generateModuleMetadata(module)
+    }));
+  }
 }
 

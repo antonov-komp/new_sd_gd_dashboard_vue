@@ -1,0 +1,494 @@
+/* Модульная система стилей для управления кешем
+ * Использует CSS переменные и дизайн-токены для консистентности
+ */
+
+/* Глобальные переменные и дизайн-токены */
+:root {
+  /* Цветовая палитра */
+  --cache-colors: {
+    primary: {
+      base: #007bff,
+      hover: #0056b3,
+      light: #f8f9ff
+    },
+    secondary: {
+      base: #6c757d,
+      hover: #5a6268,
+      light: #f8f9fa
+    },
+    semantic: {
+      success: #28a745,
+      danger: #dc3545,
+      warning: #fd7e14,
+      info: #17a2b8
+    }
+  };
+
+  /* Типографика */
+  --cache-fonts: {
+    family: {
+      primary: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif,
+      mono: 'SF Mono', 'Monaco', 'Inconsolata', monospace
+    },
+    sizes: {
+      xs: 11px,
+      sm: 12px,
+      md: 14px,
+      lg: 16px,
+      xl: 18px,
+      xxl: 20px
+    },
+    weights: {
+      normal: 400,
+      medium: 500,
+      semibold: 600,
+      bold: 700
+    }
+  };
+
+  /* Размеры и отступы */
+  --cache-spacing: {
+    xs: 4px,
+    sm: 8px,
+    md: 16px,
+    lg: 20px,
+    xl: 24px,
+    xxl: 32px
+  };
+
+  --cache-radius: {
+    sm: 6px,
+    md: 8px,
+    lg: 12px,
+    full: 50%
+  };
+
+  /* Тени и эффекты */
+  --cache-shadows: {
+    sm: 0 2px 4px rgba(0, 0, 0, 0.1),
+    md: 0 4px 12px rgba(0, 123, 255, 0.15),
+    lg: 0 8px 25px rgba(0, 123, 255, 0.2)
+  };
+
+  /* Анимации */
+  --cache-animations: {
+    transition: all 0.2s ease,
+    duration: {
+      fast: 0.15s,
+      normal: 0.2s,
+      slow: 0.3s
+    }
+  };
+}
+
+/* Переменные для использования в компонентах */
+:root {
+  --cache-primary-color: #007bff;
+  --cache-secondary-color: #6c757d;
+  --cache-success-color: #28a745;
+  --cache-danger-color: #dc3545;
+  --cache-warning-color: #fd7e14;
+  --cache-info-color: #17a2b8;
+
+  --cache-border-radius: 12px;
+  --cache-border-radius-sm: 8px;
+  --cache-transition: all 0.2s ease;
+
+  --cache-shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
+  --cache-shadow-md: 0 4px 12px rgba(0, 123, 255, 0.15);
+  --cache-shadow-lg: 0 8px 25px rgba(0, 123, 255, 0.2);
+}
+
+/* Базовые стили для карточек кеша */
+.cache-card-base {
+  background: white;
+  border: 2px solid #e0e0e0;
+  border-radius: var(--cache-border-radius);
+  overflow: hidden;
+  transition: var(--cache-transition);
+  position: relative;
+  animation: cardFadeIn 0.4s ease-out;
+  animation-fill-mode: both;
+}
+
+.cache-card-base:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--cache-shadow-lg);
+}
+
+/* Модификаторы для типов модулей */
+.cache-card-primary {
+  border-color: var(--cache-primary-color);
+  background: linear-gradient(135deg, #f8f9ff 0%, #ffffff 100%);
+  box-shadow: var(--cache-shadow-md);
+}
+
+.cache-card-primary:hover {
+  border-color: #0056b3;
+  box-shadow: 0 6px 20px rgba(0, 123, 255, 0.25);
+}
+
+.cache-card-secondary {
+  border-color: #dee2e6;
+  background: #f8f9fa;
+  box-shadow: var(--cache-shadow-sm);
+}
+
+/* Модификаторы состояний */
+.cache-card-high-priority {
+  border-width: 3px;
+  box-shadow: 0 0 0 2px rgba(255, 193, 7, 0.2);
+}
+
+.cache-card-expiring-soon {
+  border-color: var(--cache-warning-color);
+  box-shadow: 0 0 0 2px rgba(253, 126, 20, 0.2);
+}
+
+.cache-card-expiring-soon .status-badge {
+  animation: pulseWarning 2s infinite;
+}
+
+.cache-card-empty {
+  opacity: 0.8;
+}
+
+.cache-card-empty .card-content {
+  opacity: 0.6;
+}
+
+.cache-card-loading {
+  pointer-events: none;
+}
+
+.cache-card-loading::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+/* Бейджи и индикаторы */
+.cache-badge {
+  padding: 6px 12px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cache-badge-priority {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: bold;
+  color: white;
+  min-width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cache-badge-priority-1 { background: #dc3545; }
+.cache-badge-priority-2 { background: #fd7e14; }
+.cache-badge-priority-3 { background: #ffc107; color: #212529; }
+.cache-badge-priority-4 { background: #20c997; }
+.cache-badge-priority-5 { background: #007bff; }
+
+.cache-status-active {
+  background: #d4edda;
+  color: #155724;
+}
+
+.cache-status-expired {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.cache-status-empty {
+  background: #e2e3e5;
+  color: #383d41;
+}
+
+/* Цветовые индикаторы метрик */
+.cache-metric-green {
+  color: #28a745;
+  font-weight: 700;
+}
+
+.cache-metric-yellow {
+  color: #fd7e14;
+  font-weight: 700;
+}
+
+.cache-metric-red {
+  color: #dc3545;
+  font-weight: 700;
+}
+
+.cache-metric-gray {
+  color: #6c757d;
+  font-weight: 500;
+}
+
+/* Кнопки действий */
+.cache-button {
+  padding: 12px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--cache-transition);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 140px;
+  position: relative;
+
+  &:focus {
+    outline: 2px solid #007bff;
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  &.loading {
+    pointer-events: none;
+
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid transparent;
+      border-top: 2px solid currentColor;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-right: 8px;
+    }
+  }
+}
+
+.cache-button-create {
+  background: linear-gradient(135deg, #28a745, #20c997);
+  color: white;
+  box-shadow: 0 2px 4px rgba(40, 167, 69, 0.2);
+
+  &:hover:not(:disabled) {
+    background: linear-gradient(135deg, #218838, #1aa085);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(40, 167, 69, 0.3);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+}
+
+.cache-button-clear {
+  background: linear-gradient(135deg, #dc3545, #c82333);
+  color: white;
+  box-shadow: 0 2px 4px rgba(220, 53, 69, 0.2);
+
+  &:hover:not(.disabled) {
+    background: linear-gradient(135deg, #bd2130, #a02622);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+}
+
+.cache-button-details {
+  background: #6c757d;
+  color: white;
+  min-width: 48px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  padding: 0;
+
+  &:hover {
+    background: #5a6268;
+    transform: scale(1.05);
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+}
+
+/* Модальные окна */
+.cache-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.cache-modal {
+  background: white;
+  border-radius: var(--cache-border-radius);
+  box-shadow: var(--cache-shadow-lg);
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  animation: modalSlideIn 0.3s ease-out;
+}
+
+.cache-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #e0e0e0;
+
+  h3 {
+    margin: 0;
+    color: #333;
+  }
+}
+
+.cache-modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  color: #666;
+  transition: background-color 0.2s ease;
+
+  &:hover {
+    background: #f8f9fa;
+    color: #333;
+  }
+}
+
+.cache-modal-body {
+  padding: 20px;
+}
+
+.cache-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 20px;
+  border-top: 1px solid #e0e0e0;
+  background: #f8f9fa;
+}
+
+/* Анимации */
+@keyframes cardFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulseWarning {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.8;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Утилиты для адаптивности */
+@media (max-width: 768px) {
+  .cache-card-base {
+    border-radius: var(--cache-border-radius-sm);
+  }
+
+  .cache-button {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .cache-modal {
+    margin: 20px;
+  }
+}
+
+/* Темная тема (опционально) */
+@media (prefers-color-scheme: dark) {
+  .cache-card-base {
+    background: #2d3748;
+    border-color: #4a5568;
+    color: #e2e8f0;
+  }
+
+  .cache-card-primary {
+    background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
+    border-color: #3182ce;
+  }
+
+  .cache-card-secondary {
+    background: #1a202c;
+    border-color: #4a5568;
+  }
+}
+
+/* Печать */
+@media print {
+  .cache-card-base {
+    box-shadow: none;
+    border: 1px solid #000;
+    break-inside: avoid;
+  }
+
+  .cache-button {
+    display: none;
+  }
+}
