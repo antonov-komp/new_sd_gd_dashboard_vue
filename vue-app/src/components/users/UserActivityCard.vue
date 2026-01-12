@@ -1,16 +1,17 @@
 <template>
-  <div class="user-activity-card" :class="cardClass">
+  <div class="user-activity-card" :class="cardClass" v-if="entry">
     <div class="activity-icon">
       <span v-if="entry.type === 'app_entry'">🚪</span>
       <span v-else-if="entry.type === 'page_visit'">📄</span>
+      <span v-else>❓</span>
     </div>
-    
+
     <div class="activity-content">
       <div class="activity-header">
         <span class="user-name">{{ entry.user_name || `User #${entry.user_id}` }}</span>
         <span class="activity-time">{{ formatTime(entry.timestamp) }}</span>
       </div>
-      
+
       <div class="activity-details">
         <span v-if="entry.type === 'app_entry'" class="activity-type">
           Открыл приложение
@@ -18,10 +19,21 @@
         <span v-else-if="entry.type === 'page_visit'" class="activity-type">
           Открыл страницу: {{ entry.route_title || entry.route_path || entry.route_name || 'Неизвестная страница' }}
         </span>
+        <span v-else class="activity-type">
+          Неизвестное действие
+        </span>
       </div>
-      
+
       <div v-if="entry.type === 'page_visit' && entry.from_path" class="activity-from">
         С: {{ entry.from_name || entry.from_path }}
+      </div>
+    </div>
+  </div>
+  <div v-else class="user-activity-card error-card">
+    <div class="activity-icon">⚠️</div>
+    <div class="activity-content">
+      <div class="activity-details">
+        <span class="activity-type error">Ошибка загрузки данных</span>
       </div>
     </div>
   </div>
@@ -38,6 +50,7 @@ export default {
   },
   computed: {
     cardClass() {
+      if (!this.entry) return {};
       return {
         'activity-entry': this.entry.type === 'app_entry',
         'activity-visit': this.entry.type === 'page_visit'
@@ -47,16 +60,22 @@ export default {
   methods: {
     formatTime(timestamp) {
       if (!timestamp) return 'Неизвестно';
-      
-      const date = new Date(timestamp);
-      return date.toLocaleString('ru-RU', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-      });
+
+      try {
+        const date = new Date(timestamp);
+        if (isNaN(date.getTime())) return 'Неизвестно';
+
+        return date.toLocaleString('ru-RU', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        });
+      } catch {
+        return 'Неизвестно';
+      }
     }
   }
 };

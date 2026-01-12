@@ -169,13 +169,27 @@ export default {
       destroyChart(); // Уничтожаем предыдущую диаграмму
 
       const ctx = chartCanvas.value.getContext('2d');
-      const ChartComponent = getChartComponent(selectedChartType.value);
 
-      chartInstance.value = new ChartComponent({
-        ctx,
-        data: chartData.value,
-        options: getChartOptions()
-      });
+      // Проверяем, что контекст canvas доступен
+      if (!ctx) {
+        console.error('[DistributionChart] Canvas context not available');
+        error.value = 'Ошибка инициализации диаграммы';
+        return;
+      }
+
+      try {
+        const ChartComponent = getChartComponent(selectedChartType.value);
+
+        chartInstance.value = new ChartComponent({
+          ctx,
+          data: chartData.value,
+          options: getChartOptions()
+        });
+      } catch (err) {
+        console.error('[DistributionChart] Error creating chart:', err);
+        error.value = 'Ошибка создания диаграммы';
+        chartInstance.value = null;
+      }
     };
 
     // Получение компонента диаграммы
@@ -192,6 +206,11 @@ export default {
     const getChartOptions = () => {
       const baseOptions = {
         responsive: true,
+        devicePixelRatio: 1, // Предотвращает проблемы с высоким DPI
+        animation: {
+          duration: 300, // Уменьшаем анимацию для производительности
+          easing: 'easeOutQuart'
+        },
         maintainAspectRatio: false,
         plugins: {
           legend: {

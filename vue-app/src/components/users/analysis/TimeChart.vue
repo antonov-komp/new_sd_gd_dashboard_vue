@@ -58,6 +58,7 @@ import {
 } from 'chart.js';
 import { Line } from 'vue-chartjs';
 import { VisualizationHelpers } from '@/utils/visualization-helpers.js';
+import { ActivityAnalyticsService } from '@/services/activity-analytics-service.js';
 
 // Регистрируем компоненты Chart.js
 ChartJS.register(
@@ -114,16 +115,35 @@ export default {
 
     // Вычисляемые данные графика
     const chartData = computed(() => {
-      if (!props.data || props.data.length === 0) {
-        return VisualizationHelpers.getEmptyTimeChartData();
-      }
-
       try {
-        return VisualizationHelpers.prepareTimeChartData(
+        // Проверяем входные данные
+        if (!Array.isArray(props.data)) {
+          return VisualizationHelpers.getEmptyTimeChartData();
+        }
+
+        if (props.data.length === 0) {
+          return VisualizationHelpers.getEmptyTimeChartData();
+        }
+
+        // Проверяем, что все элементы массива - объекты
+        if (!props.data.every(item => typeof item === 'object' && item !== null)) {
+          console.warn('[TimeChart] Invalid data format, some items are not objects');
+          return VisualizationHelpers.getEmptyTimeChartData();
+        }
+
+        const preparedData = VisualizationHelpers.prepareTimeChartData(
           props.data,
           selectedGroupBy.value,
-          { ActivityAnalyticsService: null } // Можно передать если нужно
+          { ActivityAnalyticsService }
         );
+
+        // Проверяем, что подготовленные данные валидны
+        if (!preparedData || !preparedData.labels || !preparedData.datasets) {
+          console.warn('[TimeChart] Prepared data is invalid');
+          return VisualizationHelpers.getEmptyTimeChartData();
+        }
+
+        return preparedData;
       } catch (err) {
         console.error('[TimeChart] Error preparing chart data:', err);
         error.value = 'Ошибка подготовки данных графика';
@@ -151,61 +171,80 @@ export default {
 
       const ctx = chartCanvas.value.getContext('2d');
 
-      chartInstance.value = new ChartJS(ctx, {
-        type: 'line',
-        data: chartData.value,
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          height: props.height,
-          interaction: {
-            intersect: false,
-            mode: 'index'
-          },
-          plugins: {
-            legend: {
-              display: true,
-              position: 'top'
+      // Проверяем, что контекст canvas доступен
+      if (!ctx) {
+        console.error('[TimeChart] Canvas context not available');
+        error.value = 'Ошибка инициализации графика';
+        return;
+      }
+
+      try {
+        chartInstance.value = new ChartJS(ctx, {
+          type: 'line',
+          data: chartData.value,
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            devicePixelRatio: 1, // Предотвращает проблемы с высоким DPI
+            animation: {
+              duration: 300, // Уменьшаем анимацию для производительности
+              easing: 'easeOutQuart'
             },
-            tooltip: {
-              enabled: props.interactive,
-              callbacks: {
-                label: (context) => {
-                  const label = context.dataset.label || '';
-                  const value = context.parsed.y;
-                  return `${label}: ${value}`;
-                },
-                title: (contexts) => {
-                  if (contexts.length === 0) return '';
-                  return contexts[0].label;
+            plugins: {
+              legend: {
+                display: true,
+                position: 'top'
+              },
+              tooltip: {
+                enabled: props.interactive,
+                mode: 'index',
+                intersect: false,
+                callbacks: {
+                  label: (context) => {
+                    const label = context.dataset.label || '';
+                    const value = context.parsed.y;
+                    return `${label}: ${value}`;
+                  },
+                  title: (contexts) => {
+                    if (contexts.length === 0) return '';
+                    return contexts[0].label;
+                  }
                 }
               }
-            }
-          },
-          scales: {
-            x: {
-              display: true,
-              title: {
+            },
+            scales: {
+              x: {
                 display: true,
-                text: getXAxisLabel()
+                title: {
+                  display: true,
+                  text: getXAxisLabel()
+                }
+              },
+              y: {
+                display: true,
+                beginAtZero: true,
+                title: {
+                  display: true,
+                  text: 'Количество действий'
+                },
+                ticks: {
+                  precision: 0
+                }
               }
             },
-            y: {
-              display: true,
-              beginAtZero: true,
-              title: {
-                display: true,
-                text: 'Количество действий'
-              },
-              ticks: {
-                precision: 0
-              }
-            }
-          },
-          onClick: props.interactive ? handleChartClick : null,
-          onHover: props.interactive ? handleChartHover : null
-        }
-      });
+            interaction: {
+              intersect: false,
+              mode: 'index'
+            },
+            onClick: props.interactive ? handleChartClick : null,
+            onHover: props.interactive ? handleChartHover : null
+          }
+        });
+      } catch (err) {
+        console.error('[TimeChart] Error creating chart:', err);
+        error.value = 'Ошибка создания графика';
+        chartInstance.value = null;
+      }
     };
 
     // Обработчик клика по графику
@@ -242,15 +281,23 @@ export default {
 
     // Обновление графика
     const updateChart = async () => {
-      if (chartInstance.value) {
+      if (chartInstance.value && chartData.value) {
         loading.value = true;
         error.value = null;
 
         try {
-          await nextTick(); // Ждем обновления данных
-          chartInstance.value.data = chartData.value;
-          chartInstance.value.options.scales.x.title.text = getXAxisLabel();
-          chartInstance.value.update('none'); // Плавное обновление без анимации
+          // Проверяем, изменились ли данные
+          const currentData = chartInstance.value.data;
+          const newData = chartData.value;
+
+          // Обновляем только если данные действительно изменились
+          const dataChanged = JSON.stringify(currentData) !== JSON.stringify(newData);
+
+          if (dataChanged) {
+            chartInstance.value.data = newData;
+            chartInstance.value.options.scales.x.title.text = getXAxisLabel();
+            chartInstance.value.update('none'); // Плавное обновление без анимации
+          }
         } catch (err) {
           console.error('[TimeChart] Error updating chart:', err);
           error.value = 'Ошибка обновления графика';
@@ -258,6 +305,15 @@ export default {
           loading.value = false;
         }
       }
+    };
+
+    // Пересоздание графика при изменении данных
+    const recreateChart = async () => {
+      if (chartInstance.value) {
+        destroyChart();
+      }
+      await nextTick();
+      createChart();
     };
 
     // Уничтожение графика
@@ -269,9 +325,18 @@ export default {
     };
 
     // Наблюдатели
-    watch(() => props.data, () => {
-      updateChart();
+    watch(() => props.data, (newData, oldData) => {
+      // Проверяем, действительно ли данные изменились
+      if (JSON.stringify(newData) !== JSON.stringify(oldData)) {
+        recreateChart();
+      }
     }, { deep: true });
+
+    watch(() => selectedGroupBy.value, (newGroupBy, oldGroupBy) => {
+      if (newGroupBy !== oldGroupBy) {
+        recreateChart();
+      }
+    });
 
     watch(() => props.groupBy, (newValue) => {
       selectedGroupBy.value = newValue;

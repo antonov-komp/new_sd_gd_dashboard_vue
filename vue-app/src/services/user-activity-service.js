@@ -15,7 +15,58 @@ const activityCache = new Map();
 const CACHE_TTL = 5 * 60 * 1000; // 5 минут
 
 export class UserActivityService {
-  
+
+  /**
+   * Валидация и очистка данных активности
+   *
+   * @param {Array} data - Массив записей активности
+   * @returns {Array} Очищенные и валидные данные
+   */
+  static validateAndCleanActivityData(data) {
+    if (!Array.isArray(data)) {
+      console.warn('[UserActivityService] Invalid data format: not an array');
+      return [];
+    }
+
+    return data.filter(entry => {
+      // Проверяем, что entry существует и является объектом
+      if (!entry || typeof entry !== 'object') {
+        console.warn('[UserActivityService] Invalid entry: not an object', entry);
+        return false;
+      }
+
+      // Проверяем обязательные поля
+      if (!entry.user_id) {
+        console.warn('[UserActivityService] Invalid entry: missing user_id', entry);
+        return false;
+      }
+
+      if (!entry.timestamp) {
+        console.warn('[UserActivityService] Invalid entry: missing timestamp', entry);
+        return false;
+      }
+
+      // Проверяем валидность timestamp
+      const timestamp = new Date(entry.timestamp);
+      if (isNaN(timestamp.getTime())) {
+        console.warn('[UserActivityService] Invalid entry: invalid timestamp', entry.timestamp);
+        return false;
+      }
+
+      return true;
+    }).map(entry => ({
+      ...entry,
+      user_id: Number(entry.user_id),
+      timestamp: entry.timestamp,
+      type: entry.type || 'unknown',
+      route_path: entry.route_path || null,
+      route_title: entry.route_title || null,
+      route_name: entry.route_name || null,
+      user_name: entry.user_name || null,
+      user_agent: entry.user_agent || null
+    }));
+  }
+
   /**
    * Получение активности пользователя
    * 
@@ -89,7 +140,10 @@ export class UserActivityService {
       const result = await response.json();
 
       if (result.success) {
-        const data = result.data || [];
+        let data = result.data || [];
+
+        // Валидируем и очищаем данные
+        data = this.validateAndCleanActivityData(data);
 
         // Сохраняем в кеш
         if (useCache) {

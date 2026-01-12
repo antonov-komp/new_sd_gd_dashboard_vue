@@ -238,9 +238,16 @@ export class VisualizationHelpers {
    * Расчёт распределения данных
    */
   static calculateDistribution(activity, type) {
+    if (!Array.isArray(activity)) {
+      return {};
+    }
+
     const distribution = {};
 
     activity.forEach(entry => {
+      // Проверяем, что entry существует
+      if (!entry) return;
+
       let key;
       switch (type) {
         case 'activity_types':
@@ -272,10 +279,15 @@ export class VisualizationHelpers {
    * Fallback метод группировки по времени (если нет ActivityAnalyticsService)
    */
   static fallbackGroupByTime(activity, groupBy) {
+    if (!Array.isArray(activity)) {
+      return [];
+    }
+
     const groups = new Map();
 
     activity.forEach(entry => {
-      if (!entry.timestamp) return;
+      // Проверяем, что entry существует и имеет timestamp
+      if (!entry || !entry.timestamp) return;
 
       let key;
       const date = new Date(entry.timestamp);

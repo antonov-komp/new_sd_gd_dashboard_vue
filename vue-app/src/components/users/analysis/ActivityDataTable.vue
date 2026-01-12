@@ -115,6 +115,7 @@
         class="activity-card"
         :class="getRowClass(entry)"
         @click="handleRowClick(entry)"
+        v-if="entry"
       >
         <div class="card-header">
           <div class="card-icon">{{ getActionIcon(entry.type) }}</div>
@@ -275,21 +276,31 @@ export default {
     }, 300);
 
     const filteredData = computed(() => {
+      if (!Array.isArray(props.data)) {
+        return [];
+      }
+
       let result = [...props.data];
 
       // Применяем поиск
       if (searchQuery.value.trim()) {
         const query = searchQuery.value.toLowerCase();
-        result = result.filter(entry =>
-          (entry.user_name || '').toLowerCase().includes(query) ||
-          (entry.route_title || '').toLowerCase().includes(query) ||
-          (entry.route_path || '').toLowerCase().includes(query) ||
-          (entry.type || '').toLowerCase().includes(query)
-        );
+        result = result.filter(entry => {
+          // Проверяем, что entry существует
+          if (!entry) return false;
+
+          return (entry.user_name || '').toLowerCase().includes(query) ||
+                 (entry.route_title || '').toLowerCase().includes(query) ||
+                 (entry.route_path || '').toLowerCase().includes(query) ||
+                 (entry.type || '').toLowerCase().includes(query);
+        });
       }
 
       // Сортировка
       result.sort((a, b) => {
+        // Проверяем существование объектов
+        if (!a || !b) return 0;
+
         let aVal = a[sortBy.value];
         let bVal = b[sortBy.value];
 
@@ -416,10 +427,12 @@ export default {
     };
 
     const getEntryKey = (entry) => {
-      return `${entry.timestamp}-${entry.user_id}-${entry.type}-${entry.route_path || ''}`;
+      if (!entry) return 'undefined-entry';
+      return `${entry.timestamp || 'no-timestamp'}-${entry.user_id || 'no-user'}-${entry.type || 'no-type'}-${entry.route_path || ''}`;
     };
 
     const getRowClass = (entry) => {
+      if (!entry) return {};
       return {
         'row-app-entry': entry.type === 'app_entry',
         'row-page-visit': entry.type === 'page_visit'
@@ -449,10 +462,13 @@ export default {
     };
 
     const getActionIcon = (type) => {
+      if (!type) return '❓';
       return VisualizationHelpers.getActionIcon(type);
     };
 
     const getActionDescription = (entry) => {
+      if (!entry) return 'Неизвестное действие';
+
       switch (entry.type) {
         case 'app_entry':
           return 'Открытие приложения';
