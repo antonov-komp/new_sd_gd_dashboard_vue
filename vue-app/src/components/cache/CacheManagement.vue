@@ -36,14 +36,6 @@
       </p>
 
       <div v-if="(primaryModules || []).length > 0" class="modules-container">
-        <!-- Debug info -->
-        <div style="background: #f0f8ff; padding: 10px; margin: 10px 0; border: 1px solid #007bff; border-radius: 4px;">
-          <strong>DEBUG: Primary modules loaded: {{ primaryModules.length }}</strong><br>
-          <strong>Individual modules: {{ individualPrimaryModules.length }}</strong><br>
-          <strong>Time tracking modules: {{ timeTrackingModules.length }}</strong><br>
-          <strong>IDs:</strong> {{ primaryModules.map(m => m.id).join(', ') }}
-        </div>
-
         <!-- Отдельные основные модули с новой визуальной иерархией -->
         <div class="modules-grid" v-if="individualPrimaryModules.length > 0">
           <div v-for="module in individualPrimaryModules" :key="module.id" class="module-wrapper">

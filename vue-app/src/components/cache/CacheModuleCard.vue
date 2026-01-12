@@ -870,7 +870,7 @@ export default {
 }
 
 .expiring-soon .status-badge {
-  animation: pulseWarning 2s infinite;
+  /* Анимация дыхания убрана по требованию пользователя */
 }
 
 .empty-cache {
@@ -911,16 +911,7 @@ export default {
   }
 }
 
-@keyframes pulseWarning {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(1.05);
-    opacity: 0.8;
-  }
-}
+/* @keyframes pulseWarning - удалено по требованию пользователя */
 
 /* Заголовок карточки */
 .card-header {
@@ -1492,7 +1483,7 @@ export default {
 .cache-state-critical::before {
   background-color: #fd7e14;
   box-shadow: 0 0 6px rgba(253, 126, 20, 0.4);
-  animation: pulse-warning 2s infinite;
+  /* Анимация дыхания убрана по требованию пользователя */
 }
 
 .cache-state-expired::before {
@@ -1520,7 +1511,7 @@ export default {
 
 .cache-state-critical .cache-state-text {
   color: #6f5328;
-  animation: pulse-text 2s infinite;
+  /* Анимация дыхания убрана по требованию пользователя */
 }
 
 .cache-state-expired .cache-state-text {
@@ -1531,25 +1522,9 @@ export default {
   color: #383d41;
 }
 
-@keyframes pulse-warning {
-  0%, 100% {
-    opacity: 1;
-    transform: translateY(-50%) scale(1);
-  }
-  50% {
-    opacity: 0.7;
-    transform: translateY(-50%) scale(1.2);
-  }
-}
+/* @keyframes pulse-warning - удалено по требованию пользователя */
 
-@keyframes pulse-text {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.8;
-  }
-}
+/* @keyframes pulse-text - удалено по требованию пользователя */
 
 /* Общие стили для карточки с состояниями кеша */
 .cache-module-card.cache-state-critical {
