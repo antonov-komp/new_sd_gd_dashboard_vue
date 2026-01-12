@@ -21,7 +21,7 @@
     <div class="test-container">
         <h1>Тест системы секторов</h1>
 
-        <!-- Мокаем сектор 1С -->
+        <!-- Реальный сектор 1С -->
         <div class="sector-container sector-1c">
             <div class="sector-header">
                 <div class="sector-header-left">
@@ -38,42 +38,82 @@
 
             <div class="sector-content">
                 <div class="sector-modules-grid">
-                    <div class="module-tile">
+                    <!-- Дашборд сектора 1С -->
+                    <div class="sector-module-adapter module-dashboard-sector-1c">
                         <div class="module-header">
                             <div class="module-icon">⚙️</div>
                             <div class="module-info">
                                 <h3>Дашборд сектора 1С</h3>
                                 <p>Панель управления сектором 1С с основными метриками</p>
                             </div>
+                            <div class="module-actions">
+                                <button class="btn-module-fullscreen" title="Открыть в полном размере">⛶</button>
+                            </div>
+                        </div>
+                        <div class="module-content">
+                            <div class="module-loading">
+                                <div class="loading-spinner"></div>
+                                <p>Загрузка Дашборд сектора 1С...</p>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="module-tile">
+                    <!-- Управление тикетами сектора 1С -->
+                    <div class="sector-module-adapter module-tickets-management-sector-1c">
                         <div class="module-header">
                             <div class="module-icon">📋</div>
                             <div class="module-info">
                                 <h3>Управление тикетами сектора 1С</h3>
                                 <p>Управление заявками и задачами сектора 1С</p>
                             </div>
+                            <div class="module-actions">
+                                <button class="btn-module-fullscreen" title="Открыть в полном размере">⛶</button>
+                            </div>
+                        </div>
+                        <div class="module-content">
+                            <div class="module-loading">
+                                <div class="loading-spinner"></div>
+                                <p>Загрузка Управление тикетами сектора 1С...</p>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="module-tile">
+                    <!-- График состояния -->
+                    <div class="sector-module-adapter module-state-chart">
                         <div class="module-header">
                             <div class="module-icon">📊</div>
                             <div class="module-info">
                                 <h3>График состояния</h3>
                                 <p>Визуализация текущего состояния систем сектора 1С</p>
                             </div>
+                            <div class="module-actions">
+                                <button class="btn-module-fullscreen" title="Открыть в полном размере">⛶</button>
+                            </div>
+                        </div>
+                        <div class="module-content">
+                            <div class="module-loading">
+                                <div class="loading-spinner"></div>
+                                <p>Загрузка График состояния...</p>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="module-tile">
+                    <!-- Визуализация изменений сост -->
+                    <div class="sector-module-adapter module-changes-visualization">
                         <div class="module-header">
                             <div class="module-icon">📈</div>
                             <div class="module-info">
                                 <h3>Визуализация изменений сост</h3>
                                 <p>Отображение изменений состояния в секторе 1С</p>
+                            </div>
+                            <div class="module-actions">
+                                <button class="btn-module-fullscreen" title="Открыть в полном размере">⛶</button>
+                            </div>
+                        </div>
+                        <div class="module-content">
+                            <div class="module-loading">
+                                <div class="loading-spinner"></div>
+                                <p>Загрузка Визуализация изменений сост...</p>
                             </div>
                         </div>
                     </div>

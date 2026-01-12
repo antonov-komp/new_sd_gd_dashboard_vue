@@ -1,31 +1,75 @@
 <template>
   <div class="unified-user-management">
-    <div class="header">
-      <h1>🎯 TASK-089: Единый интерфейс управления пользователями</h1>
-      <p>✅ Загрузка прошла успешно! Старый интерфейс заменен новым.</p>
-    </div>
 
-    <div class="status">
-      <div class="status-item">✅ Старый интерфейс удален</div>
-      <div class="status-item">✅ Новый компонент работает</div>
-      <div class="status-item">🔄 Полная функциональность в разработке</div>
-    </div>
+    <!-- Drill-down навигация -->
+    <DrillDownNavigation
+      :breadcrumbs="breadcrumbs"
+      :is-loading="loading"
+      @navigate="handleBreadcrumbNavigate"
+      @back="handleGoBack"
+    />
 
-    <div class="next-steps">
-      <h3>Следующие шаги:</h3>
-      <ul>
-        <li>🔧 Интеграция drill-down навигации</li>
-        <li>📊 Добавление панели анализа</li>
-        <li>⚙️ Реализация управления правами</li>
-        <li>🎨 Финализация UI/UX</li>
-      </ul>
+    <!-- Основная сетка интерфейса -->
+    <div class="management-grid">
+      <!-- Контекстная боковая панель -->
+      <ContextSidebar
+        :context="currentContext"
+        :global-metrics="globalMetrics"
+        :selected-user="selectedUser"
+        @metric-click="handleMetricClick"
+      />
+
+      <!-- Основная область контента -->
+      <div class="main-content-area">
+        <!-- Панель списка пользователей -->
+        <UserListPanel
+          v-if="currentContext === 'global'"
+          :users="users"
+          :loading="loading"
+          :pagination="{ current_page: 1, total: users.length, total_pages: 1 }"
+          :filters="filters"
+          :can-edit-permissions="true"
+          :can-delete="false"
+          @user-select="handleUserSelect"
+        />
+
+        <!-- Панель анализа пользователя -->
+        <AnalysisPanel
+          v-else-if="currentContext === 'user'"
+          :user="selectedUser"
+          @back="handleGoBack"
+        />
+
+        <!-- Панель управления правами -->
+        <ManagementPanel
+          v-else-if="currentContext === 'management'"
+          @back="handleGoBack"
+        />
+      </div>
     </div>
   </div>
 </template>
 
 <script>
+import { ref, computed } from 'vue';
+
+// Импорт компонентов
+import DrillDownNavigation from '../shared/DrillDownNavigation.vue';
+import ContextSidebar from '../shared/ContextSidebar.vue';
+import UserListPanel from './UserListPanel.vue';
+import AnalysisPanel from './AnalysisPanel.vue';
+import ManagementPanel from './ManagementPanel.vue';
+
 export default {
   name: 'UnifiedUserManagement',
+
+  components: {
+    DrillDownNavigation,
+    ContextSidebar,
+    UserListPanel,
+    AnalysisPanel,
+    ManagementPanel
+  },
 
   props: {
     config: {
@@ -40,92 +84,210 @@ export default {
 
   setup(props) {
     console.log('[UnifiedUserManagement] Component loaded successfully', props.config);
-    return {};
+
+    // Реактивное состояние
+    const currentContext = ref('global');
+    const selectedUser = ref(null);
+    const loading = ref(false);
+
+    // Mock данные для демонстрации
+    const users = ref([
+      {
+        id: 1,
+        name: 'Иван Иванов',
+        email: 'ivan@example.com',
+        departments: [{ id: 369, name: 'Битрикс24 отдел', color: '#2196F3' }],
+        is_admin: true,
+        activity_stats: {
+          total_actions: 156,
+          last_activity: new Date().toISOString(),
+          activity_score: 85
+        },
+        status: 'online'
+      },
+      {
+        id: 2,
+        name: 'Петр Петров',
+        email: 'petr@example.com',
+        departments: [{ id: 366, name: 'Сектор 1С', color: '#4CAF50' }],
+        is_admin: false,
+        activity_stats: {
+          total_actions: 89,
+          last_activity: new Date(Date.now() - 86400000).toISOString(),
+          activity_score: 67
+        },
+        status: 'away'
+      },
+      {
+        id: 3,
+        name: 'Анна Сидорова',
+        email: 'anna@example.com',
+        departments: [],
+        is_admin: false,
+        activity_stats: {
+          total_actions: 23,
+          last_activity: new Date(Date.now() - 604800000).toISOString(),
+          activity_score: 35
+        },
+        status: 'offline'
+      }
+    ]);
+
+    const filters = ref({
+      search: '',
+      department_ids: [],
+      activity_filter: 'all',
+      sort_by: 'last_activity',
+      sort_order: 'desc'
+    });
+
+    const globalMetrics = ref([
+      { id: 'total_users', label: 'Всего пользователей', value: users.value.length, change: 5.2 },
+      { id: 'active_users', label: 'Активных сегодня', value: users.value.filter(u => u.status === 'online').length, change: 12.1 },
+      { id: 'new_users', label: 'Новых сегодня', value: 1, change: -2.3 }
+    ]);
+
+    // Breadcrumbs для навигации
+    const breadcrumbs = computed(() => {
+      const crumbs = [
+        {
+          id: 'global',
+          label: 'Управление пользователями',
+          icon: 'UsersIcon',
+          action: () => switchToContext('global')
+        }
+      ];
+
+      if (currentContext.value === 'user' && selectedUser.value) {
+        crumbs.push({
+          id: `user-${selectedUser.value.id}`,
+          label: selectedUser.value.name,
+          icon: 'UserIcon',
+          action: () => selectUser(selectedUser.value)
+        });
+      }
+
+      if (currentContext.value === 'management') {
+        crumbs.push({
+          id: 'management',
+          label: 'Управление правами',
+          icon: 'SettingsIcon',
+          action: () => switchToContext('management')
+        });
+      }
+
+      return crumbs;
+    });
+
+    // Методы
+    const switchToContext = (context, data = {}) => {
+      currentContext.value = context;
+      if (data.user) {
+        selectedUser.value = data.user;
+      }
+      console.log(`[UnifiedUserManagement] Switched to context: ${context}`, data);
+    };
+
+    const selectUser = (user) => {
+      selectedUser.value = user;
+      switchToContext('user', { user });
+    };
+
+    const handleUserSelect = (user) => {
+      selectUser(user);
+    };
+
+    const handleBreadcrumbNavigate = (crumb) => {
+      if (crumb.action) {
+        crumb.action();
+      }
+    };
+
+    const handleGoBack = () => {
+      if (currentContext.value === 'user' || currentContext.value === 'management') {
+        switchToContext('global');
+        selectedUser.value = null;
+      }
+      console.log(`[UnifiedUserManagement] Returned to global context`);
+    };
+
+    const handleMetricClick = (metric) => {
+      console.log('Metric clicked:', metric);
+      // Здесь можно добавить логику фильтрации по метрике
+    };
+
+    return {
+      // Состояние
+      currentContext,
+      selectedUser,
+      loading,
+      users,
+      filters,
+      globalMetrics,
+      breadcrumbs,
+
+      // Методы
+      handleUserSelect,
+      handleBreadcrumbNavigate,
+      handleGoBack,
+      handleMetricClick
+    };
   }
 };
 </script>
 
 <style scoped>
 .unified-user-management {
-  padding: 40px;
-  max-width: 800px;
-  margin: 0 auto;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-}
-
-.header {
-  text-align: center;
-  margin-bottom: 40px;
-}
-
-.header h1 {
-  color: #333;
-  font-size: 28px;
-  font-weight: 700;
-  margin-bottom: 10px;
-}
-
-.header p {
-  color: #28a745;
-  font-size: 16px;
-  font-weight: 500;
-}
-
-.status {
-  background: #f8f9fa;
-  border-radius: 8px;
-  padding: 20px;
-  margin-bottom: 30px;
-}
-
-.status-item {
+  height: 100vh;
   display: flex;
-  align-items: center;
-  padding: 8px 0;
-  font-size: 14px;
-  color: #495057;
+  flex-direction: column;
+  background: var(--um-bg-primary, #ffffff);
+  overflow: hidden;
 }
 
-.status-item:before {
-  content: '';
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  margin-right: 10px;
-  background: #28a745;
+.management-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 0;
+  overflow: hidden;
 }
 
-.next-steps {
-  background: #e3f2fd;
-  border-radius: 8px;
-  padding: 20px;
+.main-content-area {
+  padding: 24px;
+  overflow-y: auto;
+  background: var(--um-bg-primary, #ffffff);
 }
 
-.next-steps h3 {
-  margin: 0 0 15px 0;
-  color: #1976d2;
-  font-size: 18px;
+.management-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 0;
+  overflow: hidden;
 }
 
-.next-steps ul {
-  margin: 0;
-  padding-left: 20px;
-}
-
-.next-steps li {
-  margin-bottom: 8px;
-  color: #424242;
+.main-content-area {
+  padding: 24px;
+  overflow-y: auto;
+  background: var(--um-bg-primary, #ffffff);
 }
 
 /* Адаптивность */
+@media (max-width: 1024px) {
+  .management-grid {
+    grid-template-columns: 280px 1fr;
+  }
+}
+
 @media (max-width: 768px) {
-  .unified-user-management {
-    padding: 20px;
+  .management-grid {
+    display: flex;
+    flex-direction: column;
   }
 
-  .header h1 {
-    font-size: 24px;
+  .main-content-area {
+    padding: 16px;
   }
 }
 </style>

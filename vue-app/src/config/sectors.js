@@ -18,10 +18,47 @@ export const SECTORS_CONFIG = {
     backgroundColor: '#f8f9fa',
     filterValue: '1C', // UF_CRM_7_TYPE_PRODUCT = '1C'
     modules: [
-      'DashboardSector1C',      // ⚙️ 📋 Дашборд сектора 1С
-      'TicketsManagementSector1C', // Управление тикетами сектора 1С
-      'StateChart',             // 📊 График состояния
-      'ChangesVisualization'    // Визуализация изменений сост
+      {
+        id: 'dashboard-sector-1c',
+        title: 'Дашборд сектора 1С',
+        description: 'Панель управления сектором 1С с основными метриками',
+        icon: '⚙️',
+        component: 'SectorDashboard',
+        componentPath: '@/components/SectorDashboard.vue',
+        route: '/dashboard/sector-1c',
+        category: 'management',
+        props: { sectorId: '1c' }
+      },
+      {
+        id: 'tickets-management-sector-1c',
+        title: 'Управление тикетами сектора 1С',
+        description: 'Управление заявками и задачами сектора 1С',
+        icon: '📋',
+        component: 'TicketsTimeTrackingDashboard',
+        componentPath: '@/components/tickets-time-tracking/TicketsTimeTrackingDashboard.vue',
+        route: '/tickets/time-tracking',
+        category: 'tickets'
+      },
+      {
+        id: 'state-chart',
+        title: 'График состояния',
+        description: 'Визуализация текущего состояния систем сектора 1С',
+        icon: '📊',
+        component: 'GraphStateDashboard',
+        componentPath: '@/components/graph-state/GraphStateDashboard.vue',
+        route: '/graph/state',
+        category: 'analytics'
+      },
+      {
+        id: 'changes-visualization',
+        title: 'Визуализация изменений сост',
+        description: 'Отображение изменений состояния в секторе 1С',
+        icon: '📈',
+        component: 'GraphAdmissionClosureDashboard',
+        componentPath: '@/components/graph-admission-closure/GraphAdmissionClosureDashboard.vue',
+        route: '/graph/admission-closure',
+        category: 'analytics'
+      }
     ],
     features: ['smart-process-140', '1c-integration'],
     order: 1
@@ -38,9 +75,17 @@ export const SECTORS_CONFIG = {
     backgroundColor: '#f8fff8',
     filterValue: 'PDM', // UF_CRM_7_TYPE_PRODUCT = 'PDM'
     modules: [
-      // Модули будут добавлены по мере реализации
-      // 'PdmDashboard',
-      // 'PdmTicketsManagement'
+      {
+        id: 'dashboard-sector-pdm',
+        title: 'Дашборд сектора PDM',
+        description: 'Панель управления сектором PDM с основными метриками',
+        icon: '🔧',
+        component: 'SectorDashboard',
+        componentPath: '@/components/SectorDashboard.vue',
+        route: '/dashboard/sector-pdm',
+        category: 'management',
+        props: { sectorId: 'pdm' }
+      }
     ],
     features: ['pdm-integration'],
     order: 2
@@ -57,10 +102,17 @@ export const SECTORS_CONFIG = {
     backgroundColor: '#fffef8',
     filterValue: 'Bitrix24', // UF_CRM_7_TYPE_PRODUCT = 'Bitrix24'
     modules: [
-      // Модули будут добавлены по мере реализации
-      // 'Bitrix24Dashboard',
-      // 'Bitrix24TicketsManagement',
-      // 'Bitrix24Analytics'
+      {
+        id: 'dashboard-sector-bitrix24',
+        title: 'Дашборд сектора Битрикс24',
+        description: 'Панель управления сектором Битрикс24 с основными метриками',
+        icon: '🌐',
+        component: 'SectorDashboard',
+        componentPath: '@/components/SectorDashboard.vue',
+        route: '/dashboard/sector-bitrix24',
+        category: 'management',
+        props: { sectorId: 'bitrix24' }
+      }
     ],
     features: ['bitrix24-integration'],
     order: 3
@@ -77,10 +129,17 @@ export const SECTORS_CONFIG = {
     backgroundColor: '#fff8f8',
     filterValues: ['Железо', 'Прочее'], // UF_CRM_7_TYPE_PRODUCT = 'Железо' OR 'Прочее'
     modules: [
-      // Модули будут добавлены по мере реализации
-      // 'InfrastructureDashboard',
-      // 'HardwareManagement',
-      // 'InfrastructureTickets'
+      {
+        id: 'dashboard-sector-infrastructure',
+        title: 'Дашборд сектора Инфраструктура',
+        description: 'Панель управления сектором Инфраструктура с основными метриками',
+        icon: '🖥️',
+        component: 'SectorDashboard',
+        componentPath: '@/components/SectorDashboard.vue',
+        route: '/dashboard/sector-infrastructure',
+        category: 'management',
+        props: { sectorId: 'infrastructure' }
+      }
     ],
     features: ['infrastructure-management'],
     order: 4
