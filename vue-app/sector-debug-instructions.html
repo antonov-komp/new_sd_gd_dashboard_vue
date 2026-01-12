@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Отладка секторов - Инструкции</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .step {
+            background: #f8f9fa;
+            border-left: 4px solid #007bff;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+        .code {
+            background: #f4f4f4;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            margin: 10px 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .copy-btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px 0;
+        }
+        .copy-btn:hover {
+            background: #0056b3;
+        }
+        .warning {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 15px 0;
+        }
+        .test-results {
+            background: #e9ecef;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 15px 0;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Отладка проблемы с секторами</h1>
+
+    <div class="warning">
+        <strong>Проблема:</strong> Сектор 1С работает корректно, но сектора PDM, Bitrix24, Infrastructure показывают белый экран.
+    </div>
+
+    <h2>📋 Шаги диагностики:</h2>
+
+    <div class="step">
+        <h3>Шаг 1: Откройте консоль браузера</h3>
+        <p>Откройте страницу приложения и нажмите F12 → перейдите на вкладку Console</p>
+    </div>
+
+    <div class="step">
+        <h3>Шаг 2: Перейдите к сектору PDM</h3>
+        <p>В приложении перейдите к сектору PDM через интерфейс секторов</p>
+        <p><em>Ожидаемый результат: появятся логи загрузки сектора</em></p>
+    </div>
+
+    <div class="step">
+        <h3>Шаг 3: Скопируйте и выполните код в консоли</h3>
+        <button class="copy-btn" onclick="copyQuickTest()">Скопировать быстрый тест</button>
+        <div class="code" id="quickTestCode">
+// Быстрая проверка доступности модулей
+console.log('🔍 Проверка модулей...');
+
+// Проверяем Vue.js
+if (typeof window !== 'undefined' && window.Vue) {
+    console.log('✅ Vue.js загружен');
+} else {
+    console.log('❌ Vue.js не найден');
+}
+
+// Проверяем, что мы находимся в приложении
+if (window.location.pathname.includes('rest_api_aps')) {
+    console.log('✅ Находимся в приложении Bitrix24');
+} else {
+    console.log('❓ Проверьте, что открыта правильная страница');
+}
+
+console.log('🎯 Теперь перейдите к сектору PDM и посмотрите логи');</div>
+    </div>
+
+    <div class="step">
+        <h3>Шаг 4: Анализируйте логи загрузки сектора PDM</h3>
+        <p>После перехода к сектору PDM в консоли должны появиться логи:</p>
+        <div class="test-results">
+[SectorDashboard] 🚀 Mounted for sector: pdm (PDM)
+[SectorDashboard] 📡 Starting data load for sector: pdm
+[SectorPDMService] getSectorData called with options: {}
+[SectorPDMService] Returning test data: { stages: 3, employees: 3, totalTickets: 3 }
+[UniversalSectorDashboardService] Returning dashboard data for pdm: { stages: 3, employees: 3, totalTickets: 3 }
+[SectorDashboard] ✅ Data loaded successfully for sector: pdm
+        </div>
+    </div>
+
+    <div class="step">
+        <h3>Шаг 5: Проверьте DEBUG информацию в интерфейсе</h3>
+        <p>На странице сектора PDM должна отображаться DEBUG информация:</p>
+        <div class="test-results">
+DEBUG: stages.length = 3, isLoading = false, error =
+        </div>
+        <p><strong>Если stages.length = 0</strong> - проблема в загрузке данных</p>
+        <p><strong>Если isLoading = true</strong> - данные не загружаются</p>
+        <p><strong>Если есть error</strong> - ошибка загрузки</p>
+    </div>
+
+    <div class="step">
+        <h3>Шаг 6: Сообщите результаты</h3>
+        <p>После выполнения всех шагов сообщите:</p>
+        <ul>
+            <li>Какие логи появились в консоли?</li>
+            <li>Что показывает DEBUG информация?</li>
+            <li>Виден ли контент сектора или белый экран?</li>
+        </ul>
+    </div>
+
+    <h2>🔧 Дополнительные тесты:</h2>
+
+    <div class="step">
+        <h3>Тест загрузки модулей</h3>
+        <button class="copy-btn" onclick="copyModuleTest()">Скопировать тест модулей</button>
+        <div class="code" id="moduleTestCode">
+// Тест асинхронной загрузки модулей
+async function testModules() {
+    try {
+        console.log('🔄 Тестируем загрузку модулей...');
+
+        // Тестируем импорт сервисов
+        const { UniversalSectorDashboardFactory } = await import('./src/services/universal-sector-dashboard-service.js');
+        console.log('✅ UniversalSectorDashboardFactory загружен');
+
+        // Тестируем создание сервиса
+        const service = UniversalSectorDashboardFactory.getService('pdm');
+        console.log('✅ Сервис PDM создан');
+
+        // Тестируем загрузку данных
+        const data = await service.getSectorDashboardData();
+        console.log('✅ Данные загружены:', {
+            stages: data.stages?.length || 0,
+            employees: data.employees?.length || 0,
+            totalTickets: data.metadata?.totalTickets || 0
+        });
+
+    } catch (error) {
+        console.error('❌ Ошибка тестирования:', error);
+    }
+}
+
+testModules();</div>
+    </div>
+
+    <script>
+        function copyQuickTest() {
+            const code = document.getElementById('quickTestCode').textContent;
+            navigator.clipboard.writeText(code).then(() => {
+                alert('Код скопирован в буфер обмена!');
+            });
+        }
+
+        function copyModuleTest() {
+            const code = document.getElementById('moduleTestCode').textContent;
+            navigator.clipboard.writeText(code).then(() => {
+                alert('Код скопирован в буфер обмена!');
+            });
+        }
+    </script>
+</body>
+</html>
