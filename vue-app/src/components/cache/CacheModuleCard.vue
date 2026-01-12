@@ -74,32 +74,73 @@
           </div>
         </div>
 
-        <!-- Технические метрики производительности (только для основных модулей с метаданными) -->
-        <div v-if="isPrimary && module.metadata" class="data-section performance">
+        <!-- TASK-090: Состояние кеша -->
+        <div class="data-section cache-state">
+          <div class="section-header">
+            <span class="section-icon">{{ cacheStateIcon }}</span>
+            <h4 class="section-title">Состояние кеша</h4>
+          </div>
+          <div class="data-items">
+            <div class="data-item cache-state-indicator" :class="cacheStateClass">
+              <span class="data-label">Статус:</span>
+              <span class="data-value cache-state-text">{{ cacheStateText }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- TASK-090: Расширенные метрики производительности и использования -->
+        <div v-if="module.metadata || module.created_at" class="data-section performance">
           <div class="section-header">
             <span class="section-icon">⚡</span>
             <h4 class="section-title">Производительность</h4>
           </div>
           <div class="data-items">
-            <div class="data-item">
+            <!-- Время создания кеша -->
+            <div v-if="formattedCreationTime" class="data-item">
               <span class="data-label">Время создания:</span>
               <span class="data-value" :class="creationTimeClass">{{ formattedCreationTime }}</span>
             </div>
-            <div class="data-item">
+
+            <!-- Время последнего доступа -->
+            <div v-if="formattedLastAccess" class="data-item">
               <span class="data-label">Последний доступ:</span>
               <span class="data-value">{{ formattedLastAccess }}</span>
             </div>
-            <div class="data-item">
+
+            <!-- Количество обращений -->
+            <div v-if="accessCount !== null" class="data-item">
               <span class="data-label">Обращений:</span>
               <span class="data-value">{{ accessCount }}</span>
             </div>
-            <div class="data-item">
+
+            <!-- Эффективность кеша (только для модулей с метаданными) -->
+            <div v-if="cacheEfficiency" class="data-item">
               <span class="data-label">Эффективность:</span>
               <span class="data-value" :class="cacheEfficiencyClass">{{ cacheEfficiency }}</span>
             </div>
-            <div class="data-item">
+
+            <!-- Свежесть данных (только для модулей с метаданными) -->
+            <div v-if="dataFreshness" class="data-item">
               <span class="data-label">Свежесть данных:</span>
               <span class="data-value" :class="dataFreshnessClass">{{ dataFreshness }}</span>
+            </div>
+
+            <!-- Размер кеша в байтах -->
+            <div v-if="module.total_size" class="data-item">
+              <span class="data-label">Общий размер:</span>
+              <span class="data-value">{{ formatBytes(module.total_size) }}</span>
+            </div>
+
+            <!-- Время жизни кеша -->
+            <div v-if="module.ttl" class="data-item">
+              <span class="data-label">TTL:</span>
+              <span class="data-value">{{ formatTTL(module.ttl) }}</span>
+            </div>
+
+            <!-- Время до истечения -->
+            <div v-if="timeToExpiry !== null" class="data-item">
+              <span class="data-label">Истекает через:</span>
+              <span class="data-value" :class="timeToExpiryClass">{{ formatTimeToExpiry }}</span>
             </div>
           </div>
         </div>
@@ -186,6 +227,8 @@
 import { ref, computed, onMounted } from 'vue';
 import { CacheManagementService } from '@/services/cache-management-service.js';
 import CacheCreateButton from './CacheCreateButton.vue';
+import { NotificationSystem } from '@/utils/notifications.js';
+import { ConfirmationSystem } from '@/utils/confirmations.js';
 
 export default {
   name: 'CacheModuleCard',
@@ -237,7 +280,9 @@ export default {
       'high-priority': props.priority <= 3,
       'expiring-soon': isExpiringSoon.value,
       'empty-cache': isEmpty.value,
-      'loading': clearing.value || creating.value
+      'loading': clearing.value || creating.value,
+      // TASK-090: Добавляем класс состояния кеша для визуальных индикаторов
+      [cacheStateClass.value]: true
     }));
 
     const moduleIcon = computed(() => {
@@ -373,6 +418,51 @@ export default {
       return `metric-${color}`;
     });
 
+    // TASK-090: Логика состояний кеша с цветовыми индикаторами
+    const cacheState = computed(() => {
+      if (isEmpty.value) return 'empty';
+      if (isExpired.value) return 'expired';
+
+      // Определяем время до истечения
+      const timeToExpiry = computed(() => {
+        if (!props.module.expires_at) return Infinity;
+        const expiresAt = new Date(props.module.expires_at * 1000);
+        const now = new Date();
+        return expiresAt - now;
+      });
+
+      const ttl = timeToExpiry.value;
+
+      if (ttl <= 0) return 'expired';
+      if (ttl <= 30 * 60 * 1000) return 'critical'; // < 30 мин
+      if (ttl <= 2 * 60 * 60 * 1000) return 'warning'; // < 2 часа
+      return 'fresh'; // > 2 часа
+    });
+
+    const cacheStateText = computed(() => {
+      const state = cacheState.value;
+      const texts = {
+        fresh: 'Свежий кеш',
+        warning: 'Истекает скоро',
+        critical: 'Критически истекает',
+        expired: 'Просрочен',
+        empty: 'Кеш пуст'
+      };
+      return texts[state] || 'Неизвестное состояние';
+    });
+
+    const cacheStateClass = computed(() => `cache-state-${cacheState.value}`);
+    const cacheStateIcon = computed(() => {
+      const icons = {
+        fresh: '🟢',
+        warning: '🟡',
+        critical: '🔴',
+        expired: '⚫',
+        empty: '⚪'
+      };
+      return icons[cacheState.value] || '❓';
+    });
+
     // Управление состояниями кнопок
     const canClear = computed(() => !isEmpty.value && !clearing.value);
     const canShowDetails = computed(() => props.isPrimary && !isEmpty.value);
@@ -460,38 +550,42 @@ export default {
       }
     });
     
-    // Методы
+    // TASK-090: Улучшенный метод очистки кеша с popup-подтверждением и уведомлениями
     const handleClear = async () => {
       if (!canClear.value) return;
 
-      // Показываем модальное окно подтверждения
-      const confirmed = await showConfirmationModal({
-        title: 'Подтверждение очистки',
-        message: `Вы уверены, что хотите очистить кеш модуля "${props.module.name}"?`,
-        type: 'danger',
-        confirmText: 'Очистить кеш',
-        cancelText: 'Отмена'
-      });
-
-      if (!confirmed) return;
-
-      clearing.value = true;
       try {
+        // Показываем модальное окно подтверждения через новую систему
+        const confirmed = await ConfirmationSystem.show({
+          title: 'Подтверждение очистки кеша',
+          message: `Вы действительно хотите очистить кеш модуля "${props.module.name}"?\n\nЭто действие нельзя отменить.`,
+          type: 'danger',
+          confirmText: '🗑️ Очистить кеш',
+          cancelText: 'Отмена'
+        });
+
+        if (!confirmed) return;
+
+        clearing.value = true;
+
+        // Выполняем очистку кеша
         await CacheManagementService.clearCache(props.module.id);
         emit('clear', props.module.id);
 
-        // Уведомление об успехе
-        showNotification({
-          type: 'success',
-          title: 'Кеш очищен',
-          message: `Кеш модуля "${props.module.name}" успешно очищен`
-        });
+        // Уведомление об успехе через новую систему
+        NotificationSystem.success(
+          'Кеш успешно очищен',
+          `Кеш модуля "${props.module.name}" был полностью очищен`
+        );
+
       } catch (error) {
-        showNotification({
-          type: 'error',
-          title: 'Ошибка очистки',
-          message: error.message
-        });
+        console.error('[CacheModuleCard] Error clearing cache:', error);
+
+        // Уведомление об ошибке через новую систему
+        NotificationSystem.error(
+          'Ошибка очистки кеша',
+          `Не удалось очистить кеш модуля "${props.module.name}": ${error.message}`
+        );
       } finally {
         clearing.value = false;
       }
@@ -606,6 +700,11 @@ export default {
       creationTimeClass,
       cacheEfficiencyClass,
       dataFreshnessClass,
+      // TASK-090: Состояния кеша
+      cacheState,
+      cacheStateText,
+      cacheStateClass,
+      cacheStateIcon,
       canClear,
       canShowDetails,
       clearButtonLabel,
@@ -1272,6 +1371,110 @@ export default {
   .detail-modal {
     margin: 20px;
   }
+}
+
+/* TASK-090: Стили для состояний кеша */
+.cache-state-indicator {
+  position: relative;
+}
+
+.cache-state-indicator::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.cache-state-fresh::before {
+  background-color: #28a745;
+  box-shadow: 0 0 6px rgba(40, 167, 69, 0.4);
+}
+
+.cache-state-warning::before {
+  background-color: #ffc107;
+  box-shadow: 0 0 6px rgba(255, 193, 7, 0.4);
+}
+
+.cache-state-critical::before {
+  background-color: #fd7e14;
+  box-shadow: 0 0 6px rgba(253, 126, 20, 0.4);
+  animation: pulse-warning 2s infinite;
+}
+
+.cache-state-expired::before {
+  background-color: #dc3545;
+  box-shadow: 0 0 6px rgba(220, 53, 69, 0.4);
+}
+
+.cache-state-empty::before {
+  background-color: #6c757d;
+  box-shadow: 0 0 4px rgba(108, 117, 125, 0.3);
+}
+
+.cache-state-text {
+  font-weight: 600;
+  padding-left: 16px;
+}
+
+.cache-state-fresh .cache-state-text {
+  color: #155724;
+}
+
+.cache-state-warning .cache-state-text {
+  color: #856404;
+}
+
+.cache-state-critical .cache-state-text {
+  color: #6f5328;
+  animation: pulse-text 2s infinite;
+}
+
+.cache-state-expired .cache-state-text {
+  color: #721c24;
+}
+
+.cache-state-empty .cache-state-text {
+  color: #383d41;
+}
+
+@keyframes pulse-warning {
+  0%, 100% {
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: translateY(-50%) scale(1.2);
+  }
+}
+
+@keyframes pulse-text {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+/* Общие стили для карточки с состояниями кеша */
+.cache-module-card.cache-state-critical {
+  border-left: 4px solid #fd7e14;
+  box-shadow: 0 2px 8px rgba(253, 126, 20, 0.2);
+}
+
+.cache-module-card.cache-state-expired {
+  border-left: 4px solid #dc3545;
+  box-shadow: 0 2px 8px rgba(220, 53, 69, 0.2);
+}
+
+.cache-module-card.cache-state-empty {
+  opacity: 0.75;
+  border-left: 4px solid #6c757d;
 }
 </style>
 
