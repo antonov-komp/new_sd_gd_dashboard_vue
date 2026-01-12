@@ -92,7 +92,8 @@ export async function cachedFetchAdmissionClosureStats(params = {}) {
   // Если в кеше нет, делаем запрос
   console.log('[API-CACHE] Cache miss, making API request for:', cacheKey);
 
-  const { fetchAdmissionClosureStats } = await import('@/services/graph-admission-closure/admissionClosureService.js');
+  const { LazyServiceLoader } = await import('@/utils/lazy-services.js');
+  const { fetchAdmissionClosureStats } = await LazyServiceLoader.loadAdmissionClosureService();
   const result = await fetchAdmissionClosureStats(params);
 
   // Сохраняем в кеш

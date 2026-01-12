@@ -177,9 +177,17 @@ import GraphAdmissionClosureMonthsDashboard from './GraphAdmissionClosureMonthsD
 import ResponsibleModal from './ResponsibleModal.vue';
 import StagesModal from './StagesModal.vue';
 import CarryoverDurationModal from './CarryoverDurationModal.vue';
-import { fetchAdmissionClosureStats } from '@/services/graph-admission-closure/admissionClosureService.js';
+import { useAdmissionService } from '@/composables/useAdmissionService';
 
 const router = useRouter();
+
+// Используем lazy loading для admission service
+const { fetchStats, loading: serviceLoading, error: serviceError } = useAdmissionService();
+
+// Обертка для совместимости с существующим кодом
+const fetchAdmissionClosureStats = async (params) => {
+  return await fetchStats(params);
+};
 
 const isLoading = ref(false); // Начинаем с false, чтобы не показывать прелоадер при показе попапа
 const error = ref(null);

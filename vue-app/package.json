@@ -6,6 +6,15 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:analyze": "vite build --mode analyze",
+    "build:report": "npm run build && npm run bundle:analyze",
+    "bundle:analyze": "node scripts/analyze-bundle.cjs",
+    "build:performance": "npm run build && npm run lighthouse",
+    "lighthouse": "lighthouse http://localhost:3000 --config-path=lighthouse-config.json --output=json --output-path=./lighthouse-report.json",
+    "test:build": "npm run build && npm run test:chunks && npm run test:warnings",
+    "test:performance": "vitest run tests/performance/",
+    "test:chunks": "node scripts/test-build-chunks.cjs",
+    "test:warnings": "node scripts/test-build-warnings.cjs",
     "preview": "vite preview"
   },
   "dependencies": {

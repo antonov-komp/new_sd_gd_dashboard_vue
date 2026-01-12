@@ -118,10 +118,11 @@ export class AccessControlService {
         // Если BX24 API не работает, пробуем прокси API как fallback
         // ВАЖНО: При прямом доступе прокси API вернёт владельца токена (первичного администратора)
         console.warn('Bitrix24BxApi.getCurrentUser() failed, trying proxy API:', getUserError);
-        const { Bitrix24ApiService } = await import('./bitrix24-api.js');
+        const { Bitrix24ApiProvider } = await import('./bitrix24-api-provider.js');
         try {
+          const apiService = await Bitrix24ApiProvider.getInstance();
           user = await Promise.race([
-            Bitrix24ApiService.getCurrentUser(),
+            apiService.getCurrentUser(),
             new Promise((_, reject) => 
               setTimeout(() => reject(new Error('Прокси API превысило 5 секунд')), 5000)
             )

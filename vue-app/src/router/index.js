@@ -61,37 +61,43 @@ const routes = [
   {
     path: '/dashboard/sector-1c',
     name: 'dashboard-sector-1c',
-    component: () => import('@/components/dashboard/DashboardSector1C.vue')
+    component: () => import(/* webpackChunkName: "dashboard-sector1c" */ '@/components/dashboard/DashboardSector1C.vue'),
+    meta: {
+      requiresAuth: true,
+      chunk: 'dashboard-sector1c'
+    }
   },
   {
     path: '/dashboard/graph-admission-closure',
     name: 'dashboard-graph-admission-closure',
-    component: () => import('@/components/graph-admission-closure/GraphAdmissionClosureDashboard.vue'),
+    component: () => import(/* webpackChunkName: "admission-dashboard" */ '@/components/graph-admission-closure/GraphAdmissionClosureDashboard.vue'),
     meta: {
       title: 'График приёма и закрытий сектора 1С',
       description: 'Недельные агрегаты новых и закрытых тикетов сектора 1С',
-      requiresAuth: true
+      requiresAuth: true,
+      chunk: 'admission-dashboard'
     }
   },
   {
     path: '/dashboard/graph-state',
     name: 'dashboard-graph-state',
-    component: () => import('@/components/graph-state/GraphStateDashboard.vue'),
+    component: () => import(/* webpackChunkName: "graph-state" */ '@/components/graph-state/GraphStateDashboard.vue'),
     meta: {
       title: 'График состояния сектора 1С',
       description: 'Визуализация изменений состояния сектора во времени',
-      requiresAuth: true
-      // adminOnly: false — просмотр доступен всем авторизованным пользователям
+      requiresAuth: true,
+      chunk: 'graph-state'
     }
   },
   {
     path: '/dashboard/tickets-time-tracking',
     name: 'dashboard-tickets-time-tracking',
-    component: () => import('@/components/tickets-time-tracking/TicketsTimeTrackingDashboard.vue'),
+    component: () => import(/* webpackChunkName: "tickets-tracking" */ '@/components/tickets-time-tracking/TicketsTimeTrackingDashboard.vue'),
     meta: {
       title: 'Трудозатраты на Тикеты сектора 1С',
       description: 'Трудозатраты сотрудников сектора 1С по неделям',
-      requiresAuth: true
+      requiresAuth: true,
+      chunk: 'tickets-tracking'
     }
   }
 ];
@@ -181,6 +187,32 @@ router.beforeEach(async (to, from, next) => {
     } catch (error) {
       // Ошибка логирования не должна прерывать навигацию
       console.error('[Router] Error in activity logging:', error);
+    }
+  }
+
+  // Prefetch критических chunks при посещении главной страницы
+  if (to.name === 'index' && !from.name) {
+    // Предзагрузка dashboard компонентов для быстрого доступа
+    setTimeout(() => {
+      import(/* webpackChunkName: "dashboard-sector1c" */ '@/components/dashboard/DashboardSector1C.vue');
+    }, 1000); // Задержка чтобы не блокировать основную загрузку
+  }
+
+  // Prefetch связанных компонентов
+  if (to.meta.chunk) {
+    switch (to.meta.chunk) {
+      case 'dashboard-sector1c':
+        // Предзагрузка зависимых сервисов
+        setTimeout(() => {
+          import('@/services/dashboard-sector-1c-service.js');
+        }, 500);
+        break;
+      case 'admission-dashboard':
+        // Предзагрузка admission сервиса
+        setTimeout(() => {
+          import('@/utils/lazy-services.js');
+        }, 500);
+        break;
     }
   }
 

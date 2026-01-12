@@ -1,0 +1,40 @@
+{
+  "extends": "lighthouse:default",
+  "settings": {
+    "formFactor": "desktop",
+    "screenEmulation": {
+      "mobile": false,
+      "width": 1920,
+      "height": 1080
+    },
+    "throttling": {
+      "rttMs": 40,
+      "throughputKbps": 10240,
+      "cpuSlowdownMultiplier": 1
+    },
+    "skipAudits": [
+      "uses-http2",
+      "uses-long-cache-ttl",
+      "uses-text-compression"
+    ]
+  },
+  "passes": [
+    {
+      "passName": "defaultPass",
+      "recordTrace": true,
+      "useThrottling": true,
+      "gatherers": []
+    }
+  ],
+  "audits": [
+    "first-contentful-paint",
+    "largest-contentful-paint",
+    "speed-index",
+    "interactive",
+    "total-blocking-time",
+    "cumulative-layout-shift",
+    "unused-javascript",
+    "unused-css-rules",
+    "bundle-size"
+  ]
+}

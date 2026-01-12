@@ -333,7 +333,7 @@ export default {
             // Обычная обработка ошибки доступа
             // Сохраняем информацию о пользователе для отладки
             if (accessResult.user) {
-              const { getAllowedDepartmentIds } = await import('@/config/access-config.js');
+              const { getAllowedDepartmentIds } = await import('@/config/access-config-async.js');
               debugInfo.value = {
                 userId: accessResult.user.ID,
                 departmentIds: accessResult.user.UF_DEPARTMENT || [],

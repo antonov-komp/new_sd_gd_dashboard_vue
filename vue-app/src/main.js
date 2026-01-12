@@ -6,6 +6,7 @@ import './styles/main.css';
 // Импорт конфигурации Chart.js для глобальной регистрации
 import '@/utils/chart-config.js';
 import { getApiUrl } from '@/utils/path-utils.js';
+import { ErrorMonitoring } from '@/utils/error-monitoring.js';
 
 const app = createApp(App);
 
@@ -55,6 +56,9 @@ app.config.errorHandler = (err, instance, info) => {
 };
 
 app.mount('#app');
+
+// Инициализация мониторинга ошибок и производительности
+ErrorMonitoring.init();
 
 
 
