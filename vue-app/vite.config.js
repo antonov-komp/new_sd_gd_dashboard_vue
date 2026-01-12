@@ -62,7 +62,7 @@ export default defineConfig(({ mode }) => ({
 
     // Оптимизации
     chunkSizeWarningLimit: 500, // Предупреждение при > 500KB
-    cssCodeSplit: true, // Разделение CSS
+    cssCodeSplit: false, // Отключаем разделение CSS для корректной загрузки
     reportCompressedSize: true, // Показывать сжатые размеры
 
     // Esbuild оптимизации - сбалансированные настройки
