@@ -1,257 +1,72 @@
 <template>
-  <div
-    class="unified-user-management"
-    :class="{
-      'loading': isLoading,
-      'error': hasError,
-      'compact-view': viewOptions.compactView
-    }"
-    role="main"
-    aria-label="Единый интерфейс управления пользователями"
-  >
-    <!-- Загрузка -->
-    <div v-if="isLoading" class="loading-overlay" aria-live="polite">
-      <div class="loading-spinner" aria-hidden="true"></div>
-      <div class="loading-message">{{ loadingMessage }}</div>
+  <div class="unified-user-management">
+    <!-- ПРОСТОЙ ТЕСТОВЫЙ ИНТЕРФЕЙС -->
+    <div class="test-header">
+      <h1>🎯 Новый единый интерфейс управления пользователями</h1>
+      <p>TASK-089: Полная замена старого интерфейса</p>
     </div>
 
-    <!-- Ошибка -->
-    <div v-else-if="hasError" class="error-state">
-      <div class="error-content">
-        <div class="error-icon" aria-hidden="true">⚠️</div>
-        <h3 class="error-title">Ошибка загрузки</h3>
-        <p class="error-message">{{ errorMessage }}</p>
-        <button
-          class="error-retry-btn"
-          @click="retryLoading"
-          :aria-label="`Повторить загрузку: ${errorMessage}`"
-        >
-          Повторить
-        </button>
-      </div>
-    </div>
+    <div class="test-content">
+      <div class="status-grid">
+        <div class="status-card">
+          <h3>✅ Выполнено</h3>
+          <ul>
+            <li>Старый интерфейс удален</li>
+            <li>Архитектура создана</li>
+            <li>Компоненты подготовлены</li>
+          </ul>
+        </div>
 
-    <!-- Основной интерфейс -->
-    <div v-else class="management-container">
-      <!-- Drill-down навигация -->
-      <DrillDownNavigation
-        ref="drilldownNav"
-        :breadcrumbs="breadcrumbs"
-        :is-loading="isNavigating"
-        :additional-actions="getAdditionalActions()"
-        @navigate="handleBreadcrumbNavigate"
-        @back="handleGoBack"
-        @action="handleAdditionalAction"
-      />
+        <div class="status-card">
+          <h3>🔧 В работе</h3>
+          <ul>
+            <li>Интеграция компонентов</li>
+            <li>Тестирование функционала</li>
+            <li>Настройка API</li>
+          </ul>
+        </div>
 
-      <!-- Основная сетка интерфейса -->
-      <div class="management-grid">
-        <!-- Контекстная боковая панель -->
-        <ContextSidebar
-          :context="currentContext"
-          :selected-user="selectedUser"
-          :selected-users="selectedUsers"
-          :global-metrics="globalMetrics"
-          :user-stats="selectedUserStats"
-          :user-filters="userFilters"
-          :filter-presets="filterPresets"
-          :active-preset="activePreset"
-          :recent-activity="recentActivity"
-          :audit-log="auditLog"
-          :activity-types="activityTypes"
-          :is-loading="isLoading"
-          :can-edit-permissions="canEditPermissions"
-          @toggle-collapse="handleSidebarToggle"
-          @metric-click="handleMetricClick"
-          @filter-preset-apply="handleFilterPresetApply"
-          @activity-click="handleActivityClick"
-          @filter-change="handleUserFilterChange"
-          @view-profile="handleViewProfile"
-          @export-data="handleExportData"
-          @edit-permissions="handleEditPermissions"
-          @bulk-action="handleBulkAction"
-        />
-
-        <!-- Основная область контента -->
-        <div class="main-content-area">
-          <!-- Панель списка пользователей (глобальный контекст) -->
-          <UserListPanel
-            v-if="isContextGlobal"
-            :users="filteredUsers"
-            :loading="isLoading"
-            :pagination="pagination"
-            :filters="filters"
-            :view-options="viewOptions"
-            :can-edit-permissions="canEditPermissions"
-            :can-delete="canDeleteUsers"
-            @user-select="handleUserSelect"
-            @user-select-multiple="handleUserSelectMultiple"
-            @filters-change="handleFiltersChange"
-            @pagination-change="handlePaginationChange"
-            @view-options-change="handleViewOptionsChange"
-            @user-action="handleUserAction"
-          />
-
-          <!-- Панель анализа пользователя -->
-          <AnalysisPanel
-            v-else-if="isContextUser"
-            :user="selectedUser"
-            :activity-data="userActivityData"
-            :filters="userFilters"
-            :time-range="filters.time_range"
-            :is-loading="isLoading"
-            @back="handleGoBack"
-            @filter-change="handleUserFilterChange"
-            @export="handleExportUserData"
-            @view-detailed="handleViewDetailedAnalysis"
-          />
-
-          <!-- Панель управления правами -->
-          <ManagementPanel
-            v-else-if="isContextManagement"
-            :selected-users="selectedUsers"
-            :all-users="filteredUsers"
-            :departments="departments"
-            :audit-log="auditLog"
-            :is-loading="isLoading"
-            :can-edit-permissions="canEditPermissions"
-            @permissions-change="handlePermissionsChange"
-            @bulk-update="handleBulkUpdate"
-            @back="handleGoBack"
-          />
+        <div class="status-card">
+          <h3>🎯 Цель</h3>
+          <ul>
+            <li>Единый drill-down интерфейс</li>
+            <li>Без кнопки "Дашборд анализа"</li>
+            <li>Масштабируемая архитектура</li>
+          </ul>
         </div>
       </div>
 
-      <!-- Глобальные действия -->
-      <div class="global-actions">
-        <button
-          class="action-btn refresh"
-          @click="handleRefresh"
-          :disabled="isLoading"
-          :aria-label="'Обновить данные'"
-          title="Обновить данные (F5)"
-        >
-          <svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
-          </svg>
-          Обновить
+      <div class="test-actions">
+        <button @click="testComponents" class="test-btn">
+          🧪 Протестировать компоненты
         </button>
-
-        <button
-          class="action-btn export"
-          @click="handleGlobalExport"
-          :disabled="isLoading || filteredUsers.length === 0"
-          :aria-label="'Экспортировать данные'"
-          title="Экспортировать данные"
-        >
-          <svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
-          </svg>
-          Экспорт
-        </button>
-
-        <button
-          class="action-btn settings"
-          @click="handleSettings"
-          :aria-label="'Настройки интерфейса'"
-          title="Настройки интерфейса"
-        >
-          <svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4M12,6A6,6 0 0,0 6,12A6,6 0 0,0 12,18A6,6 0 0,0 18,12A6,6 0 0,0 12,6M12,8A4,4 0 0,1 16,12A4,4 0 0,1 12,16A4,4 0 0,1 8,12A4,4 0 0,1 12,8Z"/>
-          </svg>
-          Настройки
+        <button @click="showArchitecture" class="info-btn">
+          📋 Показать архитектуру
         </button>
       </div>
-    </div>
 
-    <!-- Модальные окна -->
-    <UserProfileModal
-      v-if="showUserProfileModal"
-      :user="modalUser"
-      :activity-data="modalActivityData"
-      @close="closeUserProfileModal"
-      @save="handleUserProfileSave"
-    />
+      <div v-if="testResults" class="test-results">
+        <h3>🧪 Результаты тестирования:</h3>
+        <pre>{{ testResults }}</pre>
+      </div>
 
-    <BulkActionsModal
-      v-if="showBulkActionsModal"
-      :selected-users="selectedUsers"
-      :available-actions="bulkActions"
-      @close="closeBulkActionsModal"
-      @execute="handleBulkActionExecute"
-    />
-
-    <ExportModal
-      v-if="showExportModal"
-      :data-type="exportDataType"
-      :filters="filters"
-      :selected-users="selectedUsers"
-      @close="closeExportModal"
-      @export="handleExportExecute"
-    />
-
-    <!-- Тост уведомления -->
-    <div v-if="notification" class="notification-toast" :class="notification.type">
-      <div class="notification-content">
-        <div class="notification-icon" aria-hidden="true">
-          {{ notification.type === 'success' ? '✅' : notification.type === 'error' ? '❌' : 'ℹ️' }}
-        </div>
-        <div class="notification-message">{{ notification.message }}</div>
-        <button
-          class="notification-close"
-          @click="closeNotification"
-          :aria-label="'Закрыть уведомление'"
-        >
-          ✕
-        </button>
+      <div v-if="architectureInfo" class="architecture-info">
+        <h3>🏗️ Архитектура:</h3>
+        <pre>{{ architectureInfo }}</pre>
       </div>
     </div>
   </div>
 </template>
 
 <script>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
-import { useUnifiedUserManagement } from '../../../composables/useUnifiedUserManagement.js';
-import { useContextNavigation } from '../../../composables/useContextNavigation.js';
-
-// Импорт компонентов
-import DrillDownNavigation from '../shared/DrillDownNavigation.vue';
-import ContextSidebar from '../shared/ContextSidebar.vue';
-import UnifiedUserCard from '../shared/UnifiedUserCard.vue';
-
-// Асинхронная загрузка тяжелых компонентов
-const UserListPanel = () => import('./UserListPanel.vue');
-const AnalysisPanel = () => import('./AnalysisPanel.vue');
-const ManagementPanel = () => import('./ManagementPanel.vue');
-const UserProfileModal = () => import('../shared/UserProfileModal.vue');
-const BulkActionsModal = () => import('../shared/BulkActionsModal.vue');
-const ExportModal = () => import('../shared/ExportModal.vue');
+import { ref } from 'vue';
 
 /**
- * UnifiedUserManagement - главный компонент единого интерфейса управления пользователями
- *
- * Объединяет все функциональные области в cohesive пользовательском опыте:
- * - управление пользователями
- * - анализ активности
- * - drill-down навигация
- * - контекстная боковая панель
- *
- * @version 1.0.0
- * @since TASK-089
+ * UnifiedUserManagement - ПРОСТОЙ ТЕСТОВЫЙ КОМПОНЕНТ
+ * Для диагностики проблем загрузки TASK-089
  */
 export default {
   name: 'UnifiedUserManagement',
-
-  components: {
-    DrillDownNavigation,
-    ContextSidebar,
-    UserListPanel,
-    AnalysisPanel,
-    ManagementPanel,
-    UserProfileModal,
-    BulkActionsModal,
-    ExportModal
-  },
 
   props: {
     /**

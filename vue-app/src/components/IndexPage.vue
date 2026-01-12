@@ -63,22 +63,16 @@
           </div>
         </div>
 
-        <!-- Секция с кнопками отчётов -->
-        <div class="reports-section">
-          <div class="reports-grid">
-            <div
-              v-for="report in reportsButtons"
-              :key="report.id"
-              class="report-button"
-              @click="navigateToReport(report.route)"
-            >
-              <div class="report-icon">{{ report.icon }}</div>
-              <div class="report-title">{{ report.title }}</div>
-              <div v-if="report.description" class="report-description">
-                {{ report.description }}
-              </div>
-            </div>
-          </div>
+        <!-- Секция секторов -->
+        <div class="sectors-section">
+          <SectorContainer
+            v-for="sector in sectors"
+            :key="sector.id"
+            :sector-config="sector"
+            @module-event="handleModuleEvent"
+            @sector-expanded="handleSectorExpanded"
+            @sector-collapsed="handleSectorCollapsed"
+          />
         </div>
 
         <!-- Попап администраторских интерфейсов -->
@@ -122,11 +116,13 @@ import { ref, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import StatusMessage from './common/StatusMessage.vue';
 import LoadingSpinner from './common/LoadingSpinner.vue';
+import SectorContainer from './SectorContainer.vue';
 import { AccessControlService, AccessErrorCodes } from '@/services/access-control-service.js';
 import { ActivityLoggingService } from '@/services/activity-logging-service.js';
 import { getReports } from '@/config/reports-config.js';
 import { isAdmin } from '@/config/access-config.js';
 import { getAdminInterfaces } from '@/config/admin-config.js';
+import { SECTORS_CONFIG, SectorConfigUtils } from '@/config/sectors.js';
 import { getPageUrl } from '@/utils/path-utils.js';
 import { isInsideBitrix24 } from '@/utils/bitrix24-context.js';
 
@@ -134,7 +130,8 @@ export default {
   name: 'IndexPage',
   components: {
     StatusMessage,
-    LoadingSpinner
+    LoadingSpinner,
+    SectorContainer
   },
   beforeCreate() {
     console.log('[IndexPage] beforeCreate() called');
@@ -165,7 +162,10 @@ export default {
     
     // Кнопки отчётов
     const reportsButtons = ref(getReports());
-    
+
+    // Сектора
+    const sectors = ref(SectorConfigUtils.getAllSectors());
+
     // State для администраторских интерфейсов
     const showAdminPopup = ref(false);
     const adminButtons = ref(getAdminInterfaces());
@@ -396,7 +396,7 @@ export default {
     
     /**
      * Навигация к администраторскому интерфейсу
-     * 
+     *
      * @param {string} route - Маршрут администраторского интерфейса
      */
     const navigateToAdmin = (route) => {
@@ -404,9 +404,33 @@ export default {
         console.error('Route is not defined for admin interface');
         return;
       }
-      
+
       router.push(route);
       closeAdminPopup(); // Закрываем попап после навигации
+    };
+
+    /**
+     * Обработчик событий модулей секторов
+     */
+    const handleModuleEvent = (event) => {
+      console.log('Module event:', event);
+      // Здесь можно добавить логику для обработки событий модулей
+    };
+
+    /**
+     * Обработчик развертывания сектора
+     */
+    const handleSectorExpanded = (event) => {
+      console.log('Sector expanded:', event.sectorId);
+      // Здесь можно добавить логику при развертывании сектора
+    };
+
+    /**
+     * Обработчик сворачивания сектора
+     */
+    const handleSectorCollapsed = (event) => {
+      console.log('Sector collapsed:', event.sectorId);
+      // Здесь можно добавить логику при сворачивании сектора
     };
 
     return {
@@ -425,6 +449,10 @@ export default {
       installPageUrl,
       reportsButtons,
       navigateToReport,
+      sectors,
+      handleModuleEvent,
+      handleSectorExpanded,
+      handleSectorCollapsed,
       isAdmin: isAdminComputed,
       showAdminPopup,
       adminButtons,
@@ -521,90 +549,12 @@ export default {
   margin-top: 30px;
 }
 
-/* Секция с кнопками отчётов */
-.reports-section {
+/* Секция секторов */
+.sectors-section {
   margin-top: 30px;
 }
 
-.reports-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 20px;
-}
-
-.report-button {
-  padding: 20px;
-  border-radius: 8px;
-  background: white;
-  border: 1px solid #ddd;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  text-align: center;
-}
-
-.report-button:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  transform: translateY(-2px);
-  border-color: #2196F3;
-}
-
-.report-icon {
-  font-size: 32px;
-  margin-bottom: 10px;
-}
-
-.report-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 8px;
-}
-
-.report-description {
-  font-size: 14px;
-  color: #666;
-  line-height: 1.4;
-}
-
-/* Адаптивность для планшетов */
-@media (max-width: 1024px) {
-  .reports-grid {
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 15px;
-  }
-  
-  .report-button {
-    padding: 15px;
-  }
-  
-  .report-icon {
-    font-size: 28px;
-  }
-}
-
-/* Адаптивность для мобильных */
-@media (max-width: 768px) {
-  .reports-grid {
-    grid-template-columns: 1fr;
-    gap: 15px;
-  }
-  
-  .report-button {
-    padding: 15px;
-  }
-  
-  .report-icon {
-    font-size: 24px;
-  }
-  
-  .report-title {
-    font-size: 14px;
-  }
-  
-  .report-description {
-    font-size: 12px;
-  }
-}
+/* Адаптивность секторов наследуется из sectors.css */
 
 /* Адаптивность для заголовка с кнопкой администратора */
 @media (max-width: 768px) {

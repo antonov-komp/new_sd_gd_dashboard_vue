@@ -1,0 +1,344 @@
+/**
+ * Стили для секторов стартовой страницы
+ * Цветовые схемы и визуальное оформление секторов
+ *
+ * @version 1.0
+ * @since 2026-01-12
+ */
+
+/* Переменные цветов секторов */
+:root {
+  /* Сектор 1С */
+  --sector-1c-color: #007bff;
+  --sector-1c-border-color: #0056b3;
+  --sector-1c-bg-color: #f8f9fa;
+  --sector-1c-hover-color: #0056b3;
+
+  /* Сектор PDM */
+  --sector-pdm-color: #28a745;
+  --sector-pdm-border-color: #1e7e34;
+  --sector-pdm-bg-color: #f8fff8;
+  --sector-pdm-hover-color: #1e7e34;
+
+  /* Сектор Битрикс24 */
+  --sector-bitrix24-color: #ffc107;
+  --sector-bitrix24-border-color: #d39e00;
+  --sector-bitrix24-bg-color: #fffef8;
+  --sector-bitrix24-hover-color: #d39e00;
+
+  /* Сектор Инфраструктура */
+  --sector-infrastructure-color: #dc3545;
+  --sector-infrastructure-border-color: #bd2130;
+  --sector-infrastructure-bg-color: #fff8f8;
+  --sector-infrastructure-hover-color: #bd2130;
+}
+
+/* Общие стили секторов */
+.sector-container {
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.sector-container:hover {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  transform: translateY(-2px);
+}
+
+/* Стили для конкретных секторов */
+.sector-1c {
+  border: 2px solid var(--sector-1c-border-color);
+  background: var(--sector-1c-bg-color);
+}
+
+.sector-1c .sector-header {
+  border-bottom: 2px solid var(--sector-1c-border-color);
+}
+
+.sector-1c .sector-title h2 {
+  color: var(--sector-1c-color);
+}
+
+.sector-1c .btn-sector-dashboard {
+  border-color: var(--sector-1c-border-color);
+  color: var(--sector-1c-color);
+}
+
+.sector-1c .btn-sector-dashboard:hover {
+  background: var(--sector-1c-color);
+  color: white;
+}
+
+.sector-pdm {
+  border: 2px solid var(--sector-pdm-border-color);
+  background: var(--sector-pdm-bg-color);
+}
+
+.sector-pdm .sector-header {
+  border-bottom: 2px solid var(--sector-pdm-border-color);
+}
+
+.sector-pdm .sector-title h2 {
+  color: var(--sector-pdm-color);
+}
+
+.sector-pdm .btn-sector-dashboard {
+  border-color: var(--sector-pdm-border-color);
+  color: var(--sector-pdm-color);
+}
+
+.sector-pdm .btn-sector-dashboard:hover {
+  background: var(--sector-pdm-color);
+  color: white;
+}
+
+.sector-bitrix24 {
+  border: 2px solid var(--sector-bitrix24-border-color);
+  background: var(--sector-bitrix24-bg-color);
+}
+
+.sector-bitrix24 .sector-header {
+  border-bottom: 2px solid var(--sector-bitrix24-border-color);
+}
+
+.sector-bitrix24 .sector-title h2 {
+  color: var(--sector-bitrix24-color);
+}
+
+.sector-bitrix24 .btn-sector-dashboard {
+  border-color: var(--sector-bitrix24-border-color);
+  color: var(--sector-bitrix24-color);
+}
+
+.sector-bitrix24 .btn-sector-dashboard:hover {
+  background: var(--sector-bitrix24-color);
+  color: white;
+}
+
+.sector-infrastructure {
+  border: 2px solid var(--sector-infrastructure-border-color);
+  background: var(--sector-infrastructure-bg-color);
+}
+
+.sector-infrastructure .sector-header {
+  border-bottom: 2px solid var(--sector-infrastructure-border-color);
+}
+
+.sector-infrastructure .sector-title h2 {
+  color: var(--sector-infrastructure-color);
+}
+
+.sector-infrastructure .btn-sector-dashboard {
+  border-color: var(--sector-infrastructure-border-color);
+  color: var(--sector-infrastructure-color);
+}
+
+.sector-infrastructure .btn-sector-dashboard:hover {
+  background: var(--sector-infrastructure-color);
+  color: white;
+}
+
+/* Заголовок сектора */
+.sector-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+}
+
+.sector-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sector-icon {
+  font-size: 24px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.sector-title h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.sector-title p {
+  margin: 4px 0 0 0;
+  font-size: 14px;
+  color: #666;
+  opacity: 0.8;
+}
+
+.sector-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Кнопки сектора */
+.btn-toggle-sector,
+.btn-sector-dashboard {
+  padding: 8px 16px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.btn-toggle-sector:hover,
+.btn-sector-dashboard:hover {
+  border-color: #007bff;
+  color: #007bff;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Содержимое сектора */
+.sector-content {
+  animation: sectorExpand 0.3s ease-out;
+}
+
+@keyframes sectorExpand {
+  from {
+    opacity: 0;
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    max-height: 1000px;
+  }
+}
+
+/* Сетка модулей сектора */
+.sector-modules-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+/* Состояния загрузки */
+.sector-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  text-align: center;
+}
+
+.sector-loading .loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid var(--sector-color, #007bff);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.sector-loading p {
+  margin: 0;
+  color: #666;
+  font-size: 14px;
+}
+
+/* Пустое состояние */
+.no-modules {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+}
+
+.no-modules p {
+  margin: 0;
+  font-size: 16px;
+  opacity: 0.7;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+  .sector-container {
+    margin-bottom: 16px;
+    padding: 16px;
+  }
+
+  .sector-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .sector-actions {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .sector-modules-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .btn-toggle-sector,
+  .btn-sector-dashboard {
+    flex: 1;
+    text-align: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .sector-container {
+    padding: 12px;
+  }
+
+  .sector-title h2 {
+    font-size: 18px;
+  }
+
+  .sector-title p {
+    font-size: 13px;
+  }
+}
+
+/* Темная тема (опционально) */
+@media (prefers-color-scheme: dark) {
+  .sector-container {
+    background: #2d3748;
+    border-color: #4a5568;
+  }
+
+  .sector-title p {
+    color: #a0aec0;
+  }
+
+  .btn-toggle-sector,
+  .btn-sector-dashboard {
+    background: #4a5568;
+    border-color: #718096;
+    color: #e2e8f0;
+  }
+
+  .btn-toggle-sector:hover,
+  .btn-sector-dashboard:hover {
+    border-color: #63b3ed;
+    color: #63b3ed;
+  }
+}

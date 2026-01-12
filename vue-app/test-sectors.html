@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест секторов</title>
+    <link rel="stylesheet" href="src/styles/sectors.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>Тест системы секторов</h1>
+
+        <!-- Мокаем сектор 1С -->
+        <div class="sector-container sector-1c">
+            <div class="sector-header">
+                <div class="sector-header-left">
+                    <div class="sector-icon">⚙️</div>
+                    <div class="sector-title">
+                        <h2>Сектор 1С</h2>
+                        <p>Модули для работы с системами 1С:Предприятие</p>
+                    </div>
+                </div>
+                <div class="sector-actions">
+                    <button class="btn-toggle-sector">Развернуть</button>
+                </div>
+            </div>
+
+            <div class="sector-content">
+                <div class="sector-modules-grid">
+                    <div class="module-tile">
+                        <div class="module-header">
+                            <div class="module-icon">⚙️</div>
+                            <div class="module-info">
+                                <h3>Дашборд сектора 1С</h3>
+                                <p>Панель управления сектором 1С с основными метриками</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="module-tile">
+                        <div class="module-header">
+                            <div class="module-icon">📋</div>
+                            <div class="module-info">
+                                <h3>Управление тикетами сектора 1С</h3>
+                                <p>Управление заявками и задачами сектора 1С</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="module-tile">
+                        <div class="module-header">
+                            <div class="module-icon">📊</div>
+                            <div class="module-info">
+                                <h3>График состояния</h3>
+                                <p>Визуализация текущего состояния систем сектора 1С</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="module-tile">
+                        <div class="module-header">
+                            <div class="module-icon">📈</div>
+                            <div class="module-info">
+                                <h3>Визуализация изменений сост</h3>
+                                <p>Отображение изменений состояния в секторе 1С</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Мокаем сектор PDM -->
+        <div class="sector-container sector-pdm">
+            <div class="sector-header">
+                <div class="sector-header-left">
+                    <div class="sector-icon">🔧</div>
+                    <div class="sector-title">
+                        <h2>Сектор PDM</h2>
+                        <p>Управление системами PDM (Product Data Management)</p>
+                    </div>
+                </div>
+                <div class="sector-actions">
+                    <button class="btn-toggle-sector">Развернуть</button>
+                </div>
+            </div>
+
+            <div class="sector-content">
+                <div class="no-modules">
+                    <p>Модули для сектора "Сектор PDM" находятся в разработке</p>
+                    <button class="btn-sector-dashboard">
+                        <span class="icon">📊</span>
+                        Открыть полный дашборд сектора
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

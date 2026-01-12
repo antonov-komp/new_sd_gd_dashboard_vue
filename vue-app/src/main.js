@@ -3,6 +3,7 @@ import App from './App.vue';
 import router from './router';
 import './styles/bitrix24-ui-variables.css';
 import './styles/main.css';
+import './styles/sectors.css';
 // Импорт конфигурации Chart.js для глобальной регистрации
 import '@/utils/chart-config.js';
 import { getApiUrl } from '@/utils/path-utils.js';
