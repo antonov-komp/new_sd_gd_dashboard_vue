@@ -55,19 +55,27 @@
     <!-- Режим: Дашборд анализа -->
     <div v-else-if="viewMode === 'dashboard'" class="analysis-dashboard">
       <ActivityDashboard
+        v-if="!loading"
         :initial-filters="filters"
         @user-profile-request="switchToUserProfile"
       />
+      <div v-else class="loading-state">
+        Загрузка дашборда анализа...
+      </div>
     </div>
 
     <!-- Режим: Профиль пользователя -->
     <div v-else-if="viewMode === 'profile'" class="user-profile">
       <UserProfileAnalysis
+        v-if="selectedUserId && !loading"
         :user-id="selectedUserId"
         :filters="filters"
         @back="switchToDashboard"
         @export="handleProfileExport"
       />
+      <div v-else class="loading-state">
+        Загрузка профиля пользователя...
+      </div>
     </div>
   </div>
 </template>
@@ -137,7 +145,26 @@ export default {
 
     // Фильтрованная активность (без скрытых пользователей)
     const activity = computed(() => {
-      return filterHiddenUsers(rawActivity.value);
+      try {
+        if (!Array.isArray(rawActivity.value)) {
+          return [];
+        }
+
+        // Фильтруем только валидные объекты
+        const validActivity = rawActivity.value.filter(entry =>
+          entry &&
+          typeof entry === 'object' &&
+          entry !== null &&
+          entry.user_id &&
+          entry.timestamp &&
+          typeof entry.type === 'string'
+        );
+
+        return filterHiddenUsers(validActivity);
+      } catch (error) {
+        console.warn('[UserActivityList] Error filtering activity:', error);
+        return [];
+      }
     });
 
     const loadActivity = async () => {
@@ -348,6 +375,20 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  font-size: 16px;
+  color: #666;
+}
+
+.analysis-dashboard,
+.user-profile {
+  /* Эти компоненты имеют свои собственные стили */
 }
 
 /* Responsive */

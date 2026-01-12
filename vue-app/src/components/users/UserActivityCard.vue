@@ -45,7 +45,15 @@ export default {
   props: {
     entry: {
       type: Object,
-      required: true
+      required: true,
+      validator: (value) => {
+        return value &&
+               typeof value === 'object' &&
+               value !== null &&
+               value.user_id &&
+               value.timestamp &&
+               typeof value.type === 'string';
+      }
     }
   },
   computed: {

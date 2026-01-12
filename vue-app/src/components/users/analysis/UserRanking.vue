@@ -165,14 +165,23 @@ export default {
           return [];
         }
 
-        // Фильтруем валидные данные
-        const validData = props.data.filter(entry =>
-          entry &&
-          typeof entry === 'object' &&
-          entry !== null &&
-          entry.user_id &&
-          typeof entry.type === 'string'
-        );
+        // Фильтруем валидные данные с дополнительными проверками
+        const validData = props.data.filter(entry => {
+          if (!entry || typeof entry !== 'object' || entry === null) {
+            return false;
+          }
+
+          // Обязательные поля для рейтинга
+          if (!entry.user_id || !entry.timestamp) {
+            return false;
+          }
+
+          if (typeof entry.type !== 'string' || !entry.type.trim()) {
+            return false;
+          }
+
+          return true;
+        });
 
         if (validData.length === 0) {
           return [];

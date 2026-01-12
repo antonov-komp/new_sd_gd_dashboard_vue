@@ -344,9 +344,18 @@ export default {
     );
 
     const paginatedData = computed(() => {
-      const start = (currentPage.value - 1) * props.pageSize;
-      const end = start + props.pageSize;
-      return filteredData.value.slice(start, end);
+      try {
+        if (!Array.isArray(filteredData.value)) {
+          return [];
+        }
+
+        const start = (currentPage.value - 1) * props.pageSize;
+        const end = start + props.pageSize;
+        return filteredData.value.slice(start, end);
+      } catch (error) {
+        console.warn('[ActivityDataTable] Error paginating data:', error);
+        return [];
+      }
     });
 
     const displayedData = computed(() => paginatedData.value);

@@ -144,7 +144,59 @@ export default {
     // Реактивные данные
     const activityData = ref([]);
     const filteredActivityData = ref([]);
-    const dashboardMetrics = ref([]);
+    // Инициализация метрик по умолчанию
+    const getDefaultMetrics = () => [
+      {
+        id: 'total_entries',
+        title: 'Всего записей',
+        value: 0,
+        previousValue: 0,
+        change: 0,
+        changePercent: 0,
+        trend: 'neutral',
+        icon: '📊',
+        color: '#2196F3',
+        drillDownRoute: 'activity-details'
+      },
+      {
+        id: 'unique_users',
+        title: 'Уникальных пользователей',
+        value: 0,
+        previousValue: 0,
+        change: 0,
+        changePercent: 0,
+        trend: 'neutral',
+        icon: '👥',
+        color: '#4CAF50',
+        drillDownRoute: 'user-list'
+      },
+      {
+        id: 'total_sessions',
+        title: 'Всего сессий',
+        value: 0,
+        previousValue: 0,
+        change: 0,
+        changePercent: 0,
+        trend: 'neutral',
+        icon: '🎯',
+        color: '#FF9800',
+        drillDownRoute: 'session-analysis'
+      },
+      {
+        id: 'avg_session_duration',
+        title: 'Ср. длительность сессии',
+        value: '0с',
+        previousValue: '0с',
+        change: 0,
+        changePercent: 0,
+        trend: 'neutral',
+        icon: '⏱️',
+        color: '#9C27B0',
+        drillDownRoute: 'session-details'
+      }
+    ];
+
+    const dashboardMetrics = ref(getDefaultMetrics());
     const loading = ref(false);
     const error = ref(null);
     const filters = ref({ ...props.initialFilters });
@@ -174,14 +226,35 @@ export default {
         if (!Array.isArray(activityData.value)) {
           return [];
         }
-        return activityData.value.filter(entry =>
-          entry &&
-          typeof entry === 'object' &&
-          entry !== null &&
-          entry.user_id &&
-          entry.timestamp &&
-          typeof entry.type === 'string'
-        );
+
+        // Дополнительная валидация всех полей
+        return activityData.value.filter(entry => {
+          if (!entry || typeof entry !== 'object' || entry === null) {
+            return false;
+          }
+
+          // Обязательные поля
+          if (!entry.user_id || !entry.timestamp) {
+            return false;
+          }
+
+          // Проверка типа
+          if (typeof entry.type !== 'string' || !entry.type.trim()) {
+            return false;
+          }
+
+          // Проверка timestamp
+          try {
+            const date = new Date(entry.timestamp);
+            if (isNaN(date.getTime())) {
+              return false;
+            }
+          } catch {
+            return false;
+          }
+
+          return true;
+        });
       } catch (error) {
         console.warn('[ActivityDashboard] Error filtering activity data:', error);
         return [];
@@ -209,11 +282,15 @@ export default {
         );
 
         // Форматируем метрики для отображения
-        dashboardMetrics.value = formatMetricsForDisplay(metrics);
+        const formattedMetrics = formatMetricsForDisplay(metrics);
+        dashboardMetrics.value = formattedMetrics;
 
       } catch (err) {
         error.value = err.message || 'Ошибка загрузки данных дашборда';
         console.error('[ActivityDashboard] Error loading dashboard data:', err);
+
+        // Устанавливаем метрики по умолчанию при ошибке
+        dashboardMetrics.value = getDefaultMetrics();
       } finally {
         loading.value = false;
       }
@@ -221,56 +298,67 @@ export default {
 
     // Форматирование метрик для карточек
     const formatMetricsForDisplay = (metrics) => {
-      return [
-        {
-          id: 'total_entries',
-          title: 'Всего записей',
-          value: metrics.total_entries?.value || 0,
-          previousValue: metrics.total_entries?.previousValue || 0,
-          change: metrics.total_entries?.change || 0,
-          changePercent: metrics.total_entries?.changePercent || 0,
-          trend: metrics.total_entries?.trend || 'neutral',
-          icon: '📊',
-          color: '#2196F3',
-          drillDownRoute: 'activity-details'
-        },
-        {
-          id: 'unique_users',
-          title: 'Уникальных пользователей',
-          value: metrics.unique_users?.value || 0,
-          previousValue: metrics.unique_users?.previousValue || 0,
-          change: metrics.unique_users?.change || 0,
-          changePercent: metrics.unique_users?.changePercent || 0,
-          trend: metrics.unique_users?.trend || 'neutral',
-          icon: '👥',
-          color: '#4CAF50',
-          drillDownRoute: 'user-list'
-        },
-        {
-          id: 'total_sessions',
-          title: 'Всего сессий',
-          value: metrics.total_sessions?.value || 0,
-          previousValue: metrics.total_sessions?.previousValue || 0,
-          change: metrics.total_sessions?.change || 0,
-          changePercent: metrics.total_sessions?.changePercent || 0,
-          trend: metrics.total_sessions?.trend || 'neutral',
-          icon: '🎯',
-          color: '#FF9800',
-          drillDownRoute: 'session-analysis'
-        },
-        {
-          id: 'avg_session_duration',
-          title: 'Ср. длительность сессии',
-          value: formatDuration(metrics.total_sessions?.value || 0),
-          previousValue: formatDuration(metrics.total_sessions?.previousValue || 0),
-          change: 0, // TODO: рассчитать изменение длительности
-          changePercent: 0,
-          trend: 'neutral',
-          icon: '⏱️',
-          color: '#9C27B0',
-          drillDownRoute: 'session-details'
-        }
-      ];
+      // Проверяем, что metrics существует и является объектом
+      if (!metrics || typeof metrics !== 'object') {
+        console.warn('[ActivityDashboard] Invalid metrics format, using defaults');
+        return getDefaultMetrics();
+      }
+
+      try {
+        return [
+          {
+            id: 'total_entries',
+            title: 'Всего записей',
+            value: metrics.total_entries?.value || 0,
+            previousValue: metrics.total_entries?.previousValue || 0,
+            change: metrics.total_entries?.change || 0,
+            changePercent: metrics.total_entries?.changePercent || 0,
+            trend: metrics.total_entries?.trend || 'neutral',
+            icon: '📊',
+            color: '#2196F3',
+            drillDownRoute: 'activity-details'
+          },
+          {
+            id: 'unique_users',
+            title: 'Уникальных пользователей',
+            value: metrics.unique_users?.value || 0,
+            previousValue: metrics.unique_users?.previousValue || 0,
+            change: metrics.unique_users?.change || 0,
+            changePercent: metrics.unique_users?.changePercent || 0,
+            trend: metrics.unique_users?.trend || 'neutral',
+            icon: '👥',
+            color: '#4CAF50',
+            drillDownRoute: 'user-list'
+          },
+          {
+            id: 'total_sessions',
+            title: 'Всего сессий',
+            value: metrics.total_sessions?.value || 0,
+            previousValue: metrics.total_sessions?.previousValue || 0,
+            change: metrics.total_sessions?.change || 0,
+            changePercent: metrics.total_sessions?.changePercent || 0,
+            trend: metrics.total_sessions?.trend || 'neutral',
+            icon: '🎯',
+            color: '#FF9800',
+            drillDownRoute: 'session-analysis'
+          },
+          {
+            id: 'avg_session_duration',
+            title: 'Ср. длительность сессии',
+            value: formatDuration(metrics.total_sessions?.value || 0),
+            previousValue: formatDuration(metrics.total_sessions?.previousValue || 0),
+            change: 0, // TODO: рассчитать изменение длительности
+            changePercent: 0,
+            trend: 'neutral',
+            icon: '⏱️',
+            color: '#9C27B0',
+            drillDownRoute: 'session-details'
+          }
+        ];
+      } catch (error) {
+        console.error('[ActivityDashboard] Error formatting metrics:', error);
+        return getDefaultMetrics();
+      }
     };
 
     // Форматирование длительности

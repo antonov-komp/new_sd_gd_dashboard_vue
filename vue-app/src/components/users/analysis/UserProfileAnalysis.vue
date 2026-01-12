@@ -20,12 +20,12 @@
     </div>
 
     <!-- Основная информация -->
-    <div class="profile-summary" v-if="userProfile">
+    <div class="profile-summary" v-if="userProfile && userProfile.analytics">
       <div class="summary-cards">
         <div class="summary-card">
           <div class="card-icon">📅</div>
           <div class="card-content">
-            <div class="card-value">{{ formatDate(userProfile.analytics?.first_visit) }}</div>
+            <div class="card-value">{{ userProfile.analytics.first_visit ? formatDate(userProfile.analytics.first_visit) : 'Неизвестно' }}</div>
             <div class="card-label">Первый вход</div>
           </div>
         </div>
@@ -33,7 +33,7 @@
         <div class="summary-card">
           <div class="card-icon">⏰</div>
           <div class="card-content">
-            <div class="card-value">{{ formatDate(userProfile.analytics?.last_visit) }}</div>
+            <div class="card-value">{{ userProfile.analytics.last_visit ? formatDate(userProfile.analytics.last_visit) : 'Неизвестно' }}</div>
             <div class="card-label">Последний вход</div>
           </div>
         </div>
@@ -41,7 +41,7 @@
         <div class="summary-card">
           <div class="card-icon">🎯</div>
           <div class="card-content">
-            <div class="card-value">{{ userProfile.analytics?.total_sessions || 0 }}</div>
+            <div class="card-value">{{ userProfile.analytics.total_sessions || 0 }}</div>
             <div class="card-label">Всего сессий</div>
           </div>
         </div>
@@ -49,7 +49,7 @@
         <div class="summary-card">
           <div class="card-icon">📊</div>
           <div class="card-content">
-            <div class="card-value">{{ userProfile.analytics?.total_actions || 0 }}</div>
+            <div class="card-value">{{ userProfile.analytics.total_actions || 0 }}</div>
             <div class="card-label">Всего действий</div>
           </div>
         </div>
@@ -57,17 +57,17 @@
     </div>
 
     <!-- Статистика пользователя -->
-    <div class="profile-stats" v-if="userProfile?.analytics">
+    <div class="profile-stats" v-if="userProfile && userProfile.analytics">
       <h2 class="section-title">📈 Статистика активности</h2>
       <div class="stats-grid">
         <div class="stat-item">
           <div class="stat-label">Среднее время сессии</div>
-          <div class="stat-value">{{ formatDuration(userProfile.analytics.avg_session_duration) }}</div>
+          <div class="stat-value">{{ formatDuration(userProfile.analytics.avg_session_duration || 0) }}</div>
         </div>
 
         <div class="stat-item">
           <div class="stat-label">Предпочитаемое устройство</div>
-          <div class="stat-value">{{ formatDevice(userProfile.analytics.device_preference) }}</div>
+          <div class="stat-value">{{ formatDevice(userProfile.analytics.device_preference || 'unknown') }}</div>
         </div>
 
         <div class="stat-item">
@@ -77,17 +77,17 @@
 
         <div class="stat-item">
           <div class="stat-label">Пиковый час активности</div>
-          <div class="stat-value">{{ formatHour(userProfile.analytics.peak_hour) }}</div>
+          <div class="stat-value">{{ formatHour(userProfile.analytics.peak_hour || 0) }}</div>
         </div>
 
         <div class="stat-item">
           <div class="stat-label">Общее время использования</div>
-          <div class="stat-value">{{ formatDuration(userProfile.analytics.total_duration) }}</div>
+          <div class="stat-value">{{ formatDuration(userProfile.analytics.total_duration || 0) }}</div>
         </div>
 
         <div class="stat-item">
           <div class="stat-label">Retention (дни)</div>
-          <div class="stat-value">{{ userProfile.analytics.retention_days }} дней</div>
+          <div class="stat-value">{{ userProfile.analytics.retention_days || 0 }} дней</div>
         </div>
       </div>
     </div>
@@ -110,7 +110,7 @@
     </div>
 
     <!-- Сессии пользователя -->
-    <div class="sessions-section" v-if="userProfile?.sessions?.length > 0">
+    <div class="sessions-section" v-if="userProfile && userProfile.sessions && userProfile.sessions.length > 0">
       <h2 class="section-title">🎭 Сессии пользователя</h2>
       <div class="sessions-controls">
         <select v-model="sessionViewMode" class="view-mode-select">
@@ -206,11 +206,11 @@
           <div class="metric-comparison">
             <div class="metric-name">Количество действий</div>
             <div class="metric-values">
-              <span class="current">{{ comparisonData.current.actions }}</span>
+              <span class="current">{{ comparisonData.current?.actions || 0 }}</span>
               <span class="vs">vs</span>
-              <span class="previous">{{ comparisonData.previous.actions }}</span>
-              <span class="change" :class="getChangeClass(comparisonData.change.actions)">
-                {{ formatChange(comparisonData.changePercent.actions) }}
+              <span class="previous">{{ comparisonData.previous?.actions || 0 }}</span>
+              <span class="change" :class="getChangeClass(comparisonData.change?.actions || 0)">
+                {{ formatChange(comparisonData.changePercent?.actions || 0) }}
               </span>
             </div>
           </div>
@@ -218,11 +218,11 @@
           <div class="metric-comparison">
             <div class="metric-name">Количество сессий</div>
             <div class="metric-values">
-              <span class="current">{{ comparisonData.current.sessions }}</span>
+              <span class="current">{{ comparisonData.current?.sessions || 0 }}</span>
               <span class="vs">vs</span>
-              <span class="previous">{{ comparisonData.previous.sessions }}</span>
-              <span class="change" :class="getChangeClass(comparisonData.change.sessions)">
-                {{ formatChange(comparisonData.changePercent.sessions) }}
+              <span class="previous">{{ comparisonData.previous?.sessions || 0 }}</span>
+              <span class="change" :class="getChangeClass(comparisonData.change?.sessions || 0)">
+                {{ formatChange(comparisonData.changePercent?.sessions || 0) }}
               </span>
             </div>
           </div>
@@ -230,11 +230,11 @@
           <div class="metric-comparison">
             <div class="metric-name">Средняя длительность сессии</div>
             <div class="metric-values">
-              <span class="current">{{ formatDuration(comparisonData.current.avgDuration) }}</span>
+              <span class="current">{{ formatDuration(comparisonData.current?.avgDuration || 0) }}</span>
               <span class="vs">vs</span>
-              <span class="previous">{{ formatDuration(comparisonData.previous.avgDuration) }}</span>
-              <span class="change" :class="getChangeClass(comparisonData.change.avgDuration)">
-                {{ formatChange(comparisonData.changePercent.avgDuration) }}
+              <span class="previous">{{ formatDuration(comparisonData.previous?.avgDuration || 0) }}</span>
+              <span class="change" :class="getChangeClass(comparisonData.change?.avgDuration || 0)">
+                {{ formatChange(comparisonData.changePercent?.avgDuration || 0) }}
               </span>
             </div>
           </div>
@@ -325,6 +325,23 @@ export default {
       } catch (err) {
         error.value = err.message || 'Ошибка загрузки профиля пользователя';
         console.error('[UserProfileAnalysis] Error loading user profile:', err);
+
+        // Устанавливаем безопасные значения по умолчанию
+        userProfile.value = {
+          user: { name: 'Пользователь', id: props.userId },
+          analytics: {
+            total_actions: 0,
+            total_sessions: 0,
+            avg_session_duration: 0,
+            favorite_page: null,
+            peak_hour: 0,
+            device_preference: 'unknown',
+            first_visit: null,
+            last_visit: null
+          },
+          sessions: []
+        };
+        userActivity.value = [];
       } finally {
         loading.value = false;
       }
