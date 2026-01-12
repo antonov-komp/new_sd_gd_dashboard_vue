@@ -5,16 +5,17 @@
       🚨 DEBUG: SectorDashboard RENDERED for sector: {{ sectorId }} at {{ new Date().toISOString() }}
     </div>
 
-    <!-- Критический DEBUG блок -->
-    <div style="background: red; color: white; padding: 10px; margin-bottom: 10px; font-size: 14px;">
-      <strong>🚨 COMPONENT STATE:</strong><br>
-      sectorId: {{ sectorId }}<br>
-      isLoading: {{ isLoading }}<br>
-      error: {{ error }}<br>
-      hasData: {{ hasData }}<br>
-      totalTickets: {{ totalTickets }}<br>
-      stages: {{ state.stages }} (type: {{ typeof state.stages }}, isArray: {{ Array.isArray(state.stages) }})<br>
-      stagesLength: {{ state.stages.length }}<br>
+    <!-- Отображение состояния загрузки -->
+    <div v-if="isLoading" class="loading-indicator">
+      <div class="loading-spinner"></div>
+      <p>Загрузка данных сектора...</p>
+    </div>
+
+    <!-- Отображение ошибки -->
+    <div v-else-if="error" class="error-indicator">
+      <div class="error-icon">⚠️</div>
+      <p>Ошибка загрузки: {{ error }}</p>
+      <button @click="handleRetry" class="btn-retry">Повторить</button>
     </div>
 
     <!-- Заголовок -->
@@ -103,7 +104,7 @@
         <div class="stat-label">Завершено</div>
       </div>
       <div class="stat-item">
-        <div class="stat-value">{{ state.stages.length }}</div>
+        <div class="stat-value">{{ Array.isArray(stages) ? stages.length : 0 }}</div>
         <div class="stat-label">Этапов</div>
       </div>
     </div>
@@ -140,13 +141,13 @@
       <div v-if="!isLoading && !error" class="dashboard-content">
         <!-- DEBUG: Показываем состояние -->
         <div style="background: #f0f0f0; padding: 10px; margin-bottom: 20px; font-size: 12px;">
-          DEBUG: state.stages.length = {{ state.stages.length }}, isLoading = {{ isLoading }}, error = {{ error }}
+          DEBUG: stages.length = {{ Array.isArray(stages) ? stages.length : 'N/A' }}, isLoading = {{ isLoading }}, error = {{ error }}
         </div>
 
         <!-- Этапы обработки -->
-        <div v-if="state.stages.length > 0" class="stages-container">
+        <div v-if="Array.isArray(stages) && stages.length > 0" class="stages-container">
           <div
-            v-for="stage in state.stages"
+            v-for="stage in (Array.isArray(stages) ? stages : [])"
             :key="stage.id"
             class="stage-card"
             :style="{ borderLeftColor: stage.color }"
@@ -197,7 +198,7 @@
               <ul>
                 <li><strong>ID:</strong> {{ sectorId }}</li>
                 <li><strong>Название:</strong> {{ sectorName }}</li>
-                <li><strong>Этапов:</strong> {{ state.stages.length }}</li>
+                <li><strong>Этапов:</strong> {{ Array.isArray(stages) ? stages.length : 0 }}</li>
                 <li><strong>Сотрудников:</strong> {{ employees.length }}</li>
                 <li><strong>Тикетов:</strong> {{ totalTickets }}</li>
               </ul>
@@ -282,10 +283,10 @@ export default {
       const actions = useUniversalDashboardActions(state, props.sectorId);
 
       console.log(`[SectorDashboard] State initialized:`, {
-        hasStages: !!state.stages,
-        stagesType: typeof state.stages,
-        stagesIsArray: Array.isArray(state.stages),
-        stagesValue: state.stages
+        hasStages: !!stages,
+        stagesType: typeof stages,
+        stagesIsArray: Array.isArray(stages),
+        stagesValue: stages
       });
 
     // Информация о текущем пользователе
@@ -356,14 +357,14 @@ export default {
         console.log(`[SectorDashboard] 📡 Starting data load for sector: ${props.sectorId}`);
         await actions.loadSectorData();
         console.log(`[SectorDashboard] ✅ Data loaded successfully for sector: ${props.sectorId}`, {
-          hasData: state.hasData,
-          totalTickets: state.totalTickets,
-          stagesCount: state.stages.length,
-          employeesCount: state.employees.length,
-          completionRate: state.completionRate,
-          stages: Array.isArray(state.stages) ? state.stages.map(s => ({ id: s.id, name: s.name, ticketsCount: s.tickets?.length || 0 })) : [],
-          renderingCondition: !state.isLoading && !state.error,
-          stagesLength: state.stages.length
+          hasData: hasData,
+          totalTickets: totalTickets,
+          stagesCount: Array.isArray(stages) ? stages.length : 0,
+          employeesCount: Array.isArray(employees) ? employees.length : 0,
+          completionRate: completionRate,
+          stages: Array.isArray(stages) ? stages.map(s => ({ id: s.id, name: s.name, ticketsCount: s.tickets?.length || 0 })) : [],
+          renderingCondition: !isLoading && !error,
+          stagesLength: Array.isArray(stages) ? stages.length : 0
         });
       } catch (error) {
         console.error(`[SectorDashboard] ❌ Failed to load initial data for sector ${props.sectorId}:`, error);
@@ -951,6 +952,64 @@ export default {
   background: #f8d7da;
   border: 1px solid #f5c6cb;
   border-radius: 4px;
+}
+
+/* Индикаторы состояния */
+.loading-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #007bff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 15px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.error-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+  background: #f8d7da;
+  border: 1px solid #f5c6cb;
+  border-radius: 8px;
+  margin: 20px 0;
+}
+
+.error-icon {
+  font-size: 48px;
+  margin-bottom: 15px;
+}
+
+.btn-retry {
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  margin-top: 15px;
+}
+
+.btn-retry:hover {
+  background: #c82333;
 }
 
 /* Адаптивность для новых элементов */

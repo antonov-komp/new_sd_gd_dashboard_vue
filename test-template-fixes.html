@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Исправления template в SectorDashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f8f9fa; }
+        .test-section { margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background: white; }
+        .status { padding: 8px 12px; border-radius: 20px; font-weight: bold; display: inline-block; margin: 5px; }
+        .status.fixed { background: #d4edda; color: #155724; }
+        .status.testing { background: #cce5ff; color: #004085; }
+        .code { background: #f8f9fa; padding: 10px; border-radius: 4px; font-family: monospace; margin: 10px 0; white-space: pre-wrap; }
+        .test-link { display: inline-block; padding: 12px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; margin: 10px 5px; transition: all 0.3s; }
+        .test-link:hover { background: #0056b3; transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
+    </style>
+</head>
+<body>
+    <h1>🔧 Исправления template в SectorDashboard</h1>
+
+    <div class="test-section">
+        <h2>✅ Исправленные проблемы с template</h2>
+
+        <h3>1. <span class="status fixed">ИСПРАВЛЕНО</span> Ошибка доступа к state.stages</h3>
+        <p><strong>Проблема:</strong> В template использовался `state.stages`, но `state` - это объект, возвращаемый из setup с `...state`</p>
+        <p><strong>Решение:</strong> Использовать `stages` напрямую, поскольку `...state` делает все свойства доступными в template</p>
+        <div class="code">// Было (ошибка):
+v-for="stage in state.stages"
+{{ state.stages.length }}
+
+// Стало (правильно):
+v-for="stage in stages"
+{{ stages.length }}</div>
+
+        <h3>2. <span class="status fixed">ИСПРАВЛЕНО</span> Защита от undefined свойств</h3>
+        <p><strong>Проблема:</strong> Если `stages` не является массивом, код падал с ошибкой</p>
+        <p><strong>Решение:</strong> Добавлены проверки `Array.isArray(stages)` во всех местах использования</p>
+        <div class="code">// Добавлена защита:
+v-if="Array.isArray(stages) && stages.length > 0"
+v-for="stage in (Array.isArray(stages) ? stages : [])"
+{{ Array.isArray(stages) ? stages.length : 0 }}</div>
+
+        <h3>3. <span class="status fixed">ИСПРАВЛЕНО</span> DEBUG блок заменен на нормальный UI</h3>
+        <p><strong>Проблема:</strong> DEBUG блок с красным фоном был в продакшене</p>
+        <p><strong>Решение:</strong> Заменен на нормальные индикаторы загрузки и ошибок</p>
+    </div>
+
+    <div class="test-section">
+        <h2>🎯 Что должно работать теперь</h2>
+
+        <h3>При открытии дашборда сектора:</h3>
+        <ol>
+            <li><strong>✅ Template рендерится</strong> без ошибок Vue</li>
+            <li><strong>✅ Показывается индикатор загрузки</strong> "Загрузка данных сектора..."</li>
+            <li><strong>✅ При успешной загрузке</strong> отображаются этапы и статистика</li>
+            <li><strong>✅ При ошибке</strong> показывается сообщение с кнопкой "Повторить"</li>
+            <li><strong>✅ Все проверки массивов</strong> предотвращают ошибки</li>
+        </ol>
+
+        <h3>Логи, которые должны появиться:</h3>
+        <div class="code">[SectorDashboard] SETUP called for sector: pdm
+[SectorDashboard] State initialized: {hasStages: true, stagesType: 'object', stagesIsArray: true, stagesValue: []}
+[SectorDashboard] 🚀 Mounted for sector: pdm (PDM)
+[SectorDashboard] 📡 Starting data load for sector: pdm
+✅ [useUniversalDashboardActions] Sector data loaded successfully for pdm
+[SectorDashboard] ✅ Data loaded successfully for sector: pdm</code>
+    </div>
+
+    <div class="test-section">
+        <h2>🧪 Тестовые ссылки</h2>
+        <p>Протестируйте исправления:</p>
+
+        <a href="https://back.kompo.by/rest_api_aps/sd_it_gen_plan/index.php#/dashboard/sector-pdm" class="test-link">
+            🔧 Сектор PDM (исправленный template)
+        </a>
+
+        <a href="https://back.kompo.by/rest_api_aps/sd_it_gen_plan/index.php#/dashboard/sector-bitrix24" class="test-link">
+            🌐 Сектор Bitrix24 (исправленный template)
+        </a>
+
+        <a href="https://back.kompo.by/rest_api_aps/sd_it_gen_plan/index.php#/dashboard/sector-infrastructure" class="test-link">
+            🖥️ Сектор Infrastructure (исправленный template)
+        </a>
+    </div>
+
+    <div class="test-section">
+        <h2>📋 Технические детали исправлений</h2>
+
+        <h3>Файлы, измененные:</h3>
+        <ul>
+            <li><code>vue-app/src/components/SectorDashboard.vue</code>
+                <ul>
+                    <li>✅ Заменено `state.stages` на `stages` в template (8 мест)</li>
+                    <li>✅ Добавлены проверки `Array.isArray(stages)` (6 мест)</li>
+                    <li>✅ DEBUG блок заменен на нормальный UI</li>
+                    <li>✅ Исправлены console.log в setup и onMounted</li>
+                </ul>
+            </li>
+        </ul>
+
+        <h3>Почему возникла проблема:</h3>
+        <div class="code">В Vue 3 Composition API при использовании `...state` в return setup,
+все свойства из `state` становятся доступными в template напрямую.
+
+Использование `state.stages` было ошибкой, потому что `state` - это
+уже развернутый объект, а не ссылка на composable.</div>
+
+        <h3>Vue reactivity в этом случае:</h3>
+        <div class="code">setup() {
+  const state = useUniversalDashboardState(sectorId);
+  return { ...state }; // stages становится доступным в template
+}
+
+template:
+  {{ stages }} ✅ (работает)
+  {{ state.stages }} ❌ (state не определен в template scope)</div>
+    </div>
+
+    <div class="test-section">
+        <h2>🚀 Следующие шаги</h2>
+        <ol>
+            <li><strong>Открыть дашборды секторов</strong> - проверить отсутствие ошибок</li>
+            <li><strong>Проверить индикаторы загрузки</strong> - должны показываться корректно</li>
+            <li><strong>Протестировать кнопку "Повторить"</strong> при ошибках</li>
+            <li><strong>Убедиться в отсутствии Vue ошибок</strong> в консоли</li>
+            <li><strong>Перейти к подключению реальных данных</strong> вместо mock</li>
+        </ol>
+
+        <div style="background: #d4edda; color: #155724; padding: 15px; border-radius: 5px; margin-top: 15px;">
+            <strong>🎉 Template исправлен!</strong><br>
+            Теперь дашборды секторов должны отображаться без ошибок Vue.
+        </div>
+    </div>
+</body>
+</html>
