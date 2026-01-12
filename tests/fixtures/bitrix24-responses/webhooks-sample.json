@@ -1,0 +1,55 @@
+[
+    {
+        "event": "ONTASKADD",
+        "data": {
+            "FIELDS": {
+                "ID": "123",
+                "TITLE": "New Task Created",
+                "CREATED_DATE": "2026-01-12T10:00:00Z",
+                "STAGE_ID": "DT140_12:UC_0VHWE2",
+                "ASSIGNED_BY_ID": "1",
+                "RESPONSIBLE_ID": "2"
+            }
+        },
+        "auth": {
+            "application_token": "test_webhook_token_123"
+        }
+    },
+    {
+        "event": "ONTASKUPDATE",
+        "data": {
+            "FIELDS": {
+                "ID": "124",
+                "TITLE": "Task Updated - Stage Changed",
+                "CREATED_DATE": "2026-01-02T10:00:00Z",
+                "STAGE_ID": "DT140_12:PREPARATION",
+                "ASSIGNED_BY_ID": "2",
+                "RESPONSIBLE_ID": "1"
+            },
+            "CHANGES": {
+                "STAGE_ID": {
+                    "FROM": "DT140_12:UC_0VHWE2",
+                    "TO": "DT140_12:PREPARATION"
+                }
+            }
+        },
+        "auth": {
+            "application_token": "test_webhook_token_123"
+        }
+    },
+    {
+        "event": "ONCRMDEALADD",
+        "data": {
+            "FIELDS": {
+                "ID": "1001",
+                "TITLE": "New Deal Created",
+                "STAGE_ID": "NEW",
+                "ASSIGNED_BY_ID": "1",
+                "OPPORTUNITY": "150000.00"
+            }
+        },
+        "auth": {
+            "application_token": "test_webhook_token_123"
+        }
+    }
+]

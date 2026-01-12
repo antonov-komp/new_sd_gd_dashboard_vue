@@ -1,0 +1,19 @@
+{
+    "timestamp": "2026-01-12T07:13:56Z",
+    "environment": "sandbox",
+    "category": "unit",
+    "summary": {
+        "total": 4,
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0,
+        "duration": 1
+    },
+    "results": [
+        {"name":"test-basic-functionality","status":"passed","duration":0},
+        {"name":"test-cache-logic","status":"passed","duration":0},
+        {"name":"test-carryover-categories","status":"passed","duration":0},
+        {"name":"test-duration-category","status":"passed","duration":0},
+        
+    ]
+}

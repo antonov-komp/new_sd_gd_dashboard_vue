@@ -1,0 +1,42 @@
+[
+    {
+        "ID": "1001",
+        "TITLE": "Test Deal 1",
+        "STAGE_ID": "NEW",
+        "ASSIGNED_BY_ID": "1",
+        "OPPORTUNITY": "150000.00",
+        "CURRENCY_ID": "RUB",
+        "COMPANY_ID": "201",
+        "CONTACT_ID": "301",
+        "DATE_CREATE": "2026-01-01T10:00:00Z",
+        "DATE_MODIFY": "2026-01-05T14:30:00Z",
+        "PROBABILITY": "30"
+    },
+    {
+        "ID": "1002",
+        "TITLE": "Test Deal 2 - In Progress",
+        "STAGE_ID": "PREPARATION",
+        "ASSIGNED_BY_ID": "2",
+        "OPPORTUNITY": "250000.00",
+        "CURRENCY_ID": "RUB",
+        "COMPANY_ID": "202",
+        "CONTACT_ID": "302",
+        "DATE_CREATE": "2025-12-15T11:20:00Z",
+        "DATE_MODIFY": "2026-01-08T16:45:00Z",
+        "PROBABILITY": "60"
+    },
+    {
+        "ID": "1003",
+        "TITLE": "Test Deal 3 - Won",
+        "STAGE_ID": "WON",
+        "ASSIGNED_BY_ID": "1",
+        "OPPORTUNITY": "180000.00",
+        "CURRENCY_ID": "RUB",
+        "COMPANY_ID": "203",
+        "CONTACT_ID": "303",
+        "DATE_CREATE": "2025-11-20T09:15:00Z",
+        "DATE_MODIFY": "2026-01-12T10:00:00Z",
+        "DATE_CLOSED": "2026-01-12T10:00:00Z",
+        "PROBABILITY": "100"
+    }
+]

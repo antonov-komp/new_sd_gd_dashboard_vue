@@ -1,0 +1,46 @@
+[
+    {
+        "ID": "123",
+        "TITLE": "Test Task 1",
+        "CREATED_DATE": "2026-01-01T10:00:00Z",
+        "STAGE_ID": "DT140_12:UC_0VHWE2",
+        "ASSIGNED_BY_ID": "1",
+        "RESPONSIBLE_ID": "2",
+        "STATUS": "2",
+        "CLOSED_DATE": null,
+        "COMMENTS_COUNT": "0"
+    },
+    {
+        "ID": "124",
+        "TITLE": "Test Task 2",
+        "CREATED_DATE": "2026-01-02T10:00:00Z",
+        "STAGE_ID": "DT140_12:PREPARATION",
+        "ASSIGNED_BY_ID": "2",
+        "RESPONSIBLE_ID": "1",
+        "STATUS": "3",
+        "CLOSED_DATE": null,
+        "COMMENTS_COUNT": "2"
+    },
+    {
+        "ID": "125",
+        "TITLE": "Test Task 3 - Long Running",
+        "CREATED_DATE": "2025-01-01T10:00:00Z",
+        "STAGE_ID": "DT140_12:CLIENT",
+        "ASSIGNED_BY_ID": "1",
+        "RESPONSIBLE_ID": "3",
+        "STATUS": "5",
+        "CLOSED_DATE": "2026-01-10T15:30:00Z",
+        "COMMENTS_COUNT": "5"
+    },
+    {
+        "ID": "126",
+        "TITLE": "Test Task 4 - Carryover",
+        "CREATED_DATE": "2025-06-15T09:00:00Z",
+        "STAGE_ID": "DT140_12:UC_0VHWE2",
+        "ASSIGNED_BY_ID": "3",
+        "RESPONSIBLE_ID": "2",
+        "STATUS": "2",
+        "CLOSED_DATE": null,
+        "COMMENTS_COUNT": "1"
+    }
+]
