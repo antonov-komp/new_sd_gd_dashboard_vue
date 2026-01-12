@@ -58,10 +58,10 @@ if ($config['use_mocks']) {
     echo "Mock классы загружены\n";
 } else {
     // В реальной среде загружаем настоящие классы
-    require_once '../api/cache/DashboardSector1CCache.php';
-    require_once '../api/cache/GraphStateCache.php';
-    require_once '../api/services/DashboardSector1CService.php';
-    require_once '../api/services/GraphStateService.php';
+    require_once '../../api/cache/DashboardSector1CCache.php';
+    require_once '../../api/cache/GraphStateCache.php';
+    require_once '../../api/services/DashboardSector1CService.php';
+    require_once '../../api/services/GraphStateService.php';
     echo "Реальные классы загружены\n";
 }
 

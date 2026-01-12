@@ -4,10 +4,10 @@
  */
 
 // Загружаем сервисы
-require_once '../api/cache/DashboardSector1CCache.php';
-require_once '../api/cache/GraphStateCache.php';
-require_once '../api/services/DashboardSector1CService.php';
-require_once '../api/services/GraphStateService.php';
+require_once '../../api/cache/DashboardSector1CCache.php';
+require_once '../../api/cache/GraphStateCache.php';
+require_once '../../api/services/DashboardSector1CService.php';
+require_once '../../api/services/GraphStateService.php';
 
 echo "=== Тест зависимостей GraphStateService ===\n\n";
 
