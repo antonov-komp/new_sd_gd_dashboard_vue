@@ -68,6 +68,31 @@ const routes = [
     }
   },
   {
+    path: '/dashboard/sector/:sectorId',
+    name: 'dashboard-sector',
+    component: () => import(/* webpackChunkName: "universal-dashboard" */ '@/components/SectorDashboard.vue'),
+    props: (route) => ({
+      sectorId: route.params.sectorId
+    }),
+    meta: {
+      requiresAuth: true,
+      chunk: 'universal-dashboard'
+    },
+    beforeEnter: (to, from, next) => {
+      // Проверяем, что сектор существует
+      const { SECTORS_CONFIG, SectorConfigUtils } = require('@/config/sectors.js');
+      const sectorId = to.params.sectorId;
+
+      if (!SectorConfigUtils.sectorExists(sectorId)) {
+        console.warn(`Sector ${sectorId} does not exist, redirecting to index`);
+        next({ name: 'index' });
+        return;
+      }
+
+      next();
+    }
+  },
+  {
     path: '/dashboard/graph-admission-closure',
     name: 'dashboard-graph-admission-closure',
     component: () => import(/* webpackChunkName: "admission-dashboard" */ '@/components/graph-admission-closure/GraphAdmissionClosureDashboard.vue'),

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест обновленных маршрутов секторов</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-links { margin: 20px 0; }
+        .test-links a { display: inline-block; margin: 10px; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; }
+        .test-links a:hover { background: #0056b3; }
+        .info { background: #e9ecef; padding: 15px; border-radius: 5px; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <h1>Тест обновленных маршрутов секторов</h1>
+
+    <div class="info">
+        <h3>Что исправлено:</h3>
+        <ul>
+            <li>✅ Добавлен динамический маршрут `/dashboard/sector/:sectorId` для всех секторов</li>
+            <li>✅ Упрощен компонент SectorDashboard (убраны зависимые компоненты)</li>
+            <li>✅ Добавлена валидация существования секторов в роутере</li>
+            <li>✅ Исправлен двойной class binding в template</li>
+        </ul>
+
+        <h3>Ожидаемый результат:</h3>
+        <ul>
+            <li><strong>Сектор 1С:</strong> Показывает реальные данные из Bitrix24</li>
+            <li><strong>Другие сектора:</strong> Показывают информационную страницу с этапами</li>
+            <li><strong>Навигация:</strong> Работает переход между секторами</li>
+        </ul>
+    </div>
+
+    <div class="test-links">
+        <a href="https://back.kompo.by/rest_api_aps/sd_it_gen_plan/index.php#/dashboard/sector-1c">Сектор 1С (с данными)</a>
+        <a href="https://back.kompo.by/rest_api_aps/sd_it_gen_plan/index.php#/dashboard/sector-pdm">Сектор PDM (заглушка)</a>
+        <a href="https://back.kompo.by/rest_api_aps/sd_it_gen_plan/index.php#/dashboard/sector-bitrix24">Сектор Bitrix24 (заглушка)</a>
+        <a href="https://back.kompo.by/rest_api_aps/sd_it_gen_plan/index.php#/dashboard/sector-infrastructure">Сектор Infrastructure (заглушка)</a>
+        <a href="https://back.kompo.by/rest_api_aps/sd_it_gen_plan/index.php#/">Главная страница</a>
+    </div>
+
+    <h2>Отладочная информация:</h2>
+    <p>Проверьте консоль браузера (F12) для логов загрузки данных секторов.</p>
+    <p>Ожидаемые логи:</p>
+    <ul>
+        <li><code>[SectorDashboard] Mounted for sector: pdm</code></li>
+        <li><code>[UniversalSectorDashboardService] Returning dashboard data for pdm</code></li>
+        <li><code>[SectorPDMService] Returning stub data</code></li>
+    </ul>
+</body>
+</html>

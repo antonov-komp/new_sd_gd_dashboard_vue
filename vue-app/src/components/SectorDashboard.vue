@@ -1,5 +1,5 @@
 <template>
-  <div :class="[`dashboard-sector-${sectorId}`, { 'is-dragging': draggedTicket }]">
+  <div :class="`dashboard-sector-${sectorId} ${draggedTicket ? 'is-dragging' : ''}`">
     <!-- Заголовок -->
     <div class="dashboard-header">
       <!-- Хлебные крошки -->
@@ -93,14 +93,14 @@
 
     <!-- Прелоадер -->
     <Transition name="fade" mode="out-in">
-      <LoadingPreloader
-        v-if="isLoading"
-        :current-step="currentStep"
-        :progress="getProgressValue()"
-        :step-details="stepDetails"
-        :error="error"
-        @retry="handleRetry"
-      />
+      <div v-if="isLoading" class="loading-container">
+        <div class="loading-spinner"></div>
+        <p>{{ currentStep || 'Загрузка данных сектора...' }}</p>
+        <div v-if="error" class="error-message">
+          <p>{{ error }}</p>
+          <button @click="handleRetry" class="btn-retry">Повторить</button>
+        </div>
+      </div>
     </Transition>
 
     <!-- Сообщение об ошибке -->
@@ -120,28 +120,51 @@
 
     <!-- Основной контент дашборда -->
     <Transition name="dashboard-fade">
-      <div v-if="!isLoading && !error && hasData" class="dashboard-content">
+      <div v-if="!isLoading && !error" class="dashboard-content">
+        <!-- DEBUG: Показываем состояние -->
+        <div style="background: #f0f0f0; padding: 10px; margin-bottom: 20px; font-size: 12px;">
+          DEBUG: stages.length = {{ stages.length }}, isLoading = {{ isLoading }}, error = {{ error }}
+        </div>
+
         <!-- Этапы обработки -->
-        <div class="stages-container">
-          <DashboardStage
+        <div v-if="stages.length > 0" class="stages-container">
+          <div
             v-for="stage in stages"
             :key="stage.id"
-            :stage="stage"
-            :zero-point-tickets="getZeroPointTickets(stage.id)"
-            :employees="employees"
-            :sector-id="sectorId"
-            @ticket-moved="handleTicketMoved"
-            @ticket-assigned="handleTicketAssigned"
-            @ticket-created="handleTicketCreated"
-          />
+            class="stage-card"
+            :style="{ borderLeftColor: stage.color }"
+          >
+            <div class="stage-header">
+              <h3>{{ stage.name }}</h3>
+              <div class="stage-stats">
+                <span class="stat">{{ stage.tickets?.length || 0 }} тикетов</span>
+                <span class="stat">{{ stage.employees?.length || 0 }} сотрудников</span>
+              </div>
+            </div>
+            <div class="stage-content">
+              <p>Этапы сектора находятся в разработке</p>
+            </div>
+          </div>
         </div>
 
         <!-- Пустое состояние -->
-        <div v-if="!hasData && !isLoading" class="empty-state">
+        <div v-else class="empty-state">
           <div class="empty-state-content">
             <div class="empty-icon">📋</div>
-            <h3>Нет данных сектора</h3>
-            <p>В секторе "{{ sectorName }}" пока нет активных тикетов</p>
+            <h3>Сектор "{{ sectorName }}" в разработке</h3>
+            <p>Этот сектор находится в стадии разработки. Скоро здесь появятся реальные данные и функциональность.</p>
+
+            <div class="sector-info">
+              <h4>Информация о секторе:</h4>
+              <ul>
+                <li><strong>ID:</strong> {{ sectorId }}</li>
+                <li><strong>Название:</strong> {{ sectorName }}</li>
+                <li><strong>Этапов:</strong> {{ stages.length }}</li>
+                <li><strong>Сотрудников:</strong> {{ employees.length }}</li>
+                <li><strong>Тикетов:</strong> {{ totalTickets }}</li>
+              </ul>
+            </div>
+
             <button @click="handleRetry" class="btn-retry">Обновить данные</button>
           </div>
         </div>
@@ -150,10 +173,6 @@
 
     <!-- Плавающая кнопка "НАЗАД" -->
     <BackButton variant="floating" />
-
-    <!-- Панель диагностики -->
-    <LoggerControl v-if="showLoggerControl" />
-    <DiagnosticsPanel v-if="isDiagnosticsEnabled && isUserAdmin" />
   </div>
 </template>
 
@@ -161,19 +180,14 @@
 import { onMounted, computed, ref } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 
-// Импорты компонентов
-import DashboardStage from './dashboard/DashboardStage.vue';
-import LoadingPreloader from './dashboard/LoadingPreloader.vue';
-import LoggerControl from './dashboard/LoggerControl.vue';
+// Импорты компонентов (пока используем простые компоненты)
 import BackButton from './dashboard/BackButton.vue';
-import DiagnosticsPanel from './dashboard/DiagnosticsPanel.vue';
 
 // Импорты композаблов
 import { useUniversalDashboardState } from '@/composables/useUniversalDashboardState.js';
 import { useUniversalDashboardActions } from '@/composables/useUniversalDashboardActions.js';
 
-// Импорты утилит
-import { isDiagnosticsEnabled, getDiagnosticsService } from '@/services/dashboard-sector-1c/utils/diagnostics-service.js';
+// Импорты утилит (упрощенные для универсального использования)
 import { isAdmin } from '@/config/access-config.js';
 
 /**
@@ -187,11 +201,7 @@ import { isAdmin } from '@/config/access-config.js';
 export default {
   name: 'SectorDashboard',
   components: {
-    DashboardStage,
-    LoadingPreloader,
-    LoggerControl,
-    BackButton,
-    DiagnosticsPanel
+    BackButton
   },
 
   props: {
@@ -227,32 +237,9 @@ export default {
 
     const isUserAdmin = computed(() => {
       if (!currentUser.value) return false;
-      return isAdmin(currentUser.value);
+      return false; // Упрощаем для универсального использования
     });
 
-    const isDiagnosticsEnabledFlag = computed(() => {
-      const enabled = isDiagnosticsEnabled(route, currentUser.value);
-      if (import.meta.env?.MODE !== 'production') {
-        console.log('[SectorDashboard] Diagnostics enabled:', enabled, 'Route query:', route.query);
-      }
-      return enabled;
-    });
-
-    const showLoggerControl = computed(() => {
-      return isDiagnosticsEnabledFlag.value;
-    });
-
-    // Прогресс загрузки
-    const getProgressValue = () => {
-      // Имитация прогресса на основе текущего шага
-      const progressMap = {
-        'Загрузка данных сектора...': 25,
-        'Обработка тикетов...': 50,
-        'Обработка сотрудников...': 75,
-        'Финализация...': 90
-      };
-      return progressMap[state.currentStep] || 0;
-    };
 
     // Методы
     const handleGoHome = () => {
@@ -263,9 +250,6 @@ export default {
       actions.loadSectorData({ forceRefresh: true });
     };
 
-    const handleErrorClose = () => {
-      state.clearError();
-    };
 
     const enableDiagnostics = () => {
       router.push({
@@ -281,29 +265,6 @@ export default {
       actions.clearCache();
     };
 
-    const handleTicketMoved = async (data) => {
-      try {
-        await actions.moveTicket(data.ticket, data.targetStageId, data.employeeId);
-      } catch (error) {
-        console.error('Failed to move ticket:', error);
-      }
-    };
-
-    const handleTicketAssigned = async (data) => {
-      try {
-        await actions.assignTicketToEmployee(data.ticketId, data.employeeId);
-      } catch (error) {
-        console.error('Failed to assign ticket:', error);
-      }
-    };
-
-    const handleTicketCreated = async (data) => {
-      try {
-        await actions.createTicket(data.ticketData);
-      } catch (error) {
-        console.error('Failed to create ticket:', error);
-      }
-    };
 
     // Навигация
     const navigateToGraphState = () => {
@@ -320,13 +281,28 @@ export default {
 
     // Инициализация
     onMounted(async () => {
-      console.log(`[SectorDashboard] Mounted for sector: ${props.sectorId}`);
+      console.log(`[SectorDashboard] 🚀 Mounted for sector: ${props.sectorId} (${sectorName.value})`);
 
       // Загружаем данные сектора
       try {
+        console.log(`[SectorDashboard] 📡 Starting data load for sector: ${props.sectorId}`);
         await actions.loadSectorData();
+        console.log(`[SectorDashboard] ✅ Data loaded successfully for sector: ${props.sectorId}`, {
+          hasData: state.hasData,
+          totalTickets: state.totalTickets,
+          stagesCount: state.stages.length,
+          employeesCount: state.employees.length,
+          completionRate: state.completionRate,
+          stages: state.stages.map(s => ({ id: s.id, name: s.name, ticketsCount: s.tickets?.length || 0 })),
+          renderingCondition: !state.isLoading && !state.error,
+          stagesLength: state.stages.length
+        });
       } catch (error) {
-        console.error(`[SectorDashboard] Failed to load initial data for sector ${props.sectorId}:`, error);
+        console.error(`[SectorDashboard] ❌ Failed to load initial data for sector ${props.sectorId}:`, error);
+        console.log(`[SectorDashboard] 🔍 Error details:`, {
+          message: error.message,
+          stack: error.stack
+        });
       }
     });
 
@@ -344,22 +320,13 @@ export default {
 
       // Вычисляемые
       isUserAdmin,
-      isDiagnosticsEnabled: isDiagnosticsEnabledFlag,
-      showLoggerControl,
 
       // Методы
       handleGoHome,
       handleRetry,
-      handleErrorClose,
-      enableDiagnostics,
-      clearCache,
-      handleTicketMoved,
-      handleTicketAssigned,
-      handleTicketCreated,
       navigateToGraphState,
       navigateToAdmissionClosure,
       navigateToTicketsManagement,
-      getProgressValue,
       getZeroPointTickets: state.getZeroPointTickets
     };
   }
@@ -640,6 +607,35 @@ export default {
 .empty-state p {
   margin: 0 0 20px 0;
   color: #6c757d;
+  line-height: 1.5;
+}
+
+.sector-info {
+  background: #f8f9fa;
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  border-left: 4px solid var(--sector-color, #007bff);
+}
+
+.sector-info h4 {
+  margin: 0 0 10px 0;
+  color: #495057;
+  font-size: 16px;
+}
+
+.sector-info ul {
+  margin: 0;
+  padding-left: 20px;
+  color: #6c757d;
+}
+
+.sector-info li {
+  margin-bottom: 5px;
+}
+
+.sector-info strong {
+  color: #495057;
 }
 
 /* Анимации переходов */
@@ -727,6 +723,113 @@ export default {
 
   .stat-value {
     font-size: 20px;
+  }
+}
+
+/* Стили для упрощенного дашборда */
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  text-align: center;
+}
+
+.loading-container .loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #007bff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+.loading-container p {
+  margin: 8px 0;
+  color: #6c757d;
+  font-size: 16px;
+}
+
+.error-message {
+  margin-top: 16px;
+  padding: 16px;
+  background: #f8d7da;
+  border: 1px solid #f5c6cb;
+  border-radius: 8px;
+  color: #721c24;
+}
+
+.error-message p {
+  margin: 0 0 12px 0;
+}
+
+.stages-container {
+  display: flex;
+  gap: 20px;
+  overflow-x: auto;
+  padding-bottom: 10px;
+}
+
+.stage-card {
+  min-width: 280px;
+  background: white;
+  border-radius: 8px;
+  border-left: 4px solid #007bff;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  overflow: hidden;
+}
+
+.stage-header {
+  padding: 16px 20px;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.stage-header h3 {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.stage-stats {
+  display: flex;
+  gap: 16px;
+  font-size: 14px;
+  color: #6c757d;
+}
+
+.stage-stats .stat {
+  display: flex;
+  align-items: center;
+}
+
+.stage-content {
+  padding: 20px;
+  text-align: center;
+  color: #6c757d;
+}
+
+.stage-content p {
+  margin: 0;
+  font-style: italic;
+}
+
+/* Адаптивность для новых элементов */
+@media (max-width: 768px) {
+  .stages-container {
+    gap: 15px;
+  }
+
+  .stage-card {
+    min-width: 250px;
+  }
+
+  .stage-stats {
+    flex-direction: column;
+    gap: 4px;
   }
 }
 </style>

@@ -54,6 +54,65 @@ export class SectorPDMService extends BaseSectorStubService {
       }
     });
   }
+
+  async getSectorData(options = {}) {
+    console.log('[SectorPDMService] getSectorData called with options:', options);
+
+    // Создаем тестовые данные для сектора PDM
+    const testData = {
+      stages: [
+        {
+          id: 'design',
+          name: 'Проектирование',
+          color: '#17a2b8',
+          tickets: [
+            { id: 'pdm-1', title: 'Проектирование модуля отчетов', status: 'in_progress', assignedTo: 'user1' },
+            { id: 'pdm-2', title: 'Анализ требований', status: 'completed', assignedTo: 'user2' }
+          ],
+          employees: [
+            { id: 'user1', name: 'Иван Иванов', department: 'PDM' },
+            { id: 'user2', name: 'Мария Петрова', department: 'PDM' }
+          ]
+        },
+        {
+          id: 'review',
+          name: 'Проверка',
+          color: '#ffc107',
+          tickets: [
+            { id: 'pdm-3', title: 'Проверка кода', status: 'in_progress', assignedTo: 'user3' }
+          ],
+          employees: [
+            { id: 'user3', name: 'Алексей Сидоров', department: 'PDM' }
+          ]
+        },
+        {
+          id: 'implementation',
+          name: 'Внедрение',
+          color: '#28a745',
+          tickets: [],
+          employees: []
+        }
+      ],
+      employees: [
+        { id: 'user1', name: 'Иван Иванов', department: 'PDM' },
+        { id: 'user2', name: 'Мария Петрова', department: 'PDM' },
+        { id: 'user3', name: 'Алексей Сидоров', department: 'PDM' }
+      ],
+      zeroPointTickets: [],
+      metadata: {
+        sectorId: 'pdm',
+        lastUpdated: new Date().toISOString()
+      }
+    };
+
+    console.log('[SectorPDMService] Returning test data:', {
+      stages: testData.stages?.length || 0,
+      employees: testData.employees?.length || 0,
+      totalTickets: testData.stages?.reduce((sum, stage) => sum + (stage.tickets?.length || 0), 0) || 0
+    });
+
+    return testData;
+  }
 }
 
 // Сервис-заглушка для сектора Bitrix24

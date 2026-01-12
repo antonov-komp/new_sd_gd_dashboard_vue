@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug: Сектор PDM</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .debug-info { background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0; }
+        .debug-info h3 { margin-top: 0; color: #495057; }
+        .test-link { display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; margin: 10px; }
+        .test-link:hover { background: #0056b3; }
+        .expected-logs { background: #e9ecef; padding: 15px; border-radius: 5px; margin: 20px 0; font-family: monospace; }
+        .expected-logs h4 { margin-top: 0; color: #495057; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Debug: Сектор PDM</h1>
+
+    <div class="debug-info">
+        <h3>Что должно происходить:</h3>
+        <ol>
+            <li>Открывается маршрут <code>/dashboard/sector-pdm</code></li>
+            <li>Загружается компонент <code>SectorDashboard.vue</code> с <code>sectorId="pdm"</code></li>
+            <li>Компонент вызывает <code>useUniversalDashboardState('pdm')</code></li>
+            <li>Вызывается <code>actions.loadSectorData()</code></li>
+            <li><code>UniversalSectorDashboardService</code> получает данные от <code>SectorPDMService</code></li>
+            <li>Данные нормализуются и устанавливаются в state</li>
+            <li>Компонент рендерит stages с tickets</li>
+        </ol>
+    </div>
+
+    <div>
+        <a href="https://back.kompo.by/rest_api_aps/sd_it_gen_plan/index.php#/dashboard/sector-pdm" class="test-link">
+            🧪 Протестировать сектор PDM
+        </a>
+        <a href="https://back.kompo.by/rest_api_aps/sd_it_gen_plan/index.php#/dashboard/sector-1c" class="test-link">
+            ✅ Проверить сектор 1С (для сравнения)
+        </a>
+    </div>
+
+    <div class="expected-logs">
+        <h4>Ожидаемые логи в консоли браузера (F12):</h4>
+        <div>
+            <strong>При открытии сектора PDM:</strong><br>
+            <code>[SectorDashboard] 🚀 Mounted for sector: pdm (PDM)</code><br>
+            <code>[SectorDashboard] 📡 Starting data load for sector: pdm</code><br>
+            <code>[SectorPDMService] getSectorData called with options: {}</code><br>
+            <code>[SectorPDMService] Returning test data: { stages: 3, employees: 3, totalTickets: 3 }</code><br>
+            <code>[UniversalSectorDashboardService] Returning dashboard data for pdm: { stages: 3, employees: 3, totalTickets: 3 }</code><br>
+            <code>[SectorDashboard] ✅ Data loaded successfully for sector: pdm</code><br>
+            <code>DEBUG: stages.length = 3, isLoading = false, error = </code>
+        </div>
+
+        <br>
+        <div>
+            <strong>Что должно отобразиться:</strong><br>
+            - Заголовок "Дашборд - Сектор PDM"<br>
+            - Статистика: 3 тикета, 3 сотрудника, 3 этапа<br>
+            - Три этапа: Проектирование, Проверка, Внедрение<br>
+            - Тикеты в первых двух этапах
+        </div>
+    </div>
+
+    <h2>🚨 Если проблема сохраняется:</h2>
+    <ul>
+        <li>Проверьте, что в консоли есть логи <code>[SectorPDMService] Returning test data</code></li>
+        <li>Посмотрите на DEBUG информацию в интерфейсе</li>
+        <li>Если stages.length = 0, то проблема в нормализации данных</li>
+        <li>Если isLoading = true, то данные не загружаются</li>
+        <li>Если есть ошибка, проверьте логи ошибки</li>
+    </ul>
+
+    <p><strong>После тестирования сообщите, какие логи вы видите и что отображается на экране.</strong></p>
+</body>
+</html>

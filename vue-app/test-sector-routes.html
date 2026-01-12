@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест маршрутов секторов</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-links { margin: 20px 0; }
+        .test-links a { display: inline-block; margin: 10px; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; }
+        .test-links a:hover { background: #0056b3; }
+    </style>
+</head>
+<body>
+    <h1>Тест маршрутов секторов</h1>
+
+    <div class="test-links">
+        <a href="https://back.kompo.by/rest_api_aps/sd_it_gen_plan/index.php#/dashboard/sector-1c">Сектор 1С</a>
+        <a href="https://back.kompo.by/rest_api_aps/sd_it_gen_plan/index.php#/dashboard/sector-pdm">Сектор PDM</a>
+        <a href="https://back.kompo.by/rest_api_aps/sd_it_gen_plan/index.php#/dashboard/sector-bitrix24">Сектор Bitrix24</a>
+        <a href="https://back.kompo.by/rest_api_aps/sd_it_gen_plan/index.php#/dashboard/sector-infrastructure">Сектор Infrastructure</a>
+        <a href="https://back.kompo.by/rest_api_aps/sd_it_gen_plan/index.php#/">Главная</a>
+    </div>
+
+    <p>Нажмите на ссылки выше, чтобы протестировать маршруты секторов.</p>
+
+    <h2>Ожидаемый результат:</h2>
+    <ul>
+        <li><strong>Сектор 1С:</strong> Должен показать реальные данные из Bitrix24</li>
+        <li><strong>Сектор PDM:</strong> Должен показать структуру с этапами: Проектирование, Проверка, Внедрение</li>
+        <li><strong>Сектор Bitrix24:</strong> Должен показать структуру с этапами: Анализ, Разработка, Тестирование, Внедрение</li>
+        <li><strong>Сектор Infrastructure:</strong> Должен показать структуру с этапами: Заявка, Оценка, Закупка, Внедрение</li>
+    </ul>
+
+    <h2>Отладочная информация:</h2>
+    <p>Проверьте консоль браузера (F12) для логов загрузки данных секторов.</p>
+</body>
+</html>

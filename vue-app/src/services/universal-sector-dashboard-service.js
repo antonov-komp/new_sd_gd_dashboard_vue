@@ -69,6 +69,12 @@ export class UniversalSectorDashboardService {
         this.cache.delete(cacheKey);
       }, 5 * 60 * 1000);
 
+      console.log(`[UniversalSectorDashboardService] Returning dashboard data for ${this.sectorId}:`, {
+        stages: dashboardData.stages?.length || 0,
+        employees: dashboardData.employees?.length || 0,
+        totalTickets: dashboardData.metadata?.totalTickets || 0
+      });
+
       return dashboardData;
 
     } catch (error) {
