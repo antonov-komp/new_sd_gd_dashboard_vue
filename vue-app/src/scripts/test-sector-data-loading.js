@@ -95,6 +95,20 @@ export class SectorDataLoadingTester {
         stages: sectorData.stages?.map(s => ({ id: s.id, name: s.name, tickets: s.tickets?.length || 0 })) || []
       });
 
+      // Дополнительная проверка для сектора bitrix24
+      if (sectorId === 'bitrix24') {
+        console.log(`[TEST] Детальный анализ сектора ${sectorId}:`);
+        console.log(`[TEST] - Стадии в данных:`, sectorData.stages?.length || 0);
+        console.log(`[TEST] - Метаданные:`, sectorData.metadata);
+        console.log(`[TEST] - Сотрудники:`, sectorData.employees?.length || 0);
+
+        if (sectorData.stages) {
+          sectorData.stages.forEach((stage, i) => {
+            console.log(`[TEST] - Стадия ${i+1}: ${stage.id} (${stage.name}) - ${stage.tickets?.length || 0} тикетов`);
+          });
+        }
+      }
+
       // Проверяем корректность данных
       const validationResult = this.validateSectorData(sectorData, sectorId);
 
@@ -315,36 +329,39 @@ export class SectorDataLoadingTester {
       });
     }
 
-    // Специфическая проверка для сектора Битрикс24 (ожидаем 1/0/0 с едиными стадиями DT140_12)
+    // Специфическая проверка для сектора Битрикс24 (реальные данные из CRM!)
     if (sectorId === 'bitrix24') {
-      console.log('[TEST] Проверяем данные сектора Битрикс24:', {
+      console.log('[TEST] 🔍 АНАЛИЗ РЕАЛЬНЫХ ДАННЫХ СЕКТОРА БИТРИКС24:');
+      console.log('[TEST] Фильтр: UF_CRM_7_TYPE_PRODUCT = "Bitrix24"');
+      console.log('[TEST] Источник: DashboardSectorBitrix24Service (реальный CRM API)');
+
+      console.log('[TEST] Полученные данные:', {
         stagesCount: sectorData.stages?.length || 0,
-        stages: sectorData.stages?.map(s => ({ id: s.id, ticketsCount: s.tickets?.length || 0 })) || []
+        totalTickets: sectorData.metadata?.totalTickets || 0,
+        stages: sectorData.stages?.map(s => ({
+          id: s.id,
+          name: s.name,
+          ticketsCount: s.tickets?.length || 0
+        })) || []
       });
 
       const stageMetrics = {};
       sectorData.stages.forEach(stage => {
         const dashboardStageId = this.mapStageIdToDashboardId(stage.id);
         stageMetrics[dashboardStageId] = stage.tickets?.length || 0;
-        console.log(`[TEST] Стадия ${stage.id} (${dashboardStageId}): ${stage.tickets?.length || 0} тикетов`);
+        console.log(`[TEST] Стадия ${stage.id} → ${dashboardStageId}: ${stage.tickets?.length || 0} тикетов`);
       });
 
-      // Проверяем ожидаемые метрики для сектора Битрикс24
-      const expectedMetrics = {
-        formed: 1,     // DT140_12:UC_0VHWE2 → formed: 1 элемент
-        review: 0,     // DT140_12:PREPARATION → review: 0 элементов
-        execution: 0   // DT140_12:CLIENT → execution: 0 элементов
-      };
+      console.log('[TEST] 📊 РАСПРЕДЕЛЕНИЕ ПО СТАДИЯМ ДАШБОРДА:');
+      console.log(`[TEST]   formed: ${stageMetrics.formed || 0}`);
+      console.log(`[TEST]   review: ${stageMetrics.review || 0}`);
+      console.log(`[TEST]   execution: ${stageMetrics.execution || 0}`);
+      console.log(`[TEST]   Формат: ${stageMetrics.formed || 0}/${stageMetrics.review || 0}/${stageMetrics.execution || 0}`);
 
-      console.log('[TEST] Ожидаемые метрики:', expectedMetrics);
-      console.log('[TEST] Фактические метрики:', stageMetrics);
-
-      Object.entries(expectedMetrics).forEach(([stageId, expectedCount]) => {
-        const actualCount = stageMetrics[stageId] || 0;
-        if (actualCount !== expectedCount) {
-          warnings.push(`Стадия ${stageId}: ожидалось ${expectedCount} элементов, получено ${actualCount}`);
-        }
-      });
+      // Для сектора Битрикс24 НЕ проверяем ожидаемые метрики,
+      // так как данные должны быть реальными из CRM
+      console.log('[TEST] ⚠️  ВНИМАНИЕ: Это реальные данные из CRM системы!');
+      console.log('[TEST] ⚠️  Ожидаемые метрики не проверяются - показываем реальные данные');
     }
 
     // Проверяем корректность метаданных
@@ -439,12 +456,10 @@ export class SectorDataLoadingTester {
           console.warn(`   ⚠️  Несоответствие ожидаемым данным PDM: ожидалось ${expected.join('/')}, получено ${actual.join('/')}`);
         }
       } else if (result.sectorId === 'bitrix24') {
-        const expected = [1, 0, 0];
-        const actual = stageCounts;
-        const matches = expected.every((exp, i) => exp === actual[i]);
-        if (!matches) {
-          console.warn(`   ⚠️  Несоответствие ожидаемым данным Битрикс24: ожидалось ${expected.join('/')}, получено ${actual.join('/')}`);
-        }
+        // Для сектора Битрикс24 показываем РЕАЛЬНЫЕ данные из CRM
+        console.log(`   🔴 РЕАЛЬНЫЕ ДАННЫЕ ИЗ CRM: UF_CRM_7_TYPE_PRODUCT = 'Bitrix24'`);
+        console.log(`   🔴 Источник: DashboardSectorBitrix24Service (Bitrix24 API)`);
+        console.log(`   🔴 Это не тестовые данные - это реальные тикеты из системы!`);
       }
     }
 

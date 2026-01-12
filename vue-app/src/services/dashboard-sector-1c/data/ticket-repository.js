@@ -34,13 +34,101 @@ const ENTITY_TYPE_ID = 140;
  */
 export class TicketRepository {
   /**
+   * Получение всех тикетов по фильтру UF_CRM_7_TYPE_PRODUCT
+   *
+   * Загружает тикеты из всех стадий смарт-процесса DT140_12
+   * с фильтрацией по полю UF_CRM_7_TYPE_PRODUCT
+   *
+   * @param {string|Array<string>} filterValue - Значение фильтра (или массив значений)
+   * @param {string} filterField - Поле для фильтрации (по умолчанию 'UF_CRM_7_TYPE_PRODUCT')
+   * @param {Function|null} onProgress - Колбэк для отслеживания прогресса (опционально)
+   * @param {boolean} useCache - Использовать кеш (по умолчанию true)
+   * @returns {Promise<Array>} Массив всех тикетов
+   */
+  static async getAllTicketsByFilter(filterValue, filterField = 'UF_CRM_7_TYPE_PRODUCT', onProgress = null, useCache = true) {
+    Logger.info(`Loading tickets by filter: ${filterField} = ${filterValue}`, 'TicketRepository');
+
+    try {
+      const allTickets = [];
+
+      // Получаем все стадии DT140_12
+      const targetStages = ['DT140_12:UC_0VHWE2', 'DT140_12:PREPARATION', 'DT140_12:CLIENT'];
+      const totalStages = targetStages.length;
+
+      for (let i = 0; i < targetStages.length; i++) {
+        const stageId = targetStages[i];
+        const stageName = this.getStageName(stageId);
+
+        if (onProgress) {
+          const baseProgress = (i / totalStages) * 100;
+          onProgress({
+            step: 'loading_tickets',
+            progress: baseProgress,
+            details: {
+              stage: stageId,
+              stageName: stageName,
+              stageIndex: i + 1,
+              totalStages: totalStages,
+              filter: `${filterField} = ${filterValue}`
+            }
+          });
+        }
+
+        try {
+          // Получаем тикеты стадии с фильтром
+          const stageTickets = await this.getTicketsByStageWithFilter(
+            stageId,
+            filterValue,
+            filterField,
+            useCache,
+            onProgress ? (batchProgress) => {
+              const stageProgress = calculateProgress(
+                (i / totalStages) * 100,
+                (1 / totalStages) * 100,
+                batchProgress.percent || 0
+              );
+
+              onProgress({
+                step: 'loading_tickets',
+                progress: stageProgress,
+                details: {
+                  stage: stageId,
+                  stageName: stageName,
+                  stageIndex: i + 1,
+                  totalStages: totalStages,
+                  count: batchProgress.count,
+                  total: batchProgress.total,
+                  filter: `${filterField} = ${filterValue}`
+                }
+              });
+            } : null
+          );
+
+          allTickets.push(...stageTickets);
+
+        } catch (stageError) {
+          Logger.error(`Error loading tickets for stage ${stageId} with filter ${filterField} = ${filterValue}`, 'TicketRepository', stageError);
+          // Продолжаем с другими стадиями
+        }
+      }
+
+      Logger.info(`Loaded ${allTickets.length} tickets with filter ${filterField} = ${filterValue}`, 'TicketRepository');
+      return allTickets;
+
+    } catch (error) {
+      Logger.error(`Error loading tickets by filter ${filterField} = ${filterValue}`, 'TicketRepository', error);
+      throw error;
+    }
+  }
+
+  /**
    * Получение всех тикетов по стадиям с пагинацией
-   * 
+   *
    * Загружает тикеты из трёх стадий:
    * - DT140_12:UC_0VHWE2 - Сформировано обращение
    * - DT140_12:PREPARATION - Рассмотрение ТЗ
    * - DT140_12:CLIENT - Исполнение
-   * 
+   *
    * @param {Array<string>} stageIds - Массив ID стадий для загрузки
    * @param {Function|null} onProgress - Колбэк для отслеживания прогресса (опционально)
    * @param {boolean} useCache - Использовать кеш (по умолчанию true)
@@ -345,6 +433,144 @@ export class TicketRepository {
     });
 
     return result.result || null;
+  }
+
+  /**
+   * Получение тикетов стадии с дополнительным фильтром
+   *
+   * Аналогично getTicketsByStage, но добавляет фильтр по пользовательскому полю
+   *
+   * @param {string} stageId - ID стадии
+   * @param {string|Array<string>} filterValue - Значение фильтра
+   * @param {string} filterField - Поле для фильтрации
+   * @param {boolean} useCache - Использовать кеш (по умолчанию true)
+   * @param {Function|null} onProgress - Колбэк для отслеживания прогресса (опционально)
+   * @returns {Promise<Array>} Массив тикетов стадии
+   */
+  static async getTicketsByStageWithFilter(stageId, filterValue, filterField = 'UF_CRM_7_TYPE_PRODUCT', useCache = true, onProgress = null) {
+    Logger.info(`Loading tickets for stage ${stageId} with filter ${filterField} = ${filterValue}`, 'TicketRepository');
+
+    // Создаем уникальный ключ кеша для фильтра
+    const cacheKey = `tickets_${stageId}_${filterField}_${JSON.stringify(filterValue)}`;
+
+    // Проверяем кеш
+    if (useCache) {
+      const cached = CacheManager.get(cacheKey);
+      if (cached !== null) {
+        Logger.info(`Cache hit for filtered tickets: ${stageId} with ${filterField} = ${filterValue}`, 'TicketRepository');
+        if (onProgress) {
+          onProgress({
+            step: 'loading_tickets',
+            percent: 100,
+            count: cached.length,
+            total: cached.length
+          });
+        }
+        return cached;
+      }
+    }
+
+    const allTickets = [];
+    let start = 0;
+    const limit = 50;
+    let hasMore = true;
+    let totalEstimated = 0;
+
+    // Создаем фильтр для запроса
+    const apiFilter = {
+      stageId: stageId
+    };
+
+    // Добавляем фильтр по пользовательскому полю
+    if (Array.isArray(filterValue)) {
+      apiFilter[filterField] = filterValue; // Для массива значений
+    } else {
+      apiFilter[filterField] = filterValue; // Для одиночного значения
+    }
+
+    while (hasMore) {
+      try {
+        const result = await ApiClient.call('crm.item.list', {
+          entityTypeId: ENTITY_TYPE_ID,
+          filter: apiFilter,
+          select: ['*'],
+          order: { id: 'DESC' },
+          start: start,
+          useOriginalUfNames: 'Y'
+        });
+
+        let batchTickets = [];
+        if (result && result.result) {
+          if (Array.isArray(result.result)) {
+            batchTickets = result.result;
+          } else if (result.result.items && Array.isArray(result.result.items)) {
+            batchTickets = result.result.items;
+          } else if (result.result.data && Array.isArray(result.result.data)) {
+            batchTickets = result.result.data;
+          }
+        }
+
+        if (batchTickets.length > 0) {
+          allTickets.push(...batchTickets);
+          start += batchTickets.length;
+
+          // Обновляем оценку общего количества
+          totalEstimated = Math.max(totalEstimated, start + batchTickets.length);
+
+          if (onProgress) {
+            onProgress({
+              step: 'loading_tickets',
+              percent: Math.min((start / Math.max(totalEstimated, start)) * 100, 95),
+              count: start,
+              total: totalEstimated
+            });
+          }
+
+          // Проверяем, есть ли еще данные
+          hasMore = batchTickets.length === limit && result.next;
+        } else {
+          hasMore = false;
+        }
+
+      } catch (error) {
+        Logger.error(`Error loading batch for stage ${stageId} with filter ${filterField} = ${filterValue}`, 'TicketRepository', error);
+        hasMore = false;
+        throw error;
+      }
+    }
+
+    // Кешируем результат
+    if (useCache) {
+      CacheManager.set(cacheKey, allTickets);
+      Logger.info(`Cached ${allTickets.length} filtered tickets for stage ${stageId}`, 'TicketRepository');
+    }
+
+    // Диагностика
+    try {
+      const diagnostics = getDiagnosticsService();
+      if (diagnostics && isDiagnosticsEnabled()) {
+        diagnostics.logTicketsLoading(
+          `${stageId}_${filterValue}`,
+          allTickets.length,
+          allTickets.length,
+          null
+        );
+      }
+    } catch (diagError) {
+      Logger.warn('Diagnostics logging error in getTicketsByStageWithFilter', 'TicketRepository', diagError);
+    }
+
+    if (onProgress) {
+      onProgress({
+        step: 'loading_tickets',
+        percent: 100,
+        count: allTickets.length,
+        total: allTickets.length
+      });
+    }
+
+    Logger.info(`Loaded ${allTickets.length} tickets for stage ${stageId} with filter ${filterField} = ${filterValue}`, 'TicketRepository');
+    return allTickets;
   }
 
   /**

@@ -49,17 +49,28 @@ export class SectorServiceFactory {
   static createServiceInstance(sectorId) {
     switch (sectorId) {
       case '1c':
-        // Для сектора 1С создаем специальный адаптер, который использует DashboardSector1CService
-        console.log('[SectorServiceFactory] Creating Sector1CAdapter for sector 1c');
+        // Для сектора 1С используем существующий сервис
+        console.log('[SectorServiceFactory] Creating DashboardSector1CService for sector 1c');
         const { DashboardSector1CService } = require('@/services/dashboard-sector-1c/index.js');
         return new DashboardSector1CService();
 
       case 'pdm':
+        // Для сектора PDM используем реальный сервис
+        console.log('[SectorServiceFactory] Creating DashboardSectorPDMService for sector pdm');
+        const { DashboardSectorPDMService } = require('@/services/dashboard/DashboardSectorPDMService.js');
+        return new DashboardSectorPDMService();
+
       case 'bitrix24':
+        // Для сектора Bitrix24 используем реальный сервис
+        console.log('[SectorServiceFactory] Creating DashboardSectorBitrix24Service for sector bitrix24');
+        const { DashboardSectorBitrix24Service } = require('@/services/dashboard/DashboardSectorBitrix24Service.js');
+        return new DashboardSectorBitrix24Service();
+
       case 'infrastructure':
-        // Для других секторов используем заглушки
-        console.log(`[SectorServiceFactory] Creating stub service for sector ${sectorId}`);
-        return SectorStubFactory.create(sectorId);
+        // Для сектора Infrastructure используем реальный сервис
+        console.log('[SectorServiceFactory] Creating DashboardSectorInfrastructureService for sector infrastructure');
+        const { DashboardSectorInfrastructureService } = require('@/services/dashboard/DashboardSectorInfrastructureService.js');
+        return new DashboardSectorInfrastructureService();
 
       default:
         throw new Error(`Unknown sector: ${sectorId}`);

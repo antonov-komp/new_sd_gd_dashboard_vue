@@ -40,7 +40,7 @@ export class BaseSectorStubService {
 }
 
 
-import { UNIFIED_DT140_STAGES, SECTOR_FILTERS } from './constants.js';
+import { UNIFIED_DT140_STAGES, SECTOR_FILTERS } from '../constants.js';
 
 // Сервис-заглушка для сектора PDM (использует единые стадии DT140_12)
 export class SectorPDMService extends BaseSectorStubService {
@@ -125,15 +125,33 @@ export class SectorPDMService extends BaseSectorStubService {
 }
 
 // Сервис-заглушка для сектора Bitrix24 (использует те же стадии DT140_12 что и 1С)
-export class SectorBitrix24Service extends BaseSectorStubService {
+export class SectorBitrix24Service {
   constructor() {
-    super('bitrix24', {
+    this.sectorId = 'bitrix24';
+    this.sectorConfig = {
       id: 'bitrix24',
       name: 'Сектор Битрикс24',
       filterField: 'UF_CRM_7_TYPE_PRODUCT',
       filterValue: 'Bitrix24', // UF_CRM_7_TYPE_PRODUCT = 'Bitrix24'
       stages: UNIFIED_DT140_STAGES
-    });
+    };
+  }
+
+  async updateTicketAssignment(ticketId, stageId, employeeId) {
+    // Заглушка - ничего не делает
+    console.log(`[SectorBitrix24Service] updateTicketAssignment called:`, { ticketId, stageId, employeeId });
+    return { success: true, message: 'Stub implementation - no real action taken' };
+  }
+
+  async createTicket(ticketData) {
+    // Заглушка - возвращает фейковый тикет
+    console.log(`[SectorBitrix24Service] createTicket called:`, ticketData);
+    return {
+      id: `b24_stub_${Date.now()}`,
+      title: ticketData.title || 'Stub ticket',
+      status: 'new',
+      createdAt: new Date().toISOString()
+    };
   }
 
   async getSectorData(options = {}) {
