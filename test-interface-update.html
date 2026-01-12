@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест обновленного интерфейса - Гибридные дашборды секторов</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f8f9fa; }
+        .test-section { margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background: white; }
+        .sector-preview { display: inline-block; margin: 10px; padding: 15px; border-radius: 8px; text-align: center; width: 200px; vertical-align: top; }
+        .sector-1c { background: linear-gradient(135deg, #007bff, #0056b3); color: white; }
+        .sector-pdm { background: linear-gradient(135deg, #28a745, #1e7e34); color: white; }
+        .sector-bitrix24 { background: linear-gradient(135deg, #ffc107, #d39e00); color: black; }
+        .sector-infrastructure { background: linear-gradient(135deg, #dc3545, #bd2130); color: white; }
+        .test-link { display: inline-block; padding: 12px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; margin: 10px 5px; transition: all 0.3s; }
+        .test-link:hover { background: #0056b3; transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
+        .info { background: #e9ecef; padding: 15px; border-radius: 5px; margin: 15px 0; }
+        .status { padding: 8px 12px; border-radius: 20px; font-weight: bold; display: inline-block; margin: 5px; }
+        .status.working { background: #d4edda; color: #155724; }
+        .status.new { background: #fff3cd; color: #856404; }
+        .status.testing { background: #cce5ff; color: #004085; }
+    </style>
+</head>
+<body>
+    <h1>🎯 Обновленный интерфейс - Гибридные дашборды секторов</h1>
+
+    <div class="info">
+        <h3>✅ Что было обновлено:</h3>
+        <ul>
+            <li><strong>Упрощена конфигурация секторов</strong> - в каждом секторе остался только основной дашборд</li>
+            <li><strong>Обновлены описания секторов</strong> - более информативные описания для новых секторов</li>
+            <li><strong>Гибридная архитектура</strong> - простые контроллеры + универсальная фильтрация</li>
+            <li><strong>Обновлены компоненты</strong> - новые контроллеры SectorDashboardPDM.vue, SectorDashboardBitrix24.vue, SectorDashboardInfrastructure.vue</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2>🏗️ Новый интерфейс секторов</h2>
+        <p><strong>Теперь каждый сектор содержит только основной дашборд:</strong></p>
+
+        <div class="sector-preview sector-1c">
+            <div style="font-size: 2em;">⚙️</div>
+            <h3>Сектор 1С</h3>
+            <p>Модули для работы с системами 1С:Предприятие</p>
+            <div class="status working">Работает</div>
+        </div>
+
+        <div class="sector-preview sector-pdm">
+            <div style="font-size: 2em;">🔧</div>
+            <h3>Сектор PDM</h3>
+            <p>Управление системами PDM - управление данными о продукции</p>
+            <div class="status new">Гибридный</div>
+        </div>
+
+        <div class="sector-preview sector-bitrix24">
+            <div style="font-size: 2em;">🌐</div>
+            <h3>Сектор Битрикс24</h3>
+            <p>Управление и поддержка платформы Битрикс24 - интеграции и разработка</p>
+            <div class="status new">Гибридный</div>
+        </div>
+
+        <div class="sector-preview sector-infrastructure">
+            <div style="font-size: 2em;">🖥️</div>
+            <h3>Сектор Инфраструктура</h3>
+            <p>Управление инфраструктурой, оборудованием и техническими задачами</p>
+            <div class="status new">Гибридный</div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>🔗 Тестовые ссылки на дашборды</h2>
+        <p>Кликните по ссылкам, чтобы протестировать гибридные дашборды:</p>
+
+        <a href="https://back.kompo.by/rest_api_aps/sd_it_gen_plan/index.php#/dashboard/sector-1c" class="test-link">
+            ⚙️ Сектор 1С (эталон)
+        </a>
+
+        <a href="https://back.kompo.by/rest_api_aps/sd_it_gen_plan/index.php#/dashboard/sector-pdm" class="test-link">
+            🔧 Сектор PDM (гибридный)
+        </a>
+
+        <a href="https://back.kompo.by/rest_api_aps/sd_it_gen_plan/index.php#/dashboard/sector-bitrix24" class="test-link">
+            🌐 Сектор Bitrix24 (гибридный)
+        </a>
+
+        <a href="https://back.kompo.by/rest_api_aps/sd_it_gen_plan/index.php#/dashboard/sector-infrastructure" class="test-link">
+            🖥️ Сектор Infrastructure (гибридный)
+        </a>
+    </div>
+
+    <div class="test-section">
+        <h2>🎯 Ожидаемый результат</h2>
+        <h3>Что должно произойти при клике:</h3>
+        <ol>
+            <li><strong>Сектор 1С:</strong> Открывается существующий дашборд (для сравнения)</li>
+            <li><strong>Сектор PDM:</strong> Загружается <code>SectorDashboardPDM.vue</code> → рендерит <code>SectorDashboard.vue</code> с <code>sector-id="pdm"</code></li>
+            <li><strong>Сектор Bitrix24:</strong> Загружается <code>SectorDashboardBitrix24.vue</code> → рендерит <code>SectorDashboard.vue</code> с <code>sector-id="bitrix24"</code></li>
+            <li><strong>Сектор Infrastructure:</strong> Загружается <code>SectorDashboardInfrastructure.vue</code> → рендерит <code>SectorDashboard.vue</code> с <code>sector-id="infrastructure"</code></li>
+        </ol>
+
+        <h3>В каждом гибридном дашборде:</h3>
+        <ul>
+            <li>✅ Простая инициализация (как в секторе 1С)</li>
+            <li>✅ Универсальная фильтрация по UF_CRM_7_TYPE_PRODUCT</li>
+            <li>✅ Drag & Drop для перемещения тикетов</li>
+            <li>✅ Нулевая точка для неклассифицированных тикетов</li>
+            <li>✅ Кеширование данных (тикеты 5 мин, сотрудники 30 мин)</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2>📋 Технические детали обновления</h2>
+
+        <h3>Файлы, измененные:</h3>
+        <ul>
+            <li><code>vue-app/src/config/sectors.js</code>
+                <ul>
+                    <li>✅ Упрощена конфигурация сектора 1С (только дашборд)</li>
+                    <li>✅ Обновлены описания для секторов PDM, Bitrix24, Infrastructure</li>
+                    <li>✅ Обновлены component поля для новых гибридных контроллеров</li>
+                </ul>
+            </li>
+            <li><code>vue-app/src/components/SectorDashboardPDM.vue</code> ✅ Создан</li>
+            <li><code>vue-app/src/components/SectorDashboardBitrix24.vue</code> ✅ Создан</li>
+            <li><code>vue-app/src/components/SectorDashboardInfrastructure.vue</code> ✅ Создан</li>
+            <li><code>vue-app/src/router/index.js</code> ✅ Обновлены маршруты</li>
+        </ul>
+
+        <h3>Архитектура гибридного подхода:</h3>
+        <pre style="background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto;">
+SectorDashboardPDM.vue (контроллер)
+    ↓
+&lt;SectorDashboard sector-id="pdm" /&gt; (универсальный компонент)
+    ↓
+useUniversalDashboardState('pdm') + useUniversalDashboardActions(state, 'pdm')
+    ↓
+UniversalSectorDashboardService.getService('pdm')
+    ↓
+DashboardSectorPDMService.getSectorData()
+    ↓
+filterTicketsBySector(tickets, { filterValue: 'PDM' })
+    ↓
+Отображение данных PDM с универсальной фильтрацией
+        </pre>
+    </div>
+
+    <div class="test-section">
+        <h2>🚀 Следующие шаги</h2>
+        <ol>
+            <li><strong>Открыть главную страницу</strong> приложения</li>
+            <li><strong>Развернуть сектора</strong> и проверить наличие только дашбордов</li>
+            <li><strong>Кликнуть по дашбордам</strong> секторов PDM, Bitrix24, Infrastructure</li>
+            <li><strong>Проверить логи</strong> в консоли браузера на наличие ошибок</li>
+            <li><strong>Сравнить с сектором 1С</strong> для уверенности в корректности</li>
+        </ol>
+
+        <div style="background: #d4edda; color: #155724; padding: 15px; border-radius: 5px; margin-top: 15px;">
+            <strong>🎉 Гибридный подход должен решить проблему универсальных дашбордов!</strong><br>
+            Теперь у нас есть простая и надежная архитектура, сочетающая преимущества обоих подходов.
+        </div>
+    </div>
+</body>
+</html>

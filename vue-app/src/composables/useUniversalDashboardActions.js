@@ -57,32 +57,38 @@ export function useUniversalDashboardActions(state, sectorId) {
    */
   const loadSectorData = async (options = {}) => {
     try {
-      state.setLoading(true, 'Загрузка данных сектора...');
-      state.clearError();
+      console.log(`📡 [useUniversalDashboardActions] Starting data load for sector: ${sectorId}`);
 
       const service = getDashboardService();
-      const dashboardData = await service.getSectorDashboardData(options);
+      console.log(`🏭 [useUniversalDashboardActions] Service obtained:`, service);
 
-      // Обновляем состояние
-      state.updateStages(dashboardData.stages);
-      state.updateEmployees(dashboardData.employees);
-      state.updateZeroPointTickets(dashboardData.zeroPointTickets);
-      state.updateSectorStats({
-        totalTickets: dashboardData.metadata.totalTickets,
-        totalEmployees: dashboardData.metadata.totalEmployees,
-        activeStages: dashboardData.stages.length,
-        lastUpdated: dashboardData.metadata.lastUpdated
+      const dashboardData = await service.getSectorDashboardData(options);
+      console.log(`✅ [useUniversalDashboardActions] Dashboard data received:`, dashboardData);
+
+      // Обновляем состояние через state (если методы существуют)
+      if (state.updateStages) state.updateStages(dashboardData.stages || []);
+      if (state.updateEmployees) state.updateEmployees(dashboardData.employees || []);
+      if (state.updateZeroPointTickets) state.updateZeroPointTickets(dashboardData.zeroPointTickets || {});
+      if (state.updateSectorStats) state.updateSectorStats(dashboardData.metadata || {});
+
+      console.log(`✅ [useUniversalDashboardActions] Sector data loaded successfully for ${sectorId}`, {
+        stagesCount: (dashboardData.stages || []).length,
+        employeesCount: (dashboardData.employees || []).length,
+        ticketsCount: dashboardData.metadata?.totalTickets || 0
       });
 
-      notifications.success('Данные сектора загружены', `Загружено ${dashboardData.metadata.totalTickets} тикетов`);
-
+      return dashboardData;
     } catch (error) {
-      console.error(`[useUniversalDashboardActions] Failed to load sector data for ${sectorId}:`, error);
-      state.setError(error.message || 'Ошибка загрузки данных сектора');
-      notifications.error('Ошибка загрузки', error.message || 'Не удалось загрузить данные сектора');
+      console.error(`❌ [useUniversalDashboardActions] Failed to load sector data for ${sectorId}:`, error);
+      console.error(`🔍 [useUniversalDashboardActions] Error details:`, {
+        message: error.message,
+        stack: error.stack
+      });
+
+      // Устанавливаем ошибку в состояние, если возможно
+      if (state.setError) state.setError(error.message);
+
       throw error;
-    } finally {
-      state.setLoading(false);
     }
   };
 
@@ -99,14 +105,14 @@ export function useUniversalDashboardActions(state, sectorId) {
       const service = getDashboardService();
       await service.updateTicketAssignment(ticketId, newStageId, employeeId);
 
-      notifications.success('Тикет обновлен', 'Назначение тикета успешно изменено');
+      console.log(`✅ [useUniversalDashboardActions] Ticket assignment updated successfully`);
 
       // Перезагружаем данные для обновления состояния
       await loadSectorData({ forceRefresh: true });
 
     } catch (error) {
       console.error(`[useUniversalDashboardActions] Failed to update ticket assignment:`, error);
-      notifications.error('Ошибка обновления', error.message || 'Не удалось обновить назначение тикета');
+      console.error(`❌ [useUniversalDashboardActions] Failed to update ticket assignment:`, error.message);
       throw error;
     }
   };
@@ -122,7 +128,7 @@ export function useUniversalDashboardActions(state, sectorId) {
       const service = getDashboardService();
       const newTicket = await service.createTicket(ticketData);
 
-      notifications.success('Тикет создан', `Тикет "${newTicket.title}" успешно создан`);
+      console.log(`✅ [useUniversalDashboardActions] Ticket created successfully: "${newTicket.title}"`);
 
       // Перезагружаем данные
       await loadSectorData({ forceRefresh: true });
@@ -131,7 +137,7 @@ export function useUniversalDashboardActions(state, sectorId) {
 
     } catch (error) {
       console.error(`[useUniversalDashboardActions] Failed to create ticket:`, error);
-      notifications.error('Ошибка создания', error.message || 'Не удалось создать тикет');
+      console.error(`❌ [useUniversalDashboardActions] Failed to create ticket:`, error.message);
       throw error;
     }
   };
@@ -153,11 +159,11 @@ export function useUniversalDashboardActions(state, sectorId) {
 
       await updateTicketAssignment(ticket.id, targetStageId, employeeId);
 
-      notifications.success('Тикет перемещен', `Тикет перемещен на этап "${getStageName(targetStageId)}"`);
+      console.log(`✅ [useUniversalDashboardActions] Ticket moved to stage: "${getStageName(targetStageId)}"`);
 
     } catch (error) {
       console.error(`[useUniversalDashboardActions] Failed to move ticket:`, error);
-      notifications.error('Ошибка перемещения', error.message || 'Не удалось переместить тикет');
+      console.error(`❌ [useUniversalDashboardActions] Failed to move ticket:`, error.message);
       throw error;
     }
   };
@@ -183,14 +189,14 @@ export function useUniversalDashboardActions(state, sectorId) {
       const employee = state.getEmployeeById(employeeId);
       const employeeName = employee ? employee.name : 'сотруднику';
 
-      notifications.success('Тикет назначен', `Тикет назначен ${employeeName}`);
+      console.log(`✅ [useUniversalDashboardActions] Ticket assigned to: ${employeeName}`);
 
       // Перезагружаем данные
       await loadSectorData({ forceRefresh: true });
 
     } catch (error) {
       console.error(`[useUniversalDashboardActions] Failed to assign ticket:`, error);
-      notifications.error('Ошибка назначения', error.message || 'Не удалось назначить тикет');
+      console.error(`❌ [useUniversalDashboardActions] Failed to assign ticket:`, error.message);
       throw error;
     }
   };
@@ -205,14 +211,14 @@ export function useUniversalDashboardActions(state, sectorId) {
       const service = getDashboardService();
       service.clearCache();
 
-      notifications.success('Кеш очищен', 'Кеш сектора успешно очищен');
+      console.log(`✅ [useUniversalDashboardActions] Sector cache cleared successfully`);
 
       // Перезагружаем данные
       await loadSectorData({ forceRefresh: true });
 
     } catch (error) {
       console.error(`[useUniversalDashboardActions] Failed to clear cache:`, error);
-      notifications.error('Ошибка очистки', error.message || 'Не удалось очистить кеш');
+      console.error(`❌ [useUniversalDashboardActions] Failed to clear cache:`, error.message);
       throw error;
     }
   };

@@ -15,6 +15,8 @@ import { SectorDataNormalizer } from './sectors/SectorDataNormalizer.js';
  * Универсальный сервис дашборда сектора
  */
 export class UniversalSectorDashboardService {
+  // Статическая переменная для хранения экземпляров сервисов
+  static services = new Map();
   constructor(sectorId) {
     this.sectorId = sectorId;
     this.cache = new Map();

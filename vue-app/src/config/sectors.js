@@ -26,33 +26,6 @@ export const SECTORS_CONFIG = {
         component: 'SectorDashboard',
         route: '/dashboard/sector-1c',
         category: 'management'
-      },
-      {
-        id: 'tickets-management-sector-1c',
-        title: 'Управление тикетами сектора 1С',
-        description: 'Управление заявками и задачами сектора 1С',
-        icon: '📋',
-        component: 'TicketsTimeTrackingDashboard',
-        route: '/tickets/time-tracking',
-        category: 'tickets'
-      },
-      {
-        id: 'state-chart',
-        title: 'График состояния',
-        description: 'Визуализация текущего состояния систем сектора 1С',
-        icon: '📊',
-        component: 'GraphStateDashboard',
-        route: '/graph/state',
-        category: 'analytics'
-      },
-      {
-        id: 'changes-visualization',
-        title: 'Визуализация изменений сост',
-        description: 'Отображение изменений состояния в секторе 1С',
-        icon: '📈',
-        component: 'GraphAdmissionClosureDashboard',
-        route: '/graph/admission-closure',
-        category: 'analytics'
       }
     ],
     features: ['smart-process-140', '1c-integration'],
@@ -63,7 +36,7 @@ export const SECTORS_CONFIG = {
   sectorPdm: {
     id: 'pdm',
     name: 'Сектор PDM',
-    description: 'Управление системами PDM (Product Data Management)',
+    description: 'Управление системами PDM (Product Data Management) - управление данными о продукции',
     icon: '🔧',
     color: '#28a745', // Зеленый цвет
     borderColor: '#1e7e34',
@@ -73,9 +46,9 @@ export const SECTORS_CONFIG = {
       {
         id: 'dashboard-sector-pdm',
         title: 'Дашборд сектора PDM',
-        description: 'Панель управления сектором PDM с основными метриками',
+        description: 'Панель управления сектором PDM с основными метриками и задачами',
         icon: '🔧',
-        component: 'SectorDashboard',
+        component: 'SectorDashboardPDM',
         route: '/dashboard/sector-pdm',
         category: 'management'
       }
@@ -88,7 +61,7 @@ export const SECTORS_CONFIG = {
   sectorBitrix24: {
     id: 'bitrix24',
     name: 'Сектор Битрикс24',
-    description: 'Управление и поддержка Битрикс24',
+    description: 'Управление и поддержка платформы Битрикс24 - интеграции и разработка',
     icon: '🌐',
     color: '#ffc107', // Желтый цвет
     borderColor: '#d39e00',
@@ -98,9 +71,9 @@ export const SECTORS_CONFIG = {
       {
         id: 'dashboard-sector-bitrix24',
         title: 'Дашборд сектора Битрикс24',
-        description: 'Панель управления сектором Битрикс24 с основными метриками',
+        description: 'Панель управления сектором Битрикс24 с задачами интеграции и поддержки',
         icon: '🌐',
-        component: 'SectorDashboard',
+        component: 'SectorDashboardBitrix24',
         route: '/dashboard/sector-bitrix24',
         category: 'management'
       }
@@ -112,8 +85,8 @@ export const SECTORS_CONFIG = {
   // Сектор 4: Железо/Инфраструктура/Прочее
   sectorInfrastructure: {
     id: 'infrastructure',
-    name: 'Сектор Железо/Инфраструктура',
-    description: 'Управление инфраструктурой, оборудованием и прочими задачами',
+    name: 'Сектор Инфраструктура',
+    description: 'Управление инфраструктурой, оборудованием и техническими задачами',
     icon: '🖥️',
     color: '#dc3545', // Красный цвет
     borderColor: '#bd2130',
@@ -123,9 +96,9 @@ export const SECTORS_CONFIG = {
       {
         id: 'dashboard-sector-infrastructure',
         title: 'Дашборд сектора Инфраструктура',
-        description: 'Панель управления сектором Инфраструктура с основными метриками',
+        description: 'Панель управления инфраструктурой с задачами по оборудованию и технике',
         icon: '🖥️',
-        component: 'SectorDashboard',
+        component: 'SectorDashboardInfrastructure',
         route: '/dashboard/sector-infrastructure',
         category: 'management'
       }

@@ -256,7 +256,7 @@ export default {
     console.log(`🚨🚨🚨 [SectorDashboard] props type:`, typeof props);
 
     if (!props || !props.sectorId) {
-      console.error(`❌ [SectorDashboard] CRITICAL ERROR: Invalid props received!`, props);
+      console.error(`❌ [SectorDashboard] Invalid props received:`, props);
       return {
         isLoading: false,
         error: 'Неверные параметры компонента',
