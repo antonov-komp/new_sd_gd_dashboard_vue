@@ -196,7 +196,12 @@ export default {
 
     // Открываем модуль в полном размере
     const openFullView = () => {
+      console.log(`🔗 [ModuleAdapter] Opening full view for module:`, props.moduleConfig.id);
+      console.log(`🔗 [ModuleAdapter] Route:`, props.moduleConfig.route);
+      console.log(`🔗 [ModuleAdapter] Module config:`, props.moduleConfig);
+
       if (props.moduleConfig.route) {
+        console.log(`🔗 [ModuleAdapter] Navigating to:`, props.moduleConfig.route);
         router.push(props.moduleConfig.route)
       } else {
         console.warn(`No route defined for module ${props.moduleConfig.id}`)

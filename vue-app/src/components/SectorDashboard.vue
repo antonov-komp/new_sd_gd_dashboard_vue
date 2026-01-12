@@ -2,7 +2,18 @@
   <div :class="`dashboard-sector-${sectorId} ${draggedTicket ? 'is-dragging' : ''}`">
     <!-- DEBUG: Показываем, что компонент рендерится -->
     <div style="background: yellow; padding: 10px; margin-bottom: 10px; border: 2px solid red;">
-      🚨 DEBUG: SectorDashboard RENDERED for sector: {{ sectorId }}
+      🚨 DEBUG: SectorDashboard RENDERED for sector: {{ sectorId }} at {{ new Date().toISOString() }}
+    </div>
+
+    <!-- Критический DEBUG блок -->
+    <div style="background: red; color: white; padding: 10px; margin-bottom: 10px; font-size: 14px;">
+      <strong>🚨 COMPONENT STATE:</strong><br>
+      sectorId: {{ sectorId }}<br>
+      isLoading: {{ isLoading }}<br>
+      error: {{ error }}<br>
+      hasData: {{ hasData }}<br>
+      totalTickets: {{ totalTickets }}<br>
+      stages: {{ stages.length }}<br>
     </div>
 
     <!-- Заголовок -->
@@ -77,7 +88,7 @@
     </div>
 
     <!-- Статистика сектора -->
-    <div class="sector-stats">
+    <div class="sector-stats" v-if="!isLoading">
       <div class="stat-item">
         <div class="stat-value">{{ totalTickets }}</div>
         <div class="stat-label">Всего тикетов</div>
@@ -239,8 +250,27 @@ export default {
   },
 
   setup(props) {
+    // Критически важные логи для диагностики
+    console.log(`🚨🚨🚨 [SectorDashboard] SETUP STARTED - props:`, props);
+    console.log(`🚨🚨🚨 [SectorDashboard] sectorId:`, props?.sectorId);
+    console.log(`🚨🚨🚨 [SectorDashboard] props type:`, typeof props);
+
+    if (!props || !props.sectorId) {
+      console.error(`❌ [SectorDashboard] CRITICAL ERROR: Invalid props received!`, props);
+      return {
+        isLoading: false,
+        error: 'Неверные параметры компонента',
+        stages: [],
+        employees: [],
+        totalTickets: 0,
+        sectorName: 'Ошибка',
+        hasData: false
+      };
+    }
+
+    console.log(`🎯 [SectorDashboard] SETUP called for sector: ${props.sectorId}`);
+
     try {
-      console.log(`[SectorDashboard] 🎯 SETUP called for sector: ${props.sectorId}`);
 
       const router = useRouter();
       const route = useRoute();

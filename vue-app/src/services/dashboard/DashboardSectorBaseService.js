@@ -15,7 +15,8 @@ import { ApiClient } from './data/api-client.js';
 import { CacheManager } from './cache/cache-manager.js';
 import { ENTITY_TYPE_ID } from './utils/constants.js';
 import { getTargetStages } from './mappers/stage-mapper.js';
-import { filterBySector } from './filters/sector-filter.js';
+import { filterTicketsBySector } from './filters/sector-filter.js';
+import { getSectorFilterDescription } from './utils/sector-config-helper.js';
 import { groupTicketsByStages, getZeroPointTickets, extractUniqueEmployeeIds } from './groupers/ticket-grouper.js';
 import { Logger } from './utils/logger.js';
 import { clearSectorCache } from './utils/sector-helper.js';
@@ -99,8 +100,24 @@ export class DashboardSectorBaseService {
         }
       );
 
-      // Фильтруем тикеты по сектору (дополнительная фильтрация)
-      const sectorTickets = filterBySector(allTickets, this.sectorId);
+      // Применяем универсальную фильтрацию по сектору (дополнительная проверка)
+      const sectorTickets = filterTicketsBySector(allTickets, {
+        id: this.sectorId,
+        name: this.config.name,
+        filterValue: this.config.filterValue,
+        filterField: this.config.filterField || 'UF_CRM_7_TYPE_PRODUCT'
+      });
+
+      // Логирование результатов фильтрации для диагностики
+      Logger.info(`Sector filtering completed for ${this.config.name}`, 'DashboardSectorBaseService', {
+        sectorId: this.sectorId,
+        totalTickets: allTickets.length,
+        filteredTickets: sectorTickets.length,
+        filterDescription: getSectorFilterDescription({
+          filterValue: this.config.filterValue,
+          filterField: this.config.filterField || 'UF_CRM_7_TYPE_PRODUCT'
+        })
+      });
 
       // Шаг 2: Извлекаем уникальных сотрудников
       if (onProgress) {

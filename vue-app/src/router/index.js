@@ -67,33 +67,32 @@ const routes = [
       chunk: 'dashboard-sector1c'
     }
   },
+  // Гибридный подход: специфические маршруты для каждого сектора
   {
-    path: '/dashboard/sector/:sectorId',
-    name: 'dashboard-sector',
-    component: () => import(/* webpackChunkName: "universal-dashboard" */ '@/components/SectorDashboard.vue'),
-    props: (route) => ({
-      sectorId: route.params.sectorId
-    }),
+    path: '/dashboard/sector-pdm',
+    name: 'dashboard-sector-pdm',
+    component: () => import(/* webpackChunkName: "dashboard-sector-pdm" */ '@/components/SectorDashboardPDM.vue'),
     meta: {
       requiresAuth: true,
-      chunk: 'universal-dashboard'
-    },
-    beforeEnter: (to, from, next) => {
-      // Проверяем, что сектор существует
-      const { SECTORS_CONFIG, SectorConfigUtils } = require('@/config/sectors.js');
-      const sectorId = to.params.sectorId;
-
-      console.log(`[Router] beforeEnter: checking sector ${sectorId}`);
-      console.log(`[Router] Available sectors:`, Object.values(SECTORS_CONFIG).map(s => s.id));
-
-      if (!SectorConfigUtils.sectorExists(sectorId)) {
-        console.warn(`[Router] Sector ${sectorId} does not exist, redirecting to index`);
-        next({ name: 'index' });
-        return;
-      }
-
-      console.log(`[Router] Sector ${sectorId} exists, allowing navigation`);
-      next();
+      chunk: 'dashboard-sector-pdm'
+    }
+  },
+  {
+    path: '/dashboard/sector-bitrix24',
+    name: 'dashboard-sector-bitrix24',
+    component: () => import(/* webpackChunkName: "dashboard-sector-bitrix24" */ '@/components/SectorDashboardBitrix24.vue'),
+    meta: {
+      requiresAuth: true,
+      chunk: 'dashboard-sector-bitrix24'
+    }
+  },
+  {
+    path: '/dashboard/sector-infrastructure',
+    name: 'dashboard-sector-infrastructure',
+    component: () => import(/* webpackChunkName: "dashboard-sector-infrastructure" */ '@/components/SectorDashboardInfrastructure.vue'),
+    meta: {
+      requiresAuth: true,
+      chunk: 'dashboard-sector-infrastructure'
     }
   },
   {

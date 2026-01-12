@@ -118,7 +118,7 @@ export const SECTORS_CONFIG = {
     color: '#dc3545', // Красный цвет
     borderColor: '#bd2130',
     backgroundColor: '#fff8f8',
-    filterValues: ['Железо', 'Прочее'], // UF_CRM_7_TYPE_PRODUCT = 'Железо' OR 'Прочее'
+    filterValue: ['Железо', 'Прочее'], // UF_CRM_7_TYPE_PRODUCT IN ('Железо', 'Прочее')
     modules: [
       {
         id: 'dashboard-sector-infrastructure',

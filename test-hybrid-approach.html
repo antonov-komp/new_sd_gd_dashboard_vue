@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест гибридного подхода - Sector Dashboards</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .test-link { display: inline-block; padding: 10px 15px; background: #007bff; color: white; text-decoration: none; border-radius: 3px; margin: 5px; }
+        .test-link:hover { background: #0056b3; }
+        .info { background: #e9ecef; padding: 10px; border-radius: 3px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Тест гибридного подхода - Sector Dashboards</h1>
+
+    <div class="info">
+        <h3>Что тестируем:</h3>
+        <ul>
+            <li>✅ Контроллеры созданы: SectorDashboardPDM.vue, SectorDashboardBitrix24.vue, SectorDashboardInfrastructure.vue</li>
+            <li>✅ Маршруты обновлены: /dashboard/sector-pdm, /dashboard/sector-bitrix24, /dashboard/sector-infrastructure</li>
+            <li>✅ Конфигурация секторов обновлена с правильными маршрутами</li>
+            <li>❓ Гибридный подход: простая инициализация + универсальная фильтрация</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2>🔗 Тестовые ссылки (гибридный подход)</h2>
+        <p>Эти ссылки должны открывать соответствующие дашборды секторов:</p>
+
+        <a href="https://back.kompo.by/rest_api_aps/sd_it_gen_plan/index.php#/dashboard/sector-pdm" class="test-link">
+            🏭 Сектор PDM (/dashboard/sector-pdm)
+        </a>
+
+        <a href="https://back.kompo.by/rest_api_aps/sd_it_gen_plan/index.php#/dashboard/sector-bitrix24" class="test-link">
+            🌐 Сектор Bitrix24 (/dashboard/sector-bitrix24)
+        </a>
+
+        <a href="https://back.kompo.by/rest_api_aps/sd_it_gen_plan/index.php#/dashboard/sector-infrastructure" class="test-link">
+            🖥️ Сектор Infrastructure (/dashboard/sector-infrastructure)
+        </a>
+    </div>
+
+    <div class="test-section">
+        <h2>📋 Для сравнения - существующий дашборд 1С</h2>
+        <p>Эта ссылка работает через старую архитектуру:</p>
+
+        <a href="https://back.kompo.by/rest_api_aps/sd_it_gen_plan/index.php#/dashboard/sector-1c" class="test-link">
+            ⚙️ Сектор 1С (/dashboard/sector-1c) - ЭТАЛОН
+        </a>
+    </div>
+
+    <div class="test-section">
+        <h2>🎯 Ожидаемый результат</h2>
+        <ul>
+            <li><strong>Сектор 1С:</strong> Должен работать как раньше (для сравнения)</li>
+            <li><strong>Сектор PDM:</strong> Должен открываться через гибридный контроллер SectorDashboardPDM.vue</li>
+            <li><strong>Сектор Bitrix24:</strong> Должен открываться через гибридный контроллер SectorDashboardBitrix24.vue</li>
+            <li><strong>Сектор Infrastructure:</strong> Должен открываться через гибридный контроллер SectorDashboardInfrastructure.vue</li>
+        </ul>
+
+        <h3>Что должно произойти:</h3>
+        <ol>
+            <li>Компонент-контроллер загружается (SectorDashboardPDM.vue и т.д.)</li>
+            <li>Контроллер рендерит универсальный SectorDashboard.vue с правильным sector-id</li>
+            <li>SectorDashboard.vue инициализируется и загружает данные через универсальные сервисы</li>
+            <li>Применяется универсальная фильтрация (filterTicketsBySector)</li>
+            <li>Отображаются данные сектора с правильной фильтрацией</li>
+        </ol>
+    </div>
+
+    <div class="test-section">
+        <h2>🔧 Техническая информация</h2>
+        <h3>Архитектура гибридного подхода:</h3>
+        <pre>
+Контроллер (SectorDashboardPDM.vue)
+    ↓
+SectorDashboard.vue (универсальный компонент)
+    ↓
+useUniversalDashboardActions() + useUniversalDashboardState()
+    ↓
+UniversalSectorDashboardService.getService('pdm')
+    ↓
+DashboardSectorPDMService (наследник от DashboardSectorBaseService)
+    ↓
+filterTicketsBySector(tickets, { id: 'pdm', filterValue: 'PDM' })
+    ↓
+Фильтрация по UF_CRM_7_TYPE_PRODUCT = 'PDM'
+        </pre>
+
+        <h3>Файлы, созданные/измененные:</h3>
+        <ul>
+            <li><code>vue-app/src/components/SectorDashboardPDM.vue</code> ✅</li>
+            <li><code>vue-app/src/components/SectorDashboardBitrix24.vue</code> ✅</li>
+            <li><code>vue-app/src/components/SectorDashboardInfrastructure.vue</code> ✅</li>
+            <li><code>vue-app/src/router/index.js</code> - новые маршруты ✅</li>
+            <li><code>vue-app/src/config/sectors.js</code> - обновлены routes ✅</li>
+        </ul>
+    </div>
+</body>
+</html>

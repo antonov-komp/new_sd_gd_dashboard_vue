@@ -24,7 +24,7 @@ import { mapTicket } from './mappers/ticket-mapper.js';
 import { mapEmployees } from './mappers/employee-mapper.js';
 import { mapStageIdToBitrix } from './mappers/stage-mapper.js';
 import { getTargetStages } from './mappers/stage-mapper.js';
-import { filterBySector } from './filters/sector-filter.js';
+import { filterTicketsBySector } from '../dashboard/filters/sector-filter.js';
 import { groupTicketsByStages, getZeroPointTickets, extractUniqueEmployeeIds } from './groupers/ticket-grouper.js';
 import { ApiClient } from './data/api-client.js';
 import { CacheManager } from './cache/cache-manager.js';
@@ -138,7 +138,12 @@ export class DashboardSector1CService {
           description: `Фильтрация ${allTickets.length} тикетов по сектору 1С...`
         }));
       }
-      const filteredTickets = filterBySector(allTickets);
+      const filteredTickets = filterTicketsBySector(allTickets, {
+        id: '1c',
+        name: '1C',
+        filterValue: '1C',
+        filterField: 'UF_CRM_7_TYPE_PRODUCT'
+      });
       
       if (onProgress) {
         onProgress(createProgressDetails('filtering', 50, {

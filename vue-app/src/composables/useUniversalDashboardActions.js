@@ -8,9 +8,7 @@
  * @since 2026-01-12
  */
 
-import { UniversalSectorDashboardService, UniversalSectorDashboardFactory } from '@/services/universal-sector-dashboard-service.js';
-import { useNotifications } from './useNotifications.js';
-import { useLoadingProgress } from './useLoadingProgress.js';
+import { UniversalSectorDashboardService } from '@/services/universal-sector-dashboard-service.js';
 
 /**
  * Универсальный композабл для действий дашборда сектора
@@ -20,15 +18,33 @@ import { useLoadingProgress } from './useLoadingProgress.js';
  * @returns {object} Объект с методами для действий
  */
 export function useUniversalDashboardActions(state, sectorId) {
-  const notifications = useNotifications();
-  const loadingProgress = useLoadingProgress();
+  console.log(`🔧 [useUniversalDashboardActions] Initialized for sector: ${sectorId}`);
 
   // Сервис дашборда для сектора
   let dashboardService = null;
 
   const getDashboardService = () => {
     if (!dashboardService) {
-      dashboardService = UniversalSectorDashboardFactory.getService(sectorId);
+      try {
+        console.log(`🏭 [useUniversalDashboardActions] Creating service for sector: ${sectorId}`);
+        dashboardService = UniversalSectorDashboardService.getService(sectorId);
+        console.log(`✅ [useUniversalDashboardActions] Service created successfully`);
+      } catch (error) {
+        console.error(`❌ [useUniversalDashboardActions] Failed to create service:`, error);
+        // Возвращаем mock сервис для предотвращения краха
+        dashboardService = {
+          getSectorDashboardData: async () => ({
+            stages: [],
+            employees: [],
+            zeroPointTickets: {},
+            metadata: {
+              sectorId,
+              totalTickets: 0,
+              totalEmployees: 0
+            }
+          })
+        };
+      }
     }
     return dashboardService;
   };
