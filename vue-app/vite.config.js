@@ -23,7 +23,7 @@ export default defineConfig(({ mode }) => ({
       },
 
       output: {
-        // Продвинутый manual chunks для оптимизации загрузки
+        // Консервативные manual chunks - только основные разделения
         manualChunks(id) {
           // Vendor chunk - основные зависимости
           if (id.includes('node_modules')) {
@@ -31,15 +31,11 @@ export default defineConfig(({ mode }) => ({
             if (id.includes('vue') || id.includes('vue-router')) {
               return 'vue-vendor';
             }
-            // Charts - отдельный chunk для тяжелых библиотек
-            if (id.includes('chart.js') || id.includes('chartjs')) {
-              return 'charts-vendor';
-            }
             // Другие vendor
             return 'vendor';
           }
 
-          // Application chunks - разделение по функциональности
+          // Application chunks - только основные сервисы
           if (id.includes('src/services/bitrix24-api') || id.includes('bitrix24-api-provider')) {
             return 'bitrix24-core';
           }
@@ -49,24 +45,7 @@ export default defineConfig(({ mode }) => ({
           if (id.includes('src/utils/graph-state/ticketListUtils')) {
             return 'ticket-utils';
           }
-          if (id.includes('src/services/graph-state')) {
-            return 'graph-state-core';
-          }
-          if (id.includes('src/components/dashboard')) {
-            return 'dashboard-components';
-          }
-          if (id.includes('src/components/graph-state')) {
-            return 'graph-state-components';
-          }
-          if (id.includes('src/pages')) {
-            return 'pages';
-          }
-          if (id.includes('src/utils/lazy-services') || id.includes('src/composables')) {
-            return 'lazy-loading';
-          }
-          if (id.includes('src/config') && id.includes('async')) {
-            return 'config-async';
-          }
+          // Избегаем проблемных разделений graph-state компонентов
         },
 
         // Оптимизация имен файлов
@@ -86,12 +65,13 @@ export default defineConfig(({ mode }) => ({
     cssCodeSplit: true, // Разделение CSS
     reportCompressedSize: true, // Показывать сжатые размеры
 
-    // Esbuild оптимизации через конфигурацию
+    // Esbuild оптимизации - сбалансированные настройки
     esbuild: {
       drop: mode === 'production' ? ['console', 'debugger'] : [],
-      minifyIdentifiers: mode === 'production',
-      minifySyntax: mode === 'production',
-      minifyWhitespace: mode === 'production'
+      minifyIdentifiers: true, // Минификация идентификаторов в production
+      minifySyntax: true, // Минификация синтаксиса
+      minifyWhitespace: true, // Минификация пробелов
+      target: 'es2020'
     },
 
     // CSS оптимизации
