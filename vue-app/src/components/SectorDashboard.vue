@@ -13,7 +13,8 @@
       error: {{ error }}<br>
       hasData: {{ hasData }}<br>
       totalTickets: {{ totalTickets }}<br>
-      stages: {{ stages.length }}<br>
+      stages: {{ stages }} (type: {{ typeof stages }}, isArray: {{ Array.isArray(stages) }})<br>
+      stagesLength: {{ stages.length }}<br>
     </div>
 
     <!-- Заголовок -->
@@ -276,8 +277,16 @@ export default {
       const route = useRoute();
 
       // Универсальные композаблы
+      console.log(`[SectorDashboard] Initializing composables for sector: ${props.sectorId}`);
       const state = useUniversalDashboardState(props.sectorId);
       const actions = useUniversalDashboardActions(state, props.sectorId);
+
+      console.log(`[SectorDashboard] State initialized:`, {
+        hasStages: !!state.stages,
+        stagesType: typeof state.stages,
+        stagesIsArray: Array.isArray(state.stages),
+        stagesValue: state.stages
+      });
 
     // Информация о текущем пользователе
     const currentUser = ref(null);
@@ -349,12 +358,12 @@ export default {
         console.log(`[SectorDashboard] ✅ Data loaded successfully for sector: ${props.sectorId}`, {
           hasData: state.hasData,
           totalTickets: state.totalTickets,
-          stagesCount: state.stages.length,
+          stagesCount: stages.length,
           employeesCount: state.employees.length,
           completionRate: state.completionRate,
-          stages: state.stages.map(s => ({ id: s.id, name: s.name, ticketsCount: s.tickets?.length || 0 })),
+          stages: Array.isArray(stages) ? stages.map(s => ({ id: s.id, name: s.name, ticketsCount: s.tickets?.length || 0 })) : [],
           renderingCondition: !state.isLoading && !state.error,
-          stagesLength: state.stages.length
+          stagesLength: stages.length
         });
       } catch (error) {
         console.error(`[SectorDashboard] ❌ Failed to load initial data for sector ${props.sectorId}:`, error);
