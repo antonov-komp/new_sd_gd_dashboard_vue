@@ -22,28 +22,65 @@ export class ApiClient {
       BX24_API = window.BX24;
       Logger.info('Using BX24 API directly', 'ApiClient');
     } else {
-      // Используем прокси API для внешнего доступа
+      // Используем mock данные для разработки
+      // В продакшене должен использоваться реальный API Bitrix24
       BX24_API = {
         call: async (method, params) => {
-          const response = await fetch('/api/bitrix24/proxy', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              method,
-              params
-            })
-          });
+          Logger.info(`Mock API call: ${method}`, 'ApiClient', params);
 
-          if (!response.ok) {
-            throw new Error(`API call failed: ${response.status}`);
+          // Имитируем задержку сети
+          await new Promise(resolve => setTimeout(resolve, 100));
+
+          // Возвращаем mock данные в зависимости от метода
+          switch (method) {
+            case 'bizproc.smartprocess.list':
+              return {
+                result: [
+                  {
+                    ID: '1',
+                    TITLE: 'Test Ticket 1',
+                    CREATED_TIME: '2026-01-12T10:00:00Z',
+                    STAGE_ID: 'DT140_12:NEW',
+                    ASSIGNED_BY_ID: '1013',
+                    UF_CRM_7_TYPE_PRODUCT: 'PDM'
+                  },
+                  {
+                    ID: '2',
+                    TITLE: 'Test Ticket 2',
+                    CREATED_TIME: '2026-01-12T11:00:00Z',
+                    STAGE_ID: 'DT140_12:ANALYSIS',
+                    ASSIGNED_BY_ID: '1014',
+                    UF_CRM_7_TYPE_PRODUCT: 'PDM'
+                  }
+                ],
+                total: 2
+              };
+
+            case 'user.get':
+              return {
+                result: [
+                  {
+                    ID: '1013',
+                    NAME: 'Марк',
+                    LAST_NAME: 'Тестов',
+                    DEPARTMENT: [369]
+                  },
+                  {
+                    ID: '1014',
+                    NAME: 'Иван',
+                    LAST_NAME: 'Разработчик',
+                    DEPARTMENT: [369]
+                  }
+                ]
+              };
+
+            default:
+              Logger.warn(`Unknown method ${method}, returning empty result`, 'ApiClient');
+              return { result: [] };
           }
-
-          return await response.json();
         }
       };
-      Logger.info('Using proxy API', 'ApiClient');
+      Logger.info('Using mock API for development', 'ApiClient');
     }
   }
 
