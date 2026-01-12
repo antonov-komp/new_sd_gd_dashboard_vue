@@ -276,25 +276,36 @@ export default {
     }, 300);
 
     const filteredData = computed(() => {
-      if (!Array.isArray(props.data)) {
-        return [];
-      }
+      try {
+        if (!Array.isArray(props.data)) {
+          return [];
+        }
 
-      let result = [...props.data];
+        let result = [...props.data];
 
-      // Применяем поиск
-      if (searchQuery.value.trim()) {
-        const query = searchQuery.value.toLowerCase();
-        result = result.filter(entry => {
-          // Проверяем, что entry существует
-          if (!entry) return false;
+        // Фильтруем валидные записи
+        result = result.filter(entry =>
+          entry &&
+          typeof entry === 'object' &&
+          entry !== null &&
+          entry.user_id &&
+          entry.timestamp &&
+          typeof entry.type === 'string'
+        );
 
-          return (entry.user_name || '').toLowerCase().includes(query) ||
-                 (entry.route_title || '').toLowerCase().includes(query) ||
-                 (entry.route_path || '').toLowerCase().includes(query) ||
-                 (entry.type || '').toLowerCase().includes(query);
-        });
-      }
+        // Применяем поиск
+        if (searchQuery.value.trim()) {
+          const query = searchQuery.value.toLowerCase();
+          result = result.filter(entry => {
+            // Проверяем, что entry существует
+            if (!entry) return false;
+
+            return (entry.user_name || '').toLowerCase().includes(query) ||
+                   (entry.route_title || '').toLowerCase().includes(query) ||
+                   (entry.route_path || '').toLowerCase().includes(query) ||
+                   (entry.type || '').toLowerCase().includes(query);
+          });
+        }
 
       // Сортировка
       result.sort((a, b) => {
@@ -320,6 +331,10 @@ export default {
       });
 
       return result;
+      } catch (error) {
+        console.warn('[ActivityDataTable] Error filtering data:', error);
+        return [];
+      }
     });
 
     const totalCount = computed(() => filteredData.value.length);

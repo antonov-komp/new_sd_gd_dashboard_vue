@@ -144,6 +144,9 @@ export class ActivityAnalyticsService {
     const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 минут
 
     sortedActivity.forEach(entry => {
+      // Проверяем, что entry существует
+      if (!entry || typeof entry !== 'object' || !entry.timestamp) return;
+
       const entryTime = new Date(entry.timestamp).getTime();
 
       if (!currentSession || (entryTime - currentSession.endTime) > SESSION_TIMEOUT) {
@@ -163,7 +166,7 @@ export class ActivityAnalyticsService {
 
       currentSession.entries.push(entry);
       currentSession.endTime = entryTime;
-      currentSession.pages.add(entry.route_path);
+      if (entry.route_path) currentSession.pages.add(entry.route_path);
 
       // Подсчёт типов действий
       const actionType = entry.type || 'unknown';
@@ -290,10 +293,12 @@ export class ActivityAnalyticsService {
    * Поиск популярных путей пользователей
    */
   static findPopularPaths(activity) {
+    if (!Array.isArray(activity)) return new Map();
+
     const paths = new Map();
 
     activity
-      .filter(entry => entry.type === 'page_visit')
+      .filter(entry => entry && entry.type === 'page_visit')
       .forEach(entry => {
         const path = entry.route_path || entry.route_name || 'unknown';
         paths.set(path, (paths.get(path) || 0) + 1);
@@ -435,10 +440,12 @@ export class ActivityAnalyticsService {
    * Поиск любимых страниц пользователя
    */
   static findFavoritePages(userActivity) {
+    if (!Array.isArray(userActivity)) return [];
+
     const pageStats = new Map();
 
     userActivity
-      .filter(entry => entry.type === 'page_visit')
+      .filter(entry => entry && entry.type === 'page_visit')
       .forEach(entry => {
         const page = entry.route_path || entry.route_title || entry.route_name || 'unknown';
         pageStats.set(page, (pageStats.get(page) || 0) + 1);

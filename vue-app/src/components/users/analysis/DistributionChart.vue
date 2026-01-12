@@ -118,13 +118,25 @@ export default {
 
     // Вычисляемые данные диаграммы
     const chartData = computed(() => {
-      if (!props.data || props.data.length === 0) {
-        return VisualizationHelpers.getEmptyDistributionData();
-      }
-
       try {
+        if (!Array.isArray(props.data) || props.data.length === 0) {
+          return VisualizationHelpers.getEmptyDistributionData();
+        }
+
+        // Фильтруем валидные данные
+        const validData = props.data.filter(entry =>
+          entry &&
+          typeof entry === 'object' &&
+          entry !== null &&
+          typeof entry.type === 'string'
+        );
+
+        if (validData.length === 0) {
+          return VisualizationHelpers.getEmptyDistributionData();
+        }
+
         return VisualizationHelpers.prepareDistributionChartData(
-          props.data,
+          validData,
           selectedType.value,
           selectedChartType.value
         );
@@ -205,11 +217,11 @@ export default {
     // Получение опций диаграммы
     const getChartOptions = () => {
       const baseOptions = {
-        responsive: true,
+        responsive: false, // Отключаем responsive для предотвращения проблем с canvas
         devicePixelRatio: 1, // Предотвращает проблемы с высоким DPI
+        maintainAspectRatio: false,
         animation: {
-          duration: 300, // Уменьшаем анимацию для производительности
-          easing: 'easeOutQuart'
+          duration: 0 // Отключаем анимации для предотвращения проблем с canvas
         },
         maintainAspectRatio: false,
         plugins: {

@@ -45,7 +45,7 @@
       <div class="chart-row">
         <div class="chart-container time-chart">
           <TimeChart
-            :data="activityData"
+            :data="safeActivityData"
             :group-by="timeGroupBy"
             :filters="filters"
             title="Активность по времени"
@@ -57,7 +57,7 @@
       <div class="chart-row">
         <div class="chart-container distribution-chart">
           <DistributionChart
-            :data="activityData"
+            :data="safeActivityData"
             :type="distributionType"
             title="Распределение активности"
             @segment-click="handleSegmentClick"
@@ -66,7 +66,7 @@
 
         <div class="chart-container user-ranking">
           <UserRanking
-            :data="activityData"
+            :data="safeActivityData"
             :limit="10"
             title="Топ активных пользователей"
             @user-select="handleUserSelect"
@@ -78,7 +78,7 @@
     <!-- Детальная таблица -->
     <div class="data-table-section">
       <ActivityDataTable
-        :data="filteredActivityData"
+        :data="safeActivityData"
         :loading="loading"
         :filters="filters"
         @sort-change="handleSortChange"
@@ -166,6 +166,26 @@ export default {
       const from = filters.value.dateFrom || 'начала';
       const to = filters.value.dateTo || 'сейчас';
       return `${from} по ${to}`;
+    });
+
+    // Валидированные данные для графиков
+    const safeActivityData = computed(() => {
+      try {
+        if (!Array.isArray(activityData.value)) {
+          return [];
+        }
+        return activityData.value.filter(entry =>
+          entry &&
+          typeof entry === 'object' &&
+          entry !== null &&
+          entry.user_id &&
+          entry.timestamp &&
+          typeof entry.type === 'string'
+        );
+      } catch (error) {
+        console.warn('[ActivityDashboard] Error filtering activity data:', error);
+        return [];
+      }
     });
 
     // Загрузка данных дашборда

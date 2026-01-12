@@ -97,15 +97,15 @@ export default {
         // Пересчитываем статистику вручную на основе отфильтрованных данных
         const filteredStats = {
           total_entries: filteredActivity.length,
-          unique_users_count: new Set(filteredActivity.map(e => e.user_id)).size,
-          total_app_entries: filteredActivity.filter(e => e.type === 'app_entry').length,
-          total_page_visits: filteredActivity.filter(e => e.type === 'page_visit').length,
+          unique_users_count: new Set(filteredActivity.filter(e => e && e.user_id).map(e => e.user_id)).size,
+          total_app_entries: filteredActivity.filter(e => e && e.type === 'app_entry').length,
+          total_page_visits: filteredActivity.filter(e => e && e.type === 'page_visit').length,
           pages_visited: {}
         };
-        
+
         // Подсчитываем популярные страницы
         filteredActivity
-          .filter(e => e.type === 'page_visit' && e.route_path)
+          .filter(e => e && e.type === 'page_visit' && e.route_path)
           .forEach(e => {
             const page = e.route_title || e.route_path || e.route_name || 'Неизвестная страница';
             filteredStats.pages_visited[page] = (filteredStats.pages_visited[page] || 0) + 1;

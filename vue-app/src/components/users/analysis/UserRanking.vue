@@ -160,12 +160,25 @@ export default {
 
     // Подготовка данных рейтинга
     const users = computed(() => {
-      if (!props.data || props.data.length === 0) {
-        return [];
-      }
-
       try {
-        let rankingData = VisualizationHelpers.prepareUserRankingData(props.data, props.limit * 3); // Берем больше для сортировки
+        if (!Array.isArray(props.data) || props.data.length === 0) {
+          return [];
+        }
+
+        // Фильтруем валидные данные
+        const validData = props.data.filter(entry =>
+          entry &&
+          typeof entry === 'object' &&
+          entry !== null &&
+          entry.user_id &&
+          typeof entry.type === 'string'
+        );
+
+        if (validData.length === 0) {
+          return [];
+        }
+
+        let rankingData = VisualizationHelpers.prepareUserRankingData(validData, props.limit * 3); // Берем больше для сортировки
 
         // Сортировка
         rankingData.sort((a, b) => {

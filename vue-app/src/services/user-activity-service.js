@@ -30,13 +30,13 @@ export class UserActivityService {
 
     return data.filter(entry => {
       // Проверяем, что entry существует и является объектом
-      if (!entry || typeof entry !== 'object') {
-        console.warn('[UserActivityService] Invalid entry: not an object', entry);
+      if (!entry || typeof entry !== 'object' || entry === null) {
+        console.warn('[UserActivityService] Invalid entry: not an object or null', entry);
         return false;
       }
 
       // Проверяем обязательные поля
-      if (!entry.user_id) {
+      if (!entry.user_id && entry.user_id !== 0) {
         console.warn('[UserActivityService] Invalid entry: missing user_id', entry);
         return false;
       }
@@ -47,24 +47,36 @@ export class UserActivityService {
       }
 
       // Проверяем валидность timestamp
-      const timestamp = new Date(entry.timestamp);
-      if (isNaN(timestamp.getTime())) {
-        console.warn('[UserActivityService] Invalid entry: invalid timestamp', entry.timestamp);
+      try {
+        const timestamp = new Date(entry.timestamp);
+        if (isNaN(timestamp.getTime())) {
+          console.warn('[UserActivityService] Invalid entry: invalid timestamp', entry.timestamp);
+          return false;
+        }
+      } catch (e) {
+        console.warn('[UserActivityService] Invalid entry: timestamp parse error', entry.timestamp, e);
         return false;
       }
 
       return true;
-    }).map(entry => ({
-      ...entry,
-      user_id: Number(entry.user_id),
-      timestamp: entry.timestamp,
-      type: entry.type || 'unknown',
-      route_path: entry.route_path || null,
-      route_title: entry.route_title || null,
-      route_name: entry.route_name || null,
-      user_name: entry.user_name || null,
-      user_agent: entry.user_agent || null
-    }));
+    }).map(entry => {
+      try {
+        return {
+          ...entry,
+          user_id: Number(entry.user_id) || 0,
+          timestamp: entry.timestamp,
+          type: entry.type || 'unknown',
+          route_path: entry.route_path || null,
+          route_title: entry.route_title || null,
+          route_name: entry.route_name || null,
+          user_name: entry.user_name || null,
+          user_agent: entry.user_agent || null
+        };
+      } catch (e) {
+        console.warn('[UserActivityService] Error normalizing entry:', entry, e);
+        return null;
+      }
+    }).filter(entry => entry !== null);
   }
 
   /**
@@ -183,25 +195,32 @@ export class UserActivityService {
     };
     
     activity.forEach(entry => {
+      // Проверяем, что entry существует
+      if (!entry || typeof entry !== 'object') return;
+
       if (entry.type === 'app_entry') {
         stats.total_app_entries++;
-        stats.unique_users.add(entry.user_id);
+        if (entry.user_id) stats.unique_users.add(entry.user_id);
       } else if (entry.type === 'page_visit') {
         stats.total_page_visits++;
-        
+
         // Подсчёт посещений страниц
         const page = entry.route_title || entry.route_path || entry.route_name || 'unknown';
         stats.pages_visited[page] = (stats.pages_visited[page] || 0) + 1;
       }
-      
+
       // Группировка по дате
       if (entry.timestamp) {
-        const date = new Date(entry.timestamp).toISOString().split('T')[0];
-        stats.activity_by_date[date] = (stats.activity_by_date[date] || 0) + 1;
-        
-        // Группировка по часу
-        const hour = new Date(entry.timestamp).getHours();
-        stats.activity_by_hour[hour] = (stats.activity_by_hour[hour] || 0) + 1;
+        try {
+          const date = new Date(entry.timestamp).toISOString().split('T')[0];
+          stats.activity_by_date[date] = (stats.activity_by_date[date] || 0) + 1;
+
+          // Группировка по часу
+          const hour = new Date(entry.timestamp).getHours();
+          stats.activity_by_hour[hour] = (stats.activity_by_hour[hour] || 0) + 1;
+        } catch (e) {
+          console.warn('[UserActivityService] Invalid timestamp:', entry.timestamp);
+        }
       }
     });
     

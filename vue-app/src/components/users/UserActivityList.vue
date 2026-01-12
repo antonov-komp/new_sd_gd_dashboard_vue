@@ -198,7 +198,8 @@ export default {
     };
 
     const getEntryKey = (entry) => {
-      return `${entry.timestamp}-${entry.user_id}-${entry.type}-${entry.route_path || ''}`;
+      if (!entry) return 'undefined-entry';
+      return `${entry.timestamp || 'no-timestamp'}-${entry.user_id || 'no-user'}-${entry.type || 'no-type'}-${entry.route_path || ''}`;
     };
 
     // Обработчик события изменения скрытых пользователей

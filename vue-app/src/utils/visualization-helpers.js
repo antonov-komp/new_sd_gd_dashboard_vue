@@ -59,9 +59,21 @@ export class VisualizationHelpers {
    * @returns {Object} Данные для Chart.js
    */
   static prepareDistributionChartData(activity, type, chartType = 'doughnut') {
-    if (!Array.isArray(activity)) {
-      return this.getEmptyDistributionData();
-    }
+    try {
+      if (!Array.isArray(activity)) {
+        console.warn('[VisualizationHelpers] prepareDistributionChartData: activity is not an array');
+        return this.getEmptyDistributionData();
+      }
+
+      if (activity.length === 0) {
+        return this.getEmptyDistributionData();
+      }
+
+      // Проверяем, что все элементы массива - объекты
+      if (!activity.every(item => typeof item === 'object' && item !== null)) {
+        console.warn('[VisualizationHelpers] prepareDistributionChartData: some items are not objects');
+        return this.getEmptyDistributionData();
+      }
 
     const distribution = this.calculateDistribution(activity, type);
     const colors = this.generateColors(Object.keys(distribution).length);
@@ -84,6 +96,10 @@ export class VisualizationHelpers {
     }
 
     return data;
+    } catch (error) {
+      console.error('[VisualizationHelpers] prepareDistributionChartData error:', error);
+      return this.getEmptyDistributionData();
+    }
   }
 
   /**
@@ -101,6 +117,9 @@ export class VisualizationHelpers {
     const userStats = new Map();
 
     activity.forEach(entry => {
+      // Проверяем, что entry существует
+      if (!entry || typeof entry !== 'object') return;
+
       const userId = entry.user_id;
       if (!userId) return;
 
@@ -239,14 +258,18 @@ export class VisualizationHelpers {
    */
   static calculateDistribution(activity, type) {
     if (!Array.isArray(activity)) {
+      console.warn('[VisualizationHelpers] calculateDistribution: activity is not an array', activity);
       return {};
     }
 
     const distribution = {};
 
     activity.forEach(entry => {
-      // Проверяем, что entry существует
-      if (!entry) return;
+      // Проверяем, что entry существует и является объектом
+      if (!entry || typeof entry !== 'object') {
+        console.warn('[VisualizationHelpers] calculateDistribution: invalid entry', entry);
+        return;
+      }
 
       let key;
       switch (type) {

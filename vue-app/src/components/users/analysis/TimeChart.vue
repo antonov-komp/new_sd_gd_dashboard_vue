@@ -131,8 +131,21 @@ export default {
           return VisualizationHelpers.getEmptyTimeChartData();
         }
 
+        // Фильтруем валидные данные
+        const validData = props.data.filter(entry =>
+          entry &&
+          typeof entry === 'object' &&
+          entry !== null &&
+          entry.timestamp &&
+          typeof entry.type === 'string'
+        );
+
+        if (validData.length === 0) {
+          return VisualizationHelpers.getEmptyTimeChartData();
+        }
+
         const preparedData = VisualizationHelpers.prepareTimeChartData(
-          props.data,
+          validData,
           selectedGroupBy.value,
           { ActivityAnalyticsService }
         );
@@ -186,10 +199,9 @@ export default {
             responsive: true,
             maintainAspectRatio: false,
             devicePixelRatio: 1, // Предотвращает проблемы с высоким DPI
-            animation: {
-              duration: 300, // Уменьшаем анимацию для производительности
-              easing: 'easeOutQuart'
-            },
+          animation: {
+            duration: 0 // Отключаем анимации для предотвращения проблем с canvas
+          },
             plugins: {
               legend: {
                 display: true,
