@@ -8,6 +8,7 @@
  */
 
 import { Logger } from '../utils/logger.js';
+import { DashboardBitrix24Facade } from '../../facades/DashboardBitrix24Facade.js';
 
 // Глобальный объект BX24 или прокси API
 let BX24_API = null;
@@ -22,79 +23,18 @@ export class ApiClient {
       BX24_API = window.BX24;
       Logger.info('Using BX24 API directly', 'ApiClient');
     } else {
-      // Используем mock данные для разработки
-      // В продакшене должен использоваться реальный API Bitrix24
+      // Используем DashboardBitrix24Facade для работы с реальными данными
+      // Этот фасад уже настроен и работает для сектора 1С
+      const facade = new DashboardBitrix24Facade();
+
       BX24_API = {
         call: async (method, params) => {
-          Logger.info(`Mock API call: ${method}`, 'ApiClient', params);
-
-          // Имитируем задержку сети
-          await new Promise(resolve => setTimeout(resolve, 100));
-
-          // Возвращаем mock данные в зависимости от метода
-          switch (method) {
-            case 'bizproc.smartprocess.list':
-              return {
-                items: [
-                  {
-                    ID: '1',
-                    TITLE: 'Test Ticket 1',
-                    CREATED_TIME: '2026-01-12T10:00:00Z',
-                    STAGE_ID: 'DT140_12:NEW',
-                    ASSIGNED_BY_ID: '1013',
-                    UF_CRM_7_TYPE_PRODUCT: 'PDM'
-                  },
-                  {
-                    ID: '2',
-                    TITLE: 'Test Ticket 2',
-                    CREATED_TIME: '2026-01-12T11:00:00Z',
-                    STAGE_ID: 'DT140_12:ANALYSIS',
-                    ASSIGNED_BY_ID: '1014',
-                    UF_CRM_7_TYPE_PRODUCT: 'PDM'
-                  }
-                ],
-                total: 2
-              };
-
-            case 'user.get':
-              const allEmployees = [
-                {
-                  ID: '1013',
-                  NAME: 'Марк',
-                  LAST_NAME: 'Тестов',
-                  DEPARTMENT: [369]
-                },
-                {
-                  ID: '1014',
-                  NAME: 'Иван',
-                  LAST_NAME: 'Разработчик',
-                  DEPARTMENT: [369]
-                },
-                {
-                  ID: '1015',
-                  NAME: 'Анна',
-                  LAST_NAME: 'Менеджер',
-                  DEPARTMENT: [369]
-                }
-              ];
-
-              // Фильтрация по ID если указан фильтр
-              let filteredEmployees = allEmployees;
-              if (params.filter && params.filter.ID) {
-                filteredEmployees = allEmployees.filter(emp => emp.ID === params.filter.ID);
-              }
-
-              return {
-                result: filteredEmployees
-              };
-
-            default:
-              Logger.warn(`Unknown method ${method}, returning empty result`, 'ApiClient');
-              return { result: [] };
-          }
+          Logger.info(`Calling Bitrix24 API via facade: ${method}`, 'ApiClient');
+          return await facade.call(method, params);
         }
       };
-      Logger.info('Using mock API for development', 'ApiClient');
+
+      Logger.info('Using DashboardBitrix24Facade for real API calls', 'ApiClient');
     }
   }
 
@@ -146,7 +86,7 @@ export class ApiClient {
       limit
     };
 
-    const result = await this.call('bizproc.smartprocess.list', params);
+    const result = await this.call('crm.item.list', params);
     return result.items || result.result || [];
   }
 
@@ -169,7 +109,7 @@ export class ApiClient {
       select
     };
 
-    const result = await this.call('bizproc.smartprocess.get', params);
+    const result = await this.call('crm.item.get', params);
     return result.item || result.result || null;
   }
 
@@ -190,7 +130,7 @@ export class ApiClient {
       fields
     };
 
-    return await this.call('bizproc.smartprocess.update', params);
+    return await this.call('crm.item.update', params);
   }
 }
 

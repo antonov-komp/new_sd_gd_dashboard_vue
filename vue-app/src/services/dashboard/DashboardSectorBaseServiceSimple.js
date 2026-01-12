@@ -7,6 +7,7 @@
 
 import { TicketRepository } from './data/ticket-repository.js';
 import { EmployeeRepository } from './data/employee-repository.js';
+import { CacheManager } from './cache/cache-manager.js';
 import { ENTITY_TYPE_ID } from './utils/constants.js';
 import { getTargetStages } from './mappers/stage-mapper.js';
 import { filterTicketsBySector } from './filters/sector-filter.js';
@@ -34,7 +35,19 @@ export class DashboardSectorBaseService {
    * Получение данных сектора
    */
   async getSectorData(options = {}) {
+    const useCache = options.useCache !== false; // по умолчанию true
+
     Logger.info(`Loading sector data for ${this.sectorId}`, 'DashboardSectorBaseService');
+
+    // Проверяем кеш
+    if (useCache) {
+      const cacheKey = CacheManager.getSectorDataCacheKey(this.sectorId);
+      const cachedData = CacheManager.get(cacheKey);
+      if (cachedData) {
+        Logger.info(`Using cached sector data for ${this.sectorId}`, 'DashboardSectorBaseService');
+        return cachedData;
+      }
+    }
 
     try {
       // Шаг 1: Получаем тикеты с фильтром по сектору
@@ -91,6 +104,13 @@ export class DashboardSectorBaseService {
           lastUpdated: new Date().toISOString()
         }
       };
+
+      // Кешируем результат
+      if (useCache) {
+        const cacheKey = CacheManager.getSectorDataCacheKey(this.sectorId);
+        CacheManager.set(cacheKey, result);
+        Logger.info(`Sector data cached for ${this.sectorId}`, 'DashboardSectorBaseService');
+      }
 
       Logger.info(`Sector data loaded successfully for ${this.sectorId}`, 'DashboardSectorBaseService', {
         totalTickets: sectorTickets.length,

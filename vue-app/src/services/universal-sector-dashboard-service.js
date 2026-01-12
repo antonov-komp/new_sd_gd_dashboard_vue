@@ -109,10 +109,25 @@ export class UniversalSectorDashboardService {
    * @returns {object} Нормализованные данные для дашборда
    */
   normalizeSectorDataToDashboard(sectorData) {
-    // Полностью отключаем нормализацию - возвращаем данные напрямую
-    console.log('[UniversalSectorDashboardService] Returning sectorData without normalization');
+    // Используем нормализатор для унификации данных
+    const normalizedData = SectorDataNormalizer.normalizeSectorData(sectorData, {
+      id: this.sectorId
+    });
 
-    return sectorData;
+    // Преобразуем в формат дашборда
+    const dashboardData = {
+      stages: this.convertStagesToDashboardFormat(normalizedData.stages),
+      employees: normalizedData.employees,
+      zeroPointTickets: this.extractZeroPointTickets(normalizedData),
+      metadata: {
+        sectorId: this.sectorId,
+        totalTickets: normalizedData.metrics?.totalTickets || 0,
+        totalEmployees: normalizedData.employees?.length || 0,
+        lastUpdated: new Date().toISOString()
+      }
+    };
+
+    return dashboardData;
   }
 
   /**
