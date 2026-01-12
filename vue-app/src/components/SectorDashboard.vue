@@ -13,8 +13,8 @@
       error: {{ error }}<br>
       hasData: {{ hasData }}<br>
       totalTickets: {{ totalTickets }}<br>
-      stages: {{ stages }} (type: {{ typeof stages }}, isArray: {{ Array.isArray(stages) }})<br>
-      stagesLength: {{ stages.length }}<br>
+      stages: {{ state.stages }} (type: {{ typeof state.stages }}, isArray: {{ Array.isArray(state.stages) }})<br>
+      stagesLength: {{ state.stages.length }}<br>
     </div>
 
     <!-- Заголовок -->
@@ -103,7 +103,7 @@
         <div class="stat-label">Завершено</div>
       </div>
       <div class="stat-item">
-        <div class="stat-value">{{ stages.length }}</div>
+        <div class="stat-value">{{ state.stages.length }}</div>
         <div class="stat-label">Этапов</div>
       </div>
     </div>
@@ -140,13 +140,13 @@
       <div v-if="!isLoading && !error" class="dashboard-content">
         <!-- DEBUG: Показываем состояние -->
         <div style="background: #f0f0f0; padding: 10px; margin-bottom: 20px; font-size: 12px;">
-          DEBUG: stages.length = {{ stages.length }}, isLoading = {{ isLoading }}, error = {{ error }}
+          DEBUG: state.stages.length = {{ state.stages.length }}, isLoading = {{ isLoading }}, error = {{ error }}
         </div>
 
         <!-- Этапы обработки -->
-        <div v-if="stages.length > 0" class="stages-container">
+        <div v-if="state.stages.length > 0" class="stages-container">
           <div
-            v-for="stage in stages"
+            v-for="stage in state.stages"
             :key="stage.id"
             class="stage-card"
             :style="{ borderLeftColor: stage.color }"
@@ -197,7 +197,7 @@
               <ul>
                 <li><strong>ID:</strong> {{ sectorId }}</li>
                 <li><strong>Название:</strong> {{ sectorName }}</li>
-                <li><strong>Этапов:</strong> {{ stages.length }}</li>
+                <li><strong>Этапов:</strong> {{ state.stages.length }}</li>
                 <li><strong>Сотрудников:</strong> {{ employees.length }}</li>
                 <li><strong>Тикетов:</strong> {{ totalTickets }}</li>
               </ul>
@@ -358,12 +358,12 @@ export default {
         console.log(`[SectorDashboard] ✅ Data loaded successfully for sector: ${props.sectorId}`, {
           hasData: state.hasData,
           totalTickets: state.totalTickets,
-          stagesCount: stages.length,
+          stagesCount: state.stages.length,
           employeesCount: state.employees.length,
           completionRate: state.completionRate,
-          stages: Array.isArray(stages) ? stages.map(s => ({ id: s.id, name: s.name, ticketsCount: s.tickets?.length || 0 })) : [],
+          stages: Array.isArray(state.stages) ? state.stages.map(s => ({ id: s.id, name: s.name, ticketsCount: s.tickets?.length || 0 })) : [],
           renderingCondition: !state.isLoading && !state.error,
-          stagesLength: stages.length
+          stagesLength: state.stages.length
         });
       } catch (error) {
         console.error(`[SectorDashboard] ❌ Failed to load initial data for sector ${props.sectorId}:`, error);
