@@ -48,7 +48,18 @@ export class UniversalSectorDashboardService {
       console.log(`[UniversalSectorDashboardService] Loading dashboard data for sector: ${this.sectorId}`);
 
       // Получаем сырые данные сектора
-      const rawSectorData = await this.sectorService.getSectorData(options);
+      // Для сектора 1C используем статический метод
+      let rawSectorData;
+      if (this.sectorId === '1c') {
+        const { DashboardSector1CService } = await import('@/services/dashboard-sector-1c/index.js');
+        rawSectorData = await DashboardSector1CService.getSectorData(
+          !options.forceRefresh, // useCache
+          false, // useBackendCache
+          null // onProgress
+        );
+      } else {
+        rawSectorData = await this.sectorService.getSectorData(options);
+      }
 
       // Нормализуем данные для дашборда
       const dashboardData = this.normalizeSectorDataToDashboard(rawSectorData);

@@ -76,7 +76,7 @@ export class SectorDataLoadingTester {
       // Ждем инициализации сервиса
       await this.waitForServiceInitialization(service);
 
-      // Получаем данные сектора с параметрами пагинации
+      // Получаем данные сектора с параметрами пагинации и отключенным кешем
       const options = this.getSectorOptions(sectorId);
       const sectorData = await service.getSectorDashboardData(options);
 
@@ -124,7 +124,7 @@ export class SectorDataLoadingTester {
     // Специфические параметры для каждого сектора
     switch (sectorId) {
       case '1c':
-        // Сектор 1С имеет большое количество данных (60/13/13)
+        // Сектор 1С имеет большое количество данных (60/13/13 = 86 тикетов)
         // Включаем пагинацию для оптимизации загрузки
         return {
           ...baseOptions,
@@ -245,6 +245,28 @@ export class SectorDataLoadingTester {
       });
     }
 
+    // Специфическая проверка для сектора PDM (ожидаем 0/27/3)
+    if (sectorId === 'pdm') {
+      const stageMetrics = {};
+      sectorData.stages.forEach(stage => {
+        stageMetrics[stage.id] = stage.tickets?.length || 0;
+      });
+
+      // Проверяем ожидаемые метрики для сектора PDM
+      const expectedMetrics = {
+        formed: 0,     // Первая стадия: 0 элементов
+        review: 27,    // Вторая стадия: 27 элементов
+        execution: 3   // Третья стадия: 3 элементов
+      };
+
+      Object.entries(expectedMetrics).forEach(([stageId, expectedCount]) => {
+        const actualCount = stageMetrics[stageId] || 0;
+        if (actualCount !== expectedCount) {
+          warnings.push(`Стадия ${stageId}: ожидалось ${expectedCount} элементов, получено ${actualCount}`);
+        }
+      });
+    }
+
     // Проверяем корректность метаданных
     if (sectorData.metadata.sectorId !== sectorId) {
       warnings.push(`ID сектора в метаданных (${sectorData.metadata.sectorId}) не соответствует ожидаемому (${sectorId})`);
@@ -316,8 +338,8 @@ export class SectorDataLoadingTester {
 
     console.log(`   Всего: ${result.metrics.totalTickets} тикетов, ${result.metrics.totalEmployees} сотрудников`);
 
-    // Специфическая информация для сектора 1С
-    if (result.sectorId === '1c') {
+    // Специфическая информация для секторов с известным распределением
+    if (result.sectorId === '1c' || result.sectorId === 'pdm') {
       const stageCounts = Object.values(result.metrics.stages).map(s => s.ticketCount);
       console.log(`   📊 Распределение: ${stageCounts.join('/')}`);
     }

@@ -38,7 +38,6 @@ import {
 import { Logger } from './utils/logger.js';
 import { clearSectorCache } from './utils/sector-helper.js';
 import { getDiagnosticsService, isDiagnosticsEnabled } from './utils/diagnostics-service.js';
-import { CacheNotificationService } from '@/services/cache-notification-service.js';
 
 /**
  * Сервис для работы с дашбордом сектора 1С
@@ -86,55 +85,8 @@ export class DashboardSector1CService {
       }));
     }
 
-    // TASK-082: Проверяем backend кеш, если включен
-    if (useBackendCache) {
-      try {
-        if (onProgress) {
-          onProgress(createProgressDetails('backend_cache_check', 5, {
-            description: 'Проверка backend кеша...'
-          }));
-        }
-
-        // Вызываем API для получения данных сектора с backend кешированием
-        const response = await fetch('/api/services/dashboard-sector-1c.php', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            action: 'getSectorDataCached',
-            params: {
-              forceRefresh: false, // Используем кеш
-              ttl: 600
-            }
-          })
-        });
-
-        if (response.ok) {
-          const result = await response.json();
-          if (result.success && result.data) {
-            if (onProgress) {
-              onProgress(createProgressDetails('backend_cache_hit', 100, {
-                description: 'Данные загружены из backend кеша'
-              }));
-            }
-
-            // Проверяем, был ли кеш создан только что (cache_created = true)
-            if (result.cache_created === true) {
-              CacheNotificationService.notifyCacheCreationSuccess('Дашборд сектора 1С (backend)');
-            }
-
-            return result.data;
-          }
-        }
-
-        // Если backend кеш не сработал, продолжаем с обычной логикой
-        Logger.warn('Backend cache miss or error, falling back to frontend logic', 'DashboardSector1CService');
-      } catch (backendError) {
-        Logger.warn('Backend cache request failed, falling back to frontend logic', 'DashboardSector1CService', backendError);
-        // Продолжаем с обычной логикой
-      }
-    }
+    // Примечание: Backend кеширование отключено для сектора 1C
+    // Данные получаются напрямую из Bitrix24 API с использованием in-memory кеширования
 
     // Проверяем in-memory кеш
     if (useCache) {

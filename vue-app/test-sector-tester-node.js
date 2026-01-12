@@ -67,45 +67,54 @@ class MockUniversalSectorDashboardService {
           {
             id: 'formed',
             name: 'Сформировано обращение',
-            employees: [
-              { id: 'emp1', name: 'Иван Иванов', email: 'ivan@example.com' },
-              { id: 'emp2', name: 'Мария Петрова', email: 'maria@example.com' }
-            ],
-            tickets: [
-              { id: 'ticket1', title: 'Проблема с 1С', assignedTo: 'emp1', priority: 'high' },
-              { id: 'ticket2', title: 'Обновление модуля', assignedTo: null, priority: 'medium' }
-            ]
+            employees: Array.from({length: 12}, (_, i) => ({
+              id: `emp_formed_${i + 1}`,
+              name: `Сотрудник ${i + 1}`,
+              email: `emp${i + 1}@example.com`
+            })),
+            tickets: Array.from({length: 60}, (_, i) => ({
+              id: `ticket_formed_${i + 1}`,
+              title: `Заявка ${i + 1} на формирование`,
+              assignedTo: i % 3 === 0 ? `emp_formed_${(i % 12) + 1}` : null,
+              priority: i % 4 === 0 ? 'high' : i % 4 === 1 ? 'medium' : i % 4 === 2 ? 'low' : 'medium'
+            }))
           },
           {
             id: 'review',
             name: 'Рассмотрение ТЗ',
             employees: [
-              { id: 'emp3', name: 'Алексей Сидоров', email: 'alex@example.com' }
+              { id: 'emp_review_1', name: 'Алексей Сидоров', email: 'alex@example.com' },
+              { id: 'emp_review_2', name: 'Марина Кузнецова', email: 'marina@example.com' }
             ],
-            tickets: [
-              { id: 'ticket3', title: 'Анализ требований', assignedTo: 'emp3', priority: 'medium' }
-            ]
+            tickets: Array.from({length: 13}, (_, i) => ({
+              id: `ticket_review_${i + 1}`,
+              title: `Анализ ТЗ ${i + 1}`,
+              assignedTo: i % 2 === 0 ? 'emp_review_1' : 'emp_review_2',
+              priority: i % 3 === 0 ? 'high' : 'medium'
+            }))
           },
           {
             id: 'execution',
             name: 'Исполнение',
             employees: [
-              { id: 'emp4', name: 'Ольга Николаева', email: 'olga@example.com' },
-              { id: 'emp5', name: 'Дмитрий Козлов', email: 'dmitry@example.com' }
+              { id: 'emp_exec_1', name: 'Ольга Николаева', email: 'olga@example.com' },
+              { id: 'emp_exec_2', name: 'Дмитрий Козлов', email: 'dmitry@example.com' },
+              { id: 'emp_exec_3', name: 'Антон Петров', email: 'anton@example.com' },
+              { id: 'emp_exec_4', name: 'Елена Соколова', email: 'elena@example.com' }
             ],
-            tickets: [
-              { id: 'ticket4', title: 'Внедрение решения', assignedTo: 'emp4', priority: 'high' },
-              { id: 'ticket5', title: 'Тестирование системы', assignedTo: 'emp5', priority: 'low' }
-            ]
+            tickets: Array.from({length: 13}, (_, i) => ({
+              id: `ticket_exec_${i + 1}`,
+              title: `Внедрение решения ${i + 1}`,
+              assignedTo: `emp_exec_${(i % 4) + 1}`,
+              priority: i % 4 === 0 ? 'high' : i % 4 === 1 ? 'medium' : 'low'
+            }))
           }
         ],
-        employees: [
-          { id: 'emp1', name: 'Иван Иванов', email: 'ivan@example.com' },
-          { id: 'emp2', name: 'Мария Петрова', email: 'maria@example.com' },
-          { id: 'emp3', name: 'Алексей Сидоров', email: 'alex@example.com' },
-          { id: 'emp4', name: 'Ольга Николаева', email: 'olga@example.com' },
-          { id: 'emp5', name: 'Дмитрий Козлов', email: 'dmitry@example.com' }
-        ],
+        employees: Array.from({length: 18}, (_, i) => ({
+          id: `emp_${i + 1}`,
+          name: `Сотрудник сектора 1С ${i + 1}`,
+          email: `emp1c${i + 1}@example.com`
+        })),
         zeroPointTickets: {
           formed: [],
           review: [],
@@ -113,8 +122,8 @@ class MockUniversalSectorDashboardService {
         },
         metadata: {
           sectorId: '1c',
-          totalTickets: 5,
-          totalEmployees: 5,
+          totalTickets: 86,
+          totalEmployees: 18,
           lastUpdated: new Date().toISOString()
         }
       },
@@ -123,35 +132,48 @@ class MockUniversalSectorDashboardService {
           {
             id: 'formed',
             name: 'Проектирование',
-            employees: [
-              { id: 'pdm1', name: 'Анна Сергеева', email: 'anna@example.com' }
-            ],
-            tickets: [
-              { id: 'pdm1', title: 'Проектирование детали', assignedTo: 'pdm1', priority: 'medium' },
-              { id: 'pdm2', title: 'Анализ чертежей', assignedTo: null, priority: 'low' }
-            ]
+            employees: [],
+            tickets: [] // 0 тикетов в стадии formed
           },
           {
             id: 'review',
             name: 'Проверка',
             employees: [
-              { id: 'pdm2', name: 'Владимир Кузнецов', email: 'vladimir@example.com' }
+              { id: 'pdm1', name: 'Анна Сергеева', email: 'anna@example.com' },
+              { id: 'pdm2', name: 'Владимир Кузнецов', email: 'vladimir@example.com' },
+              { id: 'pdm3', name: 'Елена Михайлова', email: 'elena@example.com' },
+              { id: 'pdm4', name: 'Дмитрий Петров', email: 'dmitry@example.com' },
+              { id: 'pdm5', name: 'Ольга Иванова', email: 'olga@example.com' }
             ],
-            tickets: [
-              { id: 'pdm3', title: 'Валидация проекта', assignedTo: 'pdm2', priority: 'high' }
-            ]
+            tickets: Array.from({length: 27}, (_, i) => ({
+              id: `pdm_review_${i + 1}`,
+              title: `Проверка проекта ${i + 1}`,
+              assignedTo: i % 2 === 0 ? 'pdm1' : 'pdm2',
+              priority: i % 3 === 0 ? 'high' : i % 3 === 1 ? 'medium' : 'low'
+            }))
           },
           {
             id: 'execution',
             name: 'Внедрение',
-            employees: [],
-            tickets: []
+            employees: [
+              { id: 'pdm6', name: 'Алексей Смирнов', email: 'alex@example.com' },
+              { id: 'pdm7', name: 'Мария Ковалёва', email: 'maria@example.com' }
+            ],
+            tickets: [
+              { id: 'pdm_exec_1', title: 'Внедрение системы 1', assignedTo: 'pdm6', priority: 'high' },
+              { id: 'pdm_exec_2', title: 'Тестирование внедрения', assignedTo: 'pdm7', priority: 'medium' },
+              { id: 'pdm_exec_3', title: 'Документация', assignedTo: 'pdm6', priority: 'low' }
+            ]
           }
         ],
         employees: [
           { id: 'pdm1', name: 'Анна Сергеева', email: 'anna@example.com' },
           { id: 'pdm2', name: 'Владимир Кузнецов', email: 'vladimir@example.com' },
-          { id: 'pdm3', name: 'Елена Михайлова', email: 'elena@example.com' }
+          { id: 'pdm3', name: 'Елена Михайлова', email: 'elena@example.com' },
+          { id: 'pdm4', name: 'Дмитрий Петров', email: 'dmitry@example.com' },
+          { id: 'pdm5', name: 'Ольга Иванова', email: 'olga@example.com' },
+          { id: 'pdm6', name: 'Алексей Смирнов', email: 'alex@example.com' },
+          { id: 'pdm7', name: 'Мария Ковалёва', email: 'maria@example.com' }
         ],
         zeroPointTickets: {
           formed: [],
@@ -160,8 +182,8 @@ class MockUniversalSectorDashboardService {
         },
         metadata: {
           sectorId: 'pdm',
-          totalTickets: 3,
-          totalEmployees: 3,
+          totalTickets: 30,
+          totalEmployees: 7,
           lastUpdated: new Date().toISOString()
         }
       },

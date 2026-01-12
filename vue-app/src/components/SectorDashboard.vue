@@ -169,11 +169,6 @@
         <div v-else-if="error" class="error-message">
           Ошибка загрузки: {{ error }}
         </div>
-        <div v-else class="empty-message">
-          Нет данных для отображения
-        </div>
-
-        <!-- Пустое состояние -->
         <div v-else class="empty-state">
           <div class="empty-state-content">
             <div class="empty-icon">📋</div>
