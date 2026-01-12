@@ -1,5 +1,5 @@
 <template>
-  <article class="cache-module-card" :class="moduleClasses" role="article" :aria-labelledby="`module-${module.id}-title`" :aria-describedby="`module-${module.id}-status`">
+  <article class="cache-module-card" :class="moduleClasses" role="article" :aria-labelledby="`module-${module.id}-title`" :aria-describedby="`module-${module.id}-status`" :data-module-id="module.id" tabindex="0">
     <!-- Заголовок с улучшенной иерархией -->
     <div class="card-header">
       <div class="module-identity">
@@ -27,11 +27,11 @@
 
     <!-- Улучшенное отображение данных -->
     <div class="card-content">
-      <div class="data-grid">
+      <div class="data-grid" role="region" aria-label="Информация о кеше">
         <!-- Статистика кеша -->
         <div class="data-section statistics">
           <div class="section-header">
-            <span class="section-icon">📊</span>
+            <span class="section-icon" aria-hidden="true">📊</span>
             <h4 class="section-title">Статистика</h4>
           </div>
           <div class="data-items">
@@ -55,7 +55,7 @@
         <!-- Время жизни -->
         <div class="data-section lifetime">
           <div class="section-header">
-            <span class="section-icon">⏰</span>
+            <span class="section-icon" aria-hidden="true">⏰</span>
             <h4 class="section-title">Время жизни</h4>
           </div>
           <div class="data-items">
@@ -77,7 +77,7 @@
         <!-- TASK-090: Состояние кеша -->
         <div class="data-section cache-state">
           <div class="section-header">
-            <span class="section-icon">{{ cacheStateIcon }}</span>
+            <span class="section-icon" :aria-label="cacheStateText" aria-hidden="false">{{ cacheStateIcon }}</span>
             <h4 class="section-title">Состояние кеша</h4>
           </div>
           <div class="data-items">
@@ -91,7 +91,7 @@
         <!-- TASK-090: Расширенные метрики производительности и использования -->
         <div v-if="module.metadata || module.created_at" class="data-section performance">
           <div class="section-header">
-            <span class="section-icon">⚡</span>
+            <span class="section-icon" aria-hidden="true">⚡</span>
             <h4 class="section-title">Производительность</h4>
           </div>
           <div class="data-items">
@@ -148,7 +148,7 @@
     </div>
 
     <!-- Улучшенные кнопки действий -->
-    <div class="card-actions" :class="{ 'mobile-layout': isMobile }">
+    <div class="card-actions" :class="{ 'mobile-layout': isMobile }" role="group" :aria-label="`Действия с кешем ${module.name}`">
       <!-- Первичные действия (создание кеша) -->
       <div class="primary-actions">
         <CacheCreateButton
@@ -224,7 +224,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { CacheManagementService } from '@/services/cache-management-service.js';
 import CacheCreateButton from './CacheCreateButton.vue';
 import { NotificationSystem } from '@/utils/notifications.js';
@@ -264,12 +264,47 @@ export default {
     const isMobile = ref(false);
 
     // Определение мобильного устройства
+    // TASK-090: Обработчик клавиатурных событий для доступности
+    const handleCardKeydown = (event) => {
+      // Обработка клавиш на уровне карточки
+      if (event.target.closest('.action-button')) {
+        // Если фокус на кнопке действия, не перехватываем события
+        return;
+      }
+
+      switch (event.key) {
+        case 'Enter':
+        case ' ':
+          // Активируем первую доступную кнопку
+          event.preventDefault();
+          const firstButton = event.currentTarget.querySelector('.action-button:not([disabled])');
+          if (firstButton) {
+            firstButton.focus();
+          }
+          break;
+      }
+    };
+
     onMounted(() => {
       const checkMobile = () => {
         isMobile.value = window.innerWidth < 768;
       };
       checkMobile();
       window.addEventListener('resize', checkMobile);
+
+      // Добавляем обработчик клавиатурных событий для карточки
+      const cardElement = document.querySelector(`[data-module-id="${props.module.id}"]`);
+      if (cardElement) {
+        cardElement.addEventListener('keydown', handleCardKeydown);
+      }
+    });
+
+    onUnmounted(() => {
+      // Удаляем обработчик клавиатурных событий
+      const cardElement = document.querySelector(`[data-module-id="${props.module.id}"]`);
+      if (cardElement) {
+        cardElement.removeEventListener('keydown', handleCardKeydown);
+      }
     });
 
     // Вычисляемые свойства для визуального состояния
@@ -317,6 +352,12 @@ export default {
 
     // Базовые вычисляемые свойства
     const isEmpty = computed(() => (props.module.file_count || 0) === 0);
+    const isExpired = computed(() => {
+      if (!props.module.expires_at) return false;
+      const expiresAt = new Date(props.module.expires_at * 1000);
+      const now = new Date();
+      return expiresAt <= now;
+    });
     const isExpiringSoon = computed(() => {
       if (!props.module.expires_at) return false;
       const expiresAt = new Date(props.module.expires_at * 1000);
@@ -418,21 +459,63 @@ export default {
       return `metric-${color}`;
     });
 
+    // TASK-090: Дополнительные метрики производительности
+    const timeToExpiry = computed(() => {
+      if (!props.module.expires_at) return null;
+      const expiresAt = new Date(props.module.expires_at * 1000);
+      const now = new Date();
+      return Math.max(0, Math.floor((expiresAt - now) / 1000)); // в секундах
+    });
+
+    const formatTimeToExpiry = computed(() => {
+      if (timeToExpiry.value === null) return '—';
+      if (timeToExpiry.value <= 0) return 'Истек';
+
+      const hours = Math.floor(timeToExpiry.value / 3600);
+      const minutes = Math.floor((timeToExpiry.value % 3600) / 60);
+      const seconds = timeToExpiry.value % 60;
+
+      if (hours > 0) {
+        return `${hours}ч ${minutes}м`;
+      } else if (minutes > 0) {
+        return `${minutes}м ${seconds}с`;
+      } else {
+        return `${seconds}с`;
+      }
+    });
+
+    const timeToExpiryClass = computed(() => {
+      if (timeToExpiry.value === null) return '';
+      if (timeToExpiry.value <= 0) return 'metric-red';
+      if (timeToExpiry.value <= 1800) return 'metric-red'; // < 30 мин
+      if (timeToExpiry.value <= 7200) return 'metric-orange'; // < 2 часа
+      return 'metric-green';
+    });
+
+    const formatBytes = (bytes) => {
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    };
+
+    const formatTTL = (seconds) => {
+      if (seconds < 60) return `${seconds}с`;
+      if (seconds < 3600) return `${Math.floor(seconds / 60)}м`;
+      if (seconds < 86400) return `${Math.floor(seconds / 3600)}ч`;
+      return `${Math.floor(seconds / 86400)}д`;
+    };
+
     // TASK-090: Логика состояний кеша с цветовыми индикаторами
     const cacheState = computed(() => {
       if (isEmpty.value) return 'empty';
       if (isExpired.value) return 'expired';
 
-      // Определяем время до истечения
-      const timeToExpiry = computed(() => {
-        if (!props.module.expires_at) return Infinity;
-        const expiresAt = new Date(props.module.expires_at * 1000);
-        const now = new Date();
-        return expiresAt - now;
-      });
-
+      // Используем уже определенную глобальную переменную timeToExpiry
       const ttl = timeToExpiry.value;
 
+      if (ttl === null) return 'fresh'; // Нет времени истечения
       if (ttl <= 0) return 'expired';
       if (ttl <= 30 * 60 * 1000) return 'critical'; // < 30 мин
       if (ttl <= 2 * 60 * 60 * 1000) return 'warning'; // < 2 часа
@@ -686,6 +769,7 @@ export default {
       priorityClass,
       statusClass,
       isEmpty,
+      isExpired,
       isExpiringSoon,
       statusText,
       formattedSize,
@@ -705,6 +789,12 @@ export default {
       cacheStateText,
       cacheStateClass,
       cacheStateIcon,
+      // TASK-090: Дополнительные метрики
+      timeToExpiry,
+      formatTimeToExpiry,
+      timeToExpiryClass,
+      formatBytes,
+      formatTTL,
       canClear,
       canShowDetails,
       clearButtonLabel,
