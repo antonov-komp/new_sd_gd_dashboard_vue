@@ -85,20 +85,12 @@ export class DashboardSectorBaseService {
       }
 
       // Получаем тикеты с фильтром по UF_CRM_7_TYPE_PRODUCT
-      const allTickets = await TicketRepository.getAllTicketsByFilter(
-        this.config.filterValue,
-        this.config.filterField,
-        (stageProgress) => {
-          if (onProgress) {
-            const normalized = {
-              step: stageProgress.step || 'loading_tickets',
-              progress: Math.min(10 + (stageProgress.progress || 0) * 0.4, 50),
-              details: stageProgress.details || {}
-            };
-            onProgress(normalized);
-          }
-        }
-      );
+      const filter = {};
+      filter[this.config.filterField || 'UF_CRM_7_TYPE_PRODUCT'] = this.config.filterValue;
+
+      const allTickets = await TicketRepository.getTicketsByFilter(filter, {
+        entityTypeId: ENTITY_TYPE_ID
+      });
 
       // Применяем универсальную фильтрацию по сектору (дополнительная проверка)
       const sectorTickets = filterTicketsBySector(allTickets, {

@@ -71,11 +71,12 @@ const routes = [
   {
     path: '/dashboard/sector-pdm',
     name: 'dashboard-sector-pdm',
-    component: () => import(/* webpackChunkName: "sector-dashboard" */ '@/components/SectorDashboard.vue'),
+    component: () => import(/* webpackChunkName: "sector-dashboard-pdm" */ '@/components/SectorDashboardPDM.vue'),
     meta: {
       requiresAuth: true,
       chunk: 'dashboard-sector-pdm'
-    }
+    },
+    props: { sectorId: 'pdm' } // Явно передаем props для надежности
   },
   {
     path: '/dashboard/sector-bitrix24',

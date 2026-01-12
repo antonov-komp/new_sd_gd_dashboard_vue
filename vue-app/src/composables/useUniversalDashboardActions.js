@@ -8,7 +8,7 @@
  * @since 2026-01-12
  */
 
-import { UniversalSectorDashboardService } from '@/services/universal-sector-dashboard-service.js';
+import { UniversalSectorDashboardFactory } from '@/services/universal-sector-dashboard-service.js';
 
 /**
  * Универсальный композабл для действий дашборда сектора
@@ -20,17 +20,25 @@ import { UniversalSectorDashboardService } from '@/services/universal-sector-das
 export function useUniversalDashboardActions(state, sectorId) {
   console.log(`🔧 [useUniversalDashboardActions] Initialized for sector: ${sectorId}`);
 
+  // Проверяем входные параметры
+  if (!sectorId) {
+    console.error(`❌ [useUniversalDashboardActions] Invalid sectorId:`, sectorId);
+    return getFallbackActions(sectorId, state);
+  }
+
   // Сервис дашборда для сектора
   let dashboardService = null;
+  let serviceCreationError = null;
 
-  const getDashboardService = () => {
-    if (!dashboardService) {
+  const getDashboardService = async () => {
+    if (!dashboardService && !serviceCreationError) {
       try {
         console.log(`🏭 [useUniversalDashboardActions] Creating service for sector: ${sectorId}`);
-        dashboardService = UniversalSectorDashboardService.getService(sectorId);
+        dashboardService = await UniversalSectorDashboardFactory.getService(sectorId);
         console.log(`✅ [useUniversalDashboardActions] Service created successfully`);
       } catch (error) {
         console.error(`❌ [useUniversalDashboardActions] Failed to create service:`, error);
+        serviceCreationError = error;
         // Возвращаем mock сервис для предотвращения краха
         dashboardService = {
           getSectorDashboardData: async () => ({
@@ -59,7 +67,7 @@ export function useUniversalDashboardActions(state, sectorId) {
     try {
       console.log(`📡 [useUniversalDashboardActions] Starting data load for sector: ${sectorId}`);
 
-      const service = getDashboardService();
+      const service = await getDashboardService();
       console.log(`🏭 [useUniversalDashboardActions] Service obtained:`, service);
 
       const dashboardData = await service.getSectorDashboardData(options);
@@ -102,7 +110,7 @@ export function useUniversalDashboardActions(state, sectorId) {
    */
   const updateTicketAssignment = async (ticketId, newStageId, employeeId = null) => {
     try {
-      const service = getDashboardService();
+      const service = await getDashboardService();
       await service.updateTicketAssignment(ticketId, newStageId, employeeId);
 
       console.log(`✅ [useUniversalDashboardActions] Ticket assignment updated successfully`);
@@ -125,7 +133,7 @@ export function useUniversalDashboardActions(state, sectorId) {
    */
   const createTicket = async (ticketData) => {
     try {
-      const service = getDashboardService();
+      const service = await getDashboardService();
       const newTicket = await service.createTicket(ticketData);
 
       console.log(`✅ [useUniversalDashboardActions] Ticket created successfully: "${newTicket.title}"`);
@@ -177,7 +185,7 @@ export function useUniversalDashboardActions(state, sectorId) {
    */
   const assignTicketToEmployee = async (ticketId, employeeId) => {
     try {
-      const service = getDashboardService();
+      const service = await getDashboardService();
       const ticket = findTicket(ticketId);
 
       if (!ticket) {
@@ -208,7 +216,7 @@ export function useUniversalDashboardActions(state, sectorId) {
    */
   const clearCache = async () => {
     try {
-      const service = getDashboardService();
+      const service = await getDashboardService();
       service.clearCache();
 
       console.log(`✅ [useUniversalDashboardActions] Sector cache cleared successfully`);
@@ -230,7 +238,7 @@ export function useUniversalDashboardActions(state, sectorId) {
    */
   const getSectorStats = async () => {
     try {
-      const service = getDashboardService();
+      const service = await getDashboardService();
       return await service.getSectorStats();
     } catch (error) {
       console.error(`[useUniversalDashboardActions] Failed to get sector stats:`, error);
@@ -337,6 +345,79 @@ export function useUniversalDashboardActions(state, sectorId) {
     canMoveTicket,
     findTicket,
     getStageName
+  };
+}
+
+/**
+ * Fallback actions для случаев, когда сервис недоступен
+ *
+ * @param {string} sectorId - ID сектора
+ * @param {object} state - Состояние дашборда
+ * @returns {object} Объект с fallback методами
+ */
+function getFallbackActions(sectorId, state) {
+  console.warn(`⚠️ [useUniversalDashboardActions] Using fallback actions for sector: ${sectorId}`);
+
+  const loadSectorData = async (options = {}) => {
+    console.log(`📡 [FallbackActions] Loading data for sector: ${sectorId}`);
+
+    try {
+      // Имитируем загрузку данных
+      if (state?.setLoading) state.setLoading(true);
+
+      // Задержка для имитации загрузки
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Устанавливаем mock данные
+      if (state?.updateStages) state.updateStages([]);
+      if (state?.updateEmployees) state.updateEmployees([]);
+      if (state?.updateZeroPointTickets) state.updateZeroPointTickets({});
+      if (state?.updateSectorStats) state.updateSectorStats({
+        sectorId,
+        totalTickets: 0,
+        totalEmployees: 0,
+        name: sectorId.toUpperCase()
+      });
+      if (state?.setLoading) state.setLoading(false);
+
+      console.log(`✅ [FallbackActions] Fallback data loaded for sector: ${sectorId}`);
+
+      return {
+        stages: [],
+        employees: [],
+        zeroPointTickets: {},
+        metadata: {
+          sectorId,
+          totalTickets: 0,
+          totalEmployees: 0,
+          name: sectorId.toUpperCase()
+        }
+      };
+    } catch (error) {
+      console.error(`❌ [FallbackActions] Error in fallback loadSectorData:`, error);
+      if (state?.setError) state.setError('Ошибка загрузки данных');
+      throw error;
+    }
+  };
+
+  return {
+    // Основные действия
+    loadSectorData,
+    updateTicketAssignment: async () => { throw new Error('Service unavailable'); },
+    createTicket: async () => { throw new Error('Service unavailable'); },
+    moveTicket: async () => { throw new Error('Service unavailable'); },
+    assignTicketToEmployee: async () => { throw new Error('Service unavailable'); },
+    clearCache: async () => { console.log('Cache cleared (fallback)'); },
+
+    // Навигация
+    navigateToGraphState: () => {},
+    navigateToAdmissionClosure: () => {},
+    navigateToTicketsManagement: () => {},
+
+    // Вспомогательные
+    canMoveTicket: () => false,
+    findTicket: () => null,
+    getStageName: () => sectorId
   };
 }
 

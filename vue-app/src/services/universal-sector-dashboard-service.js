@@ -20,10 +20,19 @@ export class UniversalSectorDashboardService {
   constructor(sectorId) {
     this.sectorId = sectorId;
     this.cache = new Map();
+    this.sectorService = null;
+    this.initialized = false;
+  }
 
-    // Синхронно инициализируем сервис сектора
+  /**
+   * Асинхронная инициализация сервиса
+   */
+  async initialize() {
+    if (this.initialized) return;
+
     try {
-      this.sectorService = SectorServiceFactory.create(sectorId);
+      this.sectorService = await SectorServiceFactory.create(this.sectorId);
+      this.initialized = true;
       console.log(`[UniversalSectorDashboardService] Initialized for sector: ${this.sectorId}`);
     } catch (error) {
       console.error(`[UniversalSectorDashboardService] Failed to initialize for sector ${this.sectorId}:`, error);
@@ -300,11 +309,13 @@ export class UniversalSectorDashboardFactory {
    * Получение или создание сервиса дашборда для сектора
    *
    * @param {string} sectorId - ID сектора
-   * @returns {UniversalSectorDashboardService} Сервис дашборда
+   * @returns {Promise<UniversalSectorDashboardService>} Сервис дашборда
    */
-  static getService(sectorId) {
+  static async getService(sectorId) {
     if (!this.services.has(sectorId)) {
-      this.services.set(sectorId, new UniversalSectorDashboardService(sectorId));
+      const service = new UniversalSectorDashboardService(sectorId);
+      await service.initialize();
+      this.services.set(sectorId, service);
     }
     return this.services.get(sectorId);
   }

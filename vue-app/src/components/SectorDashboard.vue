@@ -90,8 +90,11 @@ export default {
   setup(props) {
     const router = useRouter();
 
-    // Состояние и действия
-    const { state, actions } = useUniversalDashboardState(props.sectorId);
+    // Состояние
+    const state = useUniversalDashboardState(props.sectorId);
+
+    // Действия
+    const actions = useUniversalDashboardActions(state, props.sectorId);
 
     // Вычисляемые свойства
     const sectorName = computed(() => {

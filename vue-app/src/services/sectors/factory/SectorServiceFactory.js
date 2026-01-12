@@ -22,16 +22,16 @@ export class SectorServiceFactory {
    * Создает или возвращает из кеша сервис сектора
    *
    * @param {string} sectorId - ID сектора
-   * @returns {object} Сервис сектора
+   * @returns {Promise<object>} Сервис сектора
    */
-  static create(sectorId) {
+  static async create(sectorId) {
     // Проверяем кеш
     if (this.serviceCache.has(sectorId)) {
       return this.serviceCache.get(sectorId);
     }
 
     // Создаем новый сервис
-    const service = this.createServiceInstance(sectorId);
+    const service = await this.createServiceInstance(sectorId);
 
     // Кешируем
     this.serviceCache.set(sectorId, service);
@@ -46,30 +46,30 @@ export class SectorServiceFactory {
    * @returns {object} Сервис сектора
    * @private
    */
-  static createServiceInstance(sectorId) {
+  static async createServiceInstance(sectorId) {
     switch (sectorId) {
       case '1c':
         // Для сектора 1С используем существующий сервис
         console.log('[SectorServiceFactory] Creating DashboardSector1CService for sector 1c');
-        const { DashboardSector1CService } = require('@/services/dashboard-sector-1c/index.js');
+        const { DashboardSector1CService } = await import('@/services/dashboard-sector-1c/index.js');
         return new DashboardSector1CService();
 
       case 'pdm':
         // Для сектора PDM используем реальный сервис
         console.log('[SectorServiceFactory] Creating DashboardSectorPDMService for sector pdm');
-        const { DashboardSectorPDMService } = require('@/services/dashboard/DashboardSectorPDMService.js');
+        const { DashboardSectorPDMService } = await import('@/services/dashboard/DashboardSectorPDMService.js');
         return new DashboardSectorPDMService();
 
       case 'bitrix24':
         // Для сектора Bitrix24 используем реальный сервис
         console.log('[SectorServiceFactory] Creating DashboardSectorBitrix24Service for sector bitrix24');
-        const { DashboardSectorBitrix24Service } = require('@/services/dashboard/DashboardSectorBitrix24Service.js');
+        const { DashboardSectorBitrix24Service } = await import('@/services/dashboard/DashboardSectorBitrix24Service.js');
         return new DashboardSectorBitrix24Service();
 
       case 'infrastructure':
         // Для сектора Infrastructure используем реальный сервис
         console.log('[SectorServiceFactory] Creating DashboardSectorInfrastructureService for sector infrastructure');
-        const { DashboardSectorInfrastructureService } = require('@/services/dashboard/DashboardSectorInfrastructureService.js');
+        const { DashboardSectorInfrastructureService } = await import('@/services/dashboard/DashboardSectorInfrastructureService.js');
         return new DashboardSectorInfrastructureService();
 
       default:
