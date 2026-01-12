@@ -17,6 +17,19 @@
           <strong>{{ (secondaryModules || []).length }}</strong> дополнительных
         </span>
       </div>
+
+      <!-- Кнопки управления всем кешем -->
+      <div class="global-actions" v-if="!loading && !error">
+        <button
+          @click="handleClearAllCache"
+          :disabled="clearingAll"
+          class="btn-clear-all"
+          :class="{ 'btn-disabled': clearingAll }"
+        >
+          <span v-if="clearingAll">🧹 Очистка всего кеша...</span>
+          <span v-else>🗑️ Очистить весь кеш</span>
+        </button>
+      </div>
     </div>
 
     <!-- Детальная статистика кеша (временно отключена для отладки) -->
@@ -148,6 +161,7 @@ import { getApiUrl } from '@/utils/path-utils.js';
 import { sortModuleGroups } from '@/utils/cache-helpers.js';
 import CacheModuleCard from './CacheModuleCard.vue';
 import CacheStats from './CacheStats.vue';
+import { NotificationSystem } from '@/utils/notifications.js';
 
 export default {
   name: 'CacheManagement',
@@ -158,6 +172,7 @@ export default {
     const secondaryModules = ref([]);
     const loading = ref(true); // Начинаем с loading = true
     const error = ref(null);
+    const clearingAll = ref(false);
 
     // Вычисляемые свойства
     const totalModules = computed(() =>
@@ -227,297 +242,8 @@ export default {
       error.value = null;
 
       try {
-        // Временно используем mock данные для тестирования UI с расширенными метаданными
-        const mockModules = [
-          // Основные модули (5 логических) с полными метаданными
-          {
-            id: 'dashboard-sector-1c',
-            name: 'Дашборд сектора 1С',
-            status: 'active',
-            file_count: 5,
-            total_size: 1024000,
-            ttl: 600,
-            created_at: Math.floor(Date.now() / 1000) - 7200, // 2 часа назад
-            expires_at: Math.floor(Date.now() / 1000) + 1800, // через 30 мин
-            cache_dir: '/var/cache/dashboard/sector-1c',
-            metadata: {
-              version: '1.0',
-              module_id: 'dashboard-sector-1c',
-              module_name: 'Дашборд сектора 1С',
-              created_at: Math.floor(Date.now() / 1000) - 7200,
-              created_by: 'system',
-              creation_time_ms: 1250,
-              last_accessed_at: Math.floor(Date.now() / 1000) - 300,
-              access_count: 45,
-              expires_at: Math.floor(Date.now() / 1000) + 1800,
-              ttl_seconds: 600,
-              file_size_bytes: 1024000,
-              compression_ratio: 0.75,
-              data_version: '2026.01.12.v1',
-              source_params: {
-                period: 'weeks',
-                sector_id: '1c',
-                filters: ['active_only'],
-                limit: 1000
-              },
-              performance_metrics: {
-                avg_response_time_ms: 45,
-                cache_hit_ratio: 0.92,
-                data_freshness_score: 0.95
-              }
-            }
-          },
-          {
-            id: 'graph-state',
-            name: 'График состояния',
-            status: 'active',
-            file_count: 3,
-            total_size: 512000,
-            ttl: 3600,
-            created_at: Math.floor(Date.now() / 1000) - 10800, // 3 часа назад
-            expires_at: Math.floor(Date.now() / 1000) + 7200, // через 2 часа
-            cache_dir: '/var/cache/graphs/state',
-            metadata: {
-              version: '1.0',
-              module_id: 'graph-state',
-              module_name: 'График состояния',
-              created_at: Math.floor(Date.now() / 1000) - 10800,
-              created_by: 'cron',
-              creation_time_ms: 890,
-              last_accessed_at: Math.floor(Date.now() / 1000) - 600,
-              access_count: 23,
-              expires_at: Math.floor(Date.now() / 1000) + 7200,
-              ttl_seconds: 3600,
-              file_size_bytes: 512000,
-              compression_ratio: 0.82,
-              data_version: '2026.01.12.v2',
-              source_params: {
-                period: 'months',
-                sector_id: 'all',
-                filters: [],
-                limit: 500
-              },
-              performance_metrics: {
-                avg_response_time_ms: 32,
-                cache_hit_ratio: 0.88,
-                data_freshness_score: 0.91
-              }
-            }
-          },
-          {
-            id: 'graph-admission-closure-weeks',
-            name: 'График приёма/закрытий 1С (4 недели)',
-            status: 'active',
-            file_count: 8,
-            total_size: 2048000,
-            ttl: 300,
-            created_at: Math.floor(Date.now() / 1000) - 1800, // 30 мин назад
-            expires_at: Math.floor(Date.now() / 1000) + 120, // через 2 мин
-            cache_dir: '/var/cache/graphs/admission-closure/weeks',
-            metadata: {
-              version: '1.0',
-              module_id: 'graph-admission-closure-weeks',
-              module_name: 'График приёма/закрытий 1С (4 недели)',
-              created_at: Math.floor(Date.now() / 1000) - 1800,
-              created_by: 'system',
-              creation_time_ms: 2100,
-              last_accessed_at: Math.floor(Date.now() / 1000) - 60,
-              access_count: 67,
-              expires_at: Math.floor(Date.now() / 1000) + 120,
-              ttl_seconds: 300,
-              file_size_bytes: 2048000,
-              compression_ratio: 0.68,
-              data_version: '2026.01.12.v1',
-              source_params: {
-                period: 'weeks',
-                sector_id: '1c',
-                filters: ['active_only', 'resolved_only'],
-                limit: 2000
-              },
-              performance_metrics: {
-                avg_response_time_ms: 78,
-                cache_hit_ratio: 0.95,
-                data_freshness_score: 0.98
-              }
-            }
-          },
-          {
-            id: 'graph-admission-closure-months',
-            name: 'График приёма/закрытий 1С (3 месяца)',
-            status: 'active',
-            file_count: 12,
-            total_size: 3072000,
-            ttl: 300,
-            created_at: Math.floor(Date.now() / 1000) - 3600, // 1 час назад
-            expires_at: Math.floor(Date.now() / 1000) + 240, // через 4 мин
-            cache_dir: '/var/cache/graphs/admission-closure/months',
-            metadata: {
-              version: '1.0',
-              module_id: 'graph-admission-closure-months',
-              module_name: 'График приёма/закрытий 1С (3 месяца)',
-              created_at: Math.floor(Date.now() / 1000) - 3600,
-              created_by: 'cron',
-              creation_time_ms: 3400,
-              last_accessed_at: Math.floor(Date.now() / 1000) - 120,
-              access_count: 34,
-              expires_at: Math.floor(Date.now() / 1000) + 240,
-              ttl_seconds: 300,
-              file_size_bytes: 3072000,
-              compression_ratio: 0.71,
-              data_version: '2026.01.12.v3',
-              source_params: {
-                period: 'months',
-                sector_id: '1c',
-                filters: ['active_only'],
-                limit: 3000
-              },
-              performance_metrics: {
-                avg_response_time_ms: 92,
-                cache_hit_ratio: 0.89,
-                data_freshness_score: 0.93
-              }
-            }
-          },
-          // Трудозатраты на тикеты сектора 1С (3 режима - одна логическая группа)
-          {
-            id: 'time-tracking-default',
-            name: 'Трудозатраты (режим по умолчанию)',
-            status: 'active',
-            file_count: 4,
-            total_size: 768000,
-            ttl: 300,
-            created_at: Math.floor(Date.now() / 1000) - 900, // 15 мин назад
-            expires_at: Math.floor(Date.now() / 1000) + 2100, // через 35 мин
-            cache_dir: '/var/cache/time-tracking/default',
-            metadata: {
-              version: '1.0',
-              module_id: 'time-tracking-default',
-              module_name: 'Трудозатраты (режим по умолчанию)',
-              created_at: Math.floor(Date.now() / 1000) - 900,
-              created_by: 'system',
-              creation_time_ms: 560,
-              last_accessed_at: Math.floor(Date.now() / 1000) - 180,
-              access_count: 12,
-              expires_at: Math.floor(Date.now() / 1000) + 2100,
-              ttl_seconds: 300,
-              file_size_bytes: 768000,
-              compression_ratio: 0.79,
-              data_version: '2026.01.12.v2',
-              source_params: {
-                period: 'weeks',
-                sector_id: '1c',
-                filters: ['active_only'],
-                limit: 800
-              },
-              performance_metrics: {
-                avg_response_time_ms: 28,
-                cache_hit_ratio: 0.96,
-                data_freshness_score: 0.97
-              }
-            }
-          },
-          {
-            id: 'time-tracking-detailed',
-            name: 'Трудозатраты (детальный режим)',
-            status: 'active',
-            file_count: 6,
-            total_size: 1536000,
-            ttl: 120,
-            created_at: Math.floor(Date.now() / 1000) - 600, // 10 мин назад
-            expires_at: Math.floor(Date.now() / 1000) + 3540, // через 59 мин
-            cache_dir: '/var/cache/time-tracking/detailed',
-            metadata: {
-              version: '1.0',
-              module_id: 'time-tracking-detailed',
-              module_name: 'Трудозатраты (детальный режим)',
-              created_at: Math.floor(Date.now() / 1000) - 600,
-              created_by: 'user',
-              creation_time_ms: 890,
-              last_accessed_at: Math.floor(Date.now() / 1000) - 90,
-              access_count: 8,
-              expires_at: Math.floor(Date.now() / 1000) + 3540,
-              ttl_seconds: 120,
-              file_size_bytes: 1536000,
-              compression_ratio: 0.74,
-              data_version: '2026.01.12.v1',
-              source_params: {
-                period: 'weeks',
-                sector_id: '1c',
-                filters: ['active_only', 'detailed_view'],
-                limit: 1500
-              },
-              performance_metrics: {
-                avg_response_time_ms: 45,
-                cache_hit_ratio: 0.91,
-                data_freshness_score: 0.94
-              }
-            }
-          },
-          {
-            id: 'time-tracking-summary',
-            name: 'Трудозатраты (сводный режим)',
-            status: 'active',
-            file_count: 2,
-            total_size: 384000,
-            ttl: 600,
-            created_at: Math.floor(Date.now() / 1000) - 1800, // 30 мин назад
-            expires_at: Math.floor(Date.now() / 1000) + 4200, // через 70 мин
-            cache_dir: '/var/cache/time-tracking/summary',
-            metadata: {
-              version: '1.0',
-              module_id: 'time-tracking-summary',
-              module_name: 'Трудозатраты (сводный режим)',
-              created_at: Math.floor(Date.now() / 1000) - 1800,
-              created_by: 'cron',
-              creation_time_ms: 340,
-              last_accessed_at: Math.floor(Date.now() / 1000) - 240,
-              access_count: 19,
-              expires_at: Math.floor(Date.now() / 1000) + 4200,
-              ttl_seconds: 600,
-              file_size_bytes: 384000,
-              compression_ratio: 0.85,
-              data_version: '2026.01.12.v3',
-              source_params: {
-                period: 'months',
-                sector_id: '1c',
-                filters: ['summary_view'],
-                limit: 300
-              },
-              performance_metrics: {
-                avg_response_time_ms: 18,
-                cache_hit_ratio: 0.98,
-                data_freshness_score: 0.99
-              }
-            }
-          },
-          // Побочные модули с базовыми метаданными
-          {
-            id: 'users-management-departments',
-            name: 'Управление пользователями (отделы)',
-            status: 'active',
-            file_count: 2,
-            total_size: 256000,
-            ttl: 3600,
-            created_at: Math.floor(Date.now() / 1000) - 7200, // 2 часа назад
-            expires_at: Math.floor(Date.now() / 1000) + 28800, // через 8 часов
-            cache_dir: '/var/cache/users/departments'
-          },
-          {
-            id: 'webhook-logs-api',
-            name: 'Логи вебхуков (API запросы)',
-            status: 'active',
-            file_count: 15,
-            total_size: 5120000,
-            ttl: 300,
-            created_at: Math.floor(Date.now() / 1000) - 3600, // 1 час назад
-            expires_at: Math.floor(Date.now() / 1000) + 2400, // через 40 мин
-            cache_dir: '/var/cache/webhooks/api'
-          }
-        ];
-
-        // Обогащаем модули метаданными
-        const enrichedModules = CacheManagementService.enrichModulesWithMetadata(mockModules);
-        const categorized = CacheManagementService.categorizeAndSortModules(enrichedModules);
+        // Получаем categorized данные через CacheManagementService
+        const categorized = await CacheManagementService.getCacheStatus();
 
         primaryModules.value = categorized.primaryModules || [];
         secondaryModules.value = categorized.secondaryModules || [];
@@ -546,7 +272,44 @@ export default {
     const handleModuleClear = async (moduleId) => {
       // Логика очистки модуля с подтверждением
       console.log(`[CacheManagement] Clearing module: ${moduleId}`);
+
+      // Очистка кеша категоризации перед загрузкой новых данных
+      CacheManagementService.invalidateCacheAfterModuleOperation();
+
       await loadModules(); // Перезагрузка после очистки
+    };
+
+    const handleClearAllCache = async () => {
+      // Очистка всего кеша со всех модулей
+      console.log('[CacheManagement] Clearing all cache');
+
+      clearingAll.value = true;
+      try {
+        // Используем API для очистки всего кеша
+        await CacheManagementService.clearCache('all');
+
+        // Очистка кеша категоризации
+        CacheManagementService.invalidateCacheAfterModuleOperation();
+
+        // Показываем уведомление об успехе
+        NotificationSystem.success(
+          'Кеш полностью очищен',
+          'Все файлы кеша были успешно удалены'
+        );
+
+        // Перезагружаем список модулей
+        await loadModules();
+      } catch (error) {
+        console.error('[CacheManagement] Error clearing all cache:', error);
+
+        // Показываем уведомление об ошибке
+        NotificationSystem.error(
+          'Ошибка очистки кеша',
+          `Не удалось очистить весь кеш: ${error.message}`
+        );
+      } finally {
+        clearingAll.value = false;
+      }
     };
 
     const handleCreateMock = async (module) => {
@@ -578,7 +341,9 @@ export default {
       individualPrimaryModules,
       timeTrackingModules,
       logicalPrimaryCount,
+      clearingAll,
       handleModuleClear,
+      handleClearAllCache,
       handleCreateMock,
       handleClearMock,
       refreshModules
@@ -804,74 +569,42 @@ export default {
   align-items: center;
   margin: 40px 0;
   opacity: 0;
-  animation: fadeInDivider 1s ease-out 0.5s forwards;
+  /* animation: fadeInDivider 1s ease-out 0.5s forwards; - убрана анимация появления */
 }
 
-@keyframes fadeInDivider {
-  to {
-    opacity: 1;
-  }
-}
+/* @keyframes fadeInDivider - удалено по требованию пользователя */
 
 /* Анимации для карточек */
 .modules-container .module-wrapper {
-  animation: slideInUp 0.6s ease-out both;
+  /* animation: slideInUp 0.6s ease-out both; - убрана анимация появления */
 }
 
-.modules-container .module-wrapper:nth-child(1) { animation-delay: 0.1s; }
-.modules-container .module-wrapper:nth-child(2) { animation-delay: 0.2s; }
-.modules-container .module-wrapper:nth-child(3) { animation-delay: 0.3s; }
-.modules-container .module-wrapper:nth-child(4) { animation-delay: 0.4s; }
-.modules-container .module-wrapper:nth-child(5) { animation-delay: 0.5s; }
-.modules-container .module-wrapper:nth-child(6) { animation-delay: 0.6s; }
-.modules-container .module-wrapper:nth-child(7) { animation-delay: 0.7s; }
-.modules-container .module-wrapper:nth-child(8) { animation-delay: 0.8s; }
+.modules-container .module-wrapper:nth-child(1) { /* animation-delay: 0.1s; - убрана задержка */ }
+.modules-container .module-wrapper:nth-child(2) { /* animation-delay: 0.2s; - убрана задержка */ }
+.modules-container .module-wrapper:nth-child(3) { /* animation-delay: 0.3s; - убрана задержка */ }
+.modules-container .module-wrapper:nth-child(4) { /* animation-delay: 0.4s; - убрана задержка */ }
+.modules-container .module-wrapper:nth-child(5) { /* animation-delay: 0.5s; - убрана задержка */ }
+.modules-container .module-wrapper:nth-child(6) { /* animation-delay: 0.6s; - убрана задержка */ }
+.modules-container .module-wrapper:nth-child(7) { /* animation-delay: 0.7s; - убрана задержка */ }
+.modules-container .module-wrapper:nth-child(8) { /* animation-delay: 0.8s; - убрана задержка */ }
 
-@keyframes slideInUp {
-  from {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
+/* @keyframes slideInUp - удалено по требованию пользователя */
 
 /* Анимации для групповых модулей */
 .module-group {
-  animation: fadeInScale 0.5s ease-out both;
+  /* animation: fadeInScale 0.5s ease-out both; - убрана анимация появления */
 }
 
-.module-group:nth-child(1) { animation-delay: 0.1s; }
-.module-group:nth-child(2) { animation-delay: 0.2s; }
-.module-group:nth-child(3) { animation-delay: 0.3s; }
+.module-group:nth-child(1) { /* animation-delay: 0.1s; - убрана задержка */ }
+.module-group:nth-child(2) { /* animation-delay: 0.2s; - убрана задержка */ }
+.module-group:nth-child(3) { /* animation-delay: 0.3s; - убрана задержка */ }
 
-@keyframes fadeInScale {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
+/* @keyframes fadeInScale - удалено по требованию пользователя */
 
-/* Пульсирующая анимация для предупреждений */
-@keyframes pulse {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(1.02);
-    opacity: 0.9;
-  }
-}
+/* @keyframes pulse - удалено по требованию пользователя */
 
 .expiring-soon {
-  animation: pulse 2s infinite;
+  /* animation: pulse 2s infinite; - убрана анимация дыхания */
 }
 
 .divider-line {

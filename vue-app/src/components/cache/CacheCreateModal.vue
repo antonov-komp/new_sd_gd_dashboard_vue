@@ -1,19 +1,20 @@
 <template>
-  <div class="modal-overlay" @click="handleOverlayClick">
-    <div class="modal-content" @click.stop>
-      <div class="modal-header">
-        <h2>Создание кеша: {{ module.name }}</h2>
-        <button @click="close" class="btn-close">×</button>
-      </div>
-      
-      <div class="modal-body">
-        <CacheCreateProgress
-          v-if="creating"
-          :progress="progress"
-          :message="progressMessage"
-        />
-        
-        <div v-else class="create-form">
+  <teleport to="body">
+    <div class="modal-overlay" @click="handleOverlayClick">
+      <div class="modal-content" @click.stop style="pointer-events: auto;">
+        <div class="modal-header">
+          <h2>Создание кеша: {{ module.name }}</h2>
+          <button @click="close" class="btn-close">×</button>
+        </div>
+
+        <div class="modal-body">
+          <CacheCreateProgress
+            v-if="creating"
+            :progress="progress"
+            :message="progressMessage"
+          />
+
+          <div v-else class="create-form">
           <div v-if="supportsModes" class="form-group">
             <label>Режим кеша:</label>
             <select v-model="selectedMode" class="form-control">
@@ -49,6 +50,7 @@
       </div>
     </div>
   </div>
+  </teleport>
 </template>
 
 <script>
@@ -96,6 +98,8 @@ export default {
     };
     
     const handleOverlayClick = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
       if (event.target === event.currentTarget) {
         close();
       }
@@ -168,7 +172,7 @@ export default {
       if (availableModes.value.length > 0) {
         selectedMode.value = availableModes.value[0];
       }
-      
+
       // Установка параметров по умолчанию
       const defaultParams = CacheCreationService.getDefaultParams(props.module.id);
       paramsJson.value = JSON.stringify(defaultParams, null, 2);
@@ -192,34 +196,42 @@ export default {
 
 <style scoped>
 .modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  background-color: rgba(0, 0, 0, 0.7) !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  z-index: 99999 !important;
+  padding: 20px !important;
+  box-sizing: border-box !important;
 }
 
 .modal-content {
-  background: white;
-  border-radius: 8px;
-  width: 90%;
-  max-width: 600px;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  background: white !important;
+  border-radius: 8px !important;
+  width: 90% !important;
+  max-width: 600px !important;
+  max-height: 80vh !important;
+  overflow-y: auto !important;
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.5) !important;
+  position: relative !important;
+  z-index: 100000 !important;
+  border: 2px solid #007bff !important;
+  transform: translateZ(0) !important;
 }
 
 .modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px;
-  border-bottom: 1px solid #e0e0e0;
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  padding: 20px !important;
+  border-bottom: 1px solid #e0e0e0 !important;
+  position: relative !important;
+  z-index: 100001 !important;
 }
 
 .modal-header h2 {
@@ -249,7 +261,9 @@ export default {
 }
 
 .modal-body {
-  padding: 20px;
+  padding: 20px !important;
+  position: relative !important;
+  z-index: 100001 !important;
 }
 
 .create-form {
@@ -288,11 +302,13 @@ export default {
 }
 
 .modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  padding: 20px;
-  border-top: 1px solid #e0e0e0;
+  display: flex !important;
+  justify-content: flex-end !important;
+  gap: 10px !important;
+  padding: 20px !important;
+  border-top: 1px solid #e0e0e0 !important;
+  position: relative !important;
+  z-index: 100001 !important;
 }
 
 .btn-cancel,
@@ -325,8 +341,36 @@ export default {
 
 .btn-cancel:disabled,
 .btn-create:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+  opacity: 0.6 !important;
+  cursor: not-allowed !important;
+}
+
+/* Гарантированное позиционирование поверх всего */
+.modal-overlay {
+  transform: none !important;
+  will-change: auto !important;
+  pointer-events: auto !important;
+}
+
+.modal-content {
+  transform: translateZ(0) !important;
+  will-change: auto !important;
+  isolation: isolate !important;
+  pointer-events: auto !important;
+}
+
+/* Предотвращение наследования стилей от родительских элементов */
+.modal-overlay *,
+.modal-overlay *::before,
+.modal-overlay *::after {
+  box-sizing: border-box !important;
+}
+
+/* Гарантированная видимость */
+.modal-overlay {
+  opacity: 1 !important;
+  visibility: visible !important;
+  display: flex !important;
 }
 </style>
 

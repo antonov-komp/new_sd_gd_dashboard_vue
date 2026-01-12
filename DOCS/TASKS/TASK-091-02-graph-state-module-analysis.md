@@ -1,0 +1,1046 @@
+# TASK-091-02: Рефакторинг модуля "График состояния" для поддержки многосекторной архитектуры
+
+**Дата создания:** 2026-01-12 18:00 (UTC+3, Брест)
+**Версия:** 1.0
+**Статус:** В работе 🔄
+**Приоритет:** Высокий
+**Исполнитель:** Frontend Developer (Vue.js) + Bitrix24 Developer
+**Родительская задача:** [TASK-091: Создание визуального разделения секторов](./TASK-091-create-multi-layer-startup-interface.md)
+**Подзадачи:**
+- **TASK-091-02-01:** Анализ архитектуры и зависимостей (8ч)
+- **TASK-091-02-02:** Проектирование универсального API (12ч)
+- **TASK-091-02-03:** Рефакторинг компонентов графиков (16ч)
+- **TASK-091-02-04:** Реализация адаптеров данных (10ч)
+- **TASK-091-02-05:** Система слепков и кеширования (12ч)
+- **TASK-091-02-06:** Интеграция, тестирование и миграция (14ч)
+**Оценка трудозатрат:** 72 часа (6 подзадач: 8+12+16+10+12+14)
+
+---
+
+## 🎯 Цель задачи
+
+Провести детальный анализ модуля "График состояния" и разработать план его рефакторинга для поддержки многосекторной архитектуры. Модуль должен работать с любым сектором, а не только с сектором 1С.
+
+---
+
+## 📋 Оглавление
+
+1. [Контекст и анализ текущей архитектуры](#контекст-и-анализ-текущей-архитектуры)
+2. [Анализ работы со слепками состояния](#анализ-работы-со-слепками-состояния)
+3. [Архитектура данных и API](#архитектура-данных-и-api)
+4. [Требования к рефакторингу](#требования-к-рефакторингу)
+5. [План рефакторинга](#план-рефакторинга)
+6. [Тестирование и миграция](#тестирование-и-миграция)
+7. [Критерии приёмки](#критерии-приёмки)
+
+---
+
+## 🎯 Контекст и анализ текущей архитектуры
+
+### Текущая структура модуля "График состояния"
+
+**Vue.js компоненты:**
+- `GraphStateDashboard.vue` - основной дашборд графика состояния
+- `GraphStateChart.vue` - компонент визуализации графика (2000+ строк)
+
+**JavaScript сервисы:**
+- `useGraphState.js` - composable для управления состоянием
+- `SnapshotService.js` - сервис для работы со слепками
+- `SectorDataAdapter.js` - адаптер данных сектора
+- `snapshot-normalizer.js` - нормализация данных слепков
+
+**PHP сервисы:**
+- `GraphStateService.php` - backend сервис с кешированием
+- `GraphStateCache.php` - кеш для слепков
+
+### Архитектура модуля
+
+```
+Frontend (Vue.js)
+├── Components
+│   ├── GraphStateDashboard.vue     # Главный дашборд
+│   └── GraphStateChart.vue         # Визуализация графика
+├── Composables
+│   └── useGraphState.js            # Управление состоянием
+└── Services
+    ├── SnapshotService.js          # Работа со слепками
+    ├── SectorDataAdapter.js        # Адаптация данных сектора
+    └── snapshot-normalizer.js      # Нормализация данных
+
+Backend (PHP)
+├── GraphStateService.php           # Сервис с кешированием
+├── GraphStateCache.php             # Кеш слепков
+└── DashboardSector1CService.php    # Источник данных (жестко привязан к 1С)
+```
+
+### Проблемы текущей архитектуры
+
+**Жесткая привязка к сектору 1С:**
+- Все сервисы работают только с `DashboardSector1CService`
+- Фильтрация по UF_CRM_7_TYPE_PRODUCT = '1C' зашита в код
+- Названия и идентификаторы жестко привязаны к сектору 1С
+
+**Монолитная структура:**
+- `GraphStateChart.vue` - 2000+ строк кода
+- Смешивание логики разных типов графиков
+- Трудно поддерживать и расширять
+
+**Отсутствие абстракций:**
+- Нет универсального интерфейса для работы с секторами
+- Жесткая зависимость от конкретных стадий и полей
+- Сложно добавить поддержку новых секторов
+
+---
+
+## 📊 Анализ работы со слепками состояния
+
+### Концепция слепков (Snapshots)
+
+**Что такое слепок:**
+Слепок - это сохраненное состояние сектора в определенный момент времени, содержащее:
+- Распределение тикетов по стадиям
+- Список сотрудников и их нагрузку
+- Метаданные (время создания, тип, автор)
+
+**Типы слепков:**
+```javascript
+const SNAPSHOT_TYPES = {
+  week_start: 'Начало недели',
+  week_end: 'Конец недели',
+  manual: 'Ручной слепок',
+  current: 'Текущее состояние'
+};
+```
+
+### Архитектура слепков
+
+**Структура слепка:**
+```javascript
+{
+  meta: {
+    type: 'week_start',
+    created_at: '2026-01-12T10:00:00Z',
+    version: '1.0',
+    source: 'sector_1c_data',
+    createdBy: { id: 123, name: 'Иван Иванов' },
+    sectorId: '1C'
+  },
+  data: {
+    stages: [
+      {
+        id: 'DT140_12:UC_0VHWE2',
+        name: 'Сформировано обращение',
+        tickets: [...],
+        employees: [...]
+      }
+    ],
+    employees: [...],
+    zeroPointTickets: [...]
+  }
+}
+```
+
+### Процесс создания слепка
+
+1. **Загрузка данных сектора:**
+   ```javascript
+   // Через DashboardSector1CService (жесткая привязка)
+   const sectorData = await DashboardSector1CService.getSectorData();
+   ```
+
+2. **Нормализация данных:**
+   ```javascript
+   // Преобразование в формат слепка
+   const normalizedData = normalizeSectorDataToSnapshot(sectorData, type);
+   ```
+
+3. **Сохранение слепка:**
+   ```javascript
+   // Сохранение в файл через PHP API
+   await SnapshotService.createSnapshot(normalizedData, type, metadata);
+   ```
+
+### Визуализация данных
+
+**Типы графиков:**
+- **Линейный график** - сравнение слепков во времени
+- **Столбчатый график** - распределение по сотрудникам
+- **Кольцевой график** - распределение по стадиям
+- **Комбинированные графики** - смешанная визуализация
+
+**Логика сравнения:**
+```javascript
+const comparisonTypes = {
+  weekStartToWeekEnd: 'Начало недели → Конец недели',
+  weekEndToCurrent: 'Конец недели → Текущее состояние',
+  weekStartToCurrent: 'Начало недели → Текущее состояние'
+};
+```
+
+---
+
+## 🔧 Архитектура данных и API
+
+### Текущие API endpoints
+
+**PHP API для слепков:**
+```php
+// Получение данных слепков с кешированием
+GraphStateService::getSnapshotDataCached([
+  'type' => 'current',
+  'forceRefresh' => false,
+  'ttl' => 3600
+]);
+
+// Создание нового слепка
+POST /api/graph-state/create-snapshot
+{
+  "sectorData": {...},
+  "type": "week_start",
+  "metadata": {...}
+}
+```
+
+**JavaScript API:**
+```javascript
+// Создание слепка через composable
+const { createSnapshot } = useGraphState();
+await createSnapshot('week_start', {
+  createdBy: { id: 123, name: 'Иван Иванов' }
+});
+
+// Загрузка данных для графика
+const { loadSnapshotsForChart } = useGraphState();
+const chartData = await loadSnapshotsForChart(['week_start', 'week_end']);
+```
+
+### Зависимости от сектора 1С
+
+**Жесткие зависимости:**
+1. `DashboardSector1CService.getSectorData()` - источник данных
+2. Стадии: `DT140_12:UC_0VHWE2`, `DT140_12:PREPARATION`, `DT140_12:CLIENT`
+3. Поле фильтрации: `UF_CRM_7_TYPE_PRODUCT = '1C'`
+4. Структура данных сектора 1С
+
+**Кеш система:**
+```javascript
+// GraphStateCache.php - кеш для слепков
+// TTL: 1 час для обычных данных
+// TTL: 10 минут для текущего состояния
+// Хранение в файлах JSON
+```
+
+---
+
+## 💡 Требования к рефакторингу
+
+### Функциональные требования
+
+**Универсальность:**
+- Поддержка любого сектора (1С, PDM, Битрикс24, Железо/Прочее)
+- Автоматическая адаптация под структуру данных сектора
+- Конфигурируемые типы графиков и сравнений
+
+**Масштабируемость:**
+- Легкое добавление новых типов визуализации
+- Поддержка кастомных метрик для разных секторов
+- Гибкая система фильтров и группировки
+
+**Совместимость:**
+- Сохранение всех текущих функций для сектора 1С
+- Обратная совместимость API
+- Миграция существующих слепков
+
+### Технические требования
+
+**Архитектурные:**
+- Разделение на уровни абстракции
+- Dependency injection для сервисов
+- Конфигурационная система для секторов
+
+**Производительность:**
+- Ленивая загрузка компонентов графиков
+- Кеширование данных слепков
+- Оптимизация рендеринга больших графиков
+
+**Качество кода:**
+- Разделение монолитного компонента на модули
+- Unit и integration тесты
+- TypeScript для типизации (опционально)
+
+---
+
+## 🔄 План рефакторинга
+
+### 📋 Основные подзадачи рефакторинга
+
+#### 🔍 **[TASK-091-02-01:](./TASK-091-02-01-graph-state-architecture-analysis.md)** Анализ архитектуры и зависимостей
+**Цель:** Полный аудит структуры, зависимостей и точек интеграции модуля
+**Результат:** Детальная спецификация для безопасного рефакторинга
+**Трудозатраты:** 8 часов
+**Статус:** ✅ Завершено
+
+#### 🏗️ **[TASK-091-02-02:](./TASK-091-02-02-universal-api-design.md)** Проектирование универсального API
+**Цель:** Создание абстрактных интерфейсов для работы с графиками любого сектора
+**Результат:** `BaseGraphStateService.js`, `SectorGraphAdapter.js`, `UniversalGraphStateService.js`
+**Трудозатраты:** 12 часов
+**Статус:** ⏳ Ожидает разработки
+
+#### 📊 **[TASK-091-02-03:](./TASK-091-02-03-chart-components-refactoring.md)** Рефакторинг компонентов графиков
+**Цель:** Разделение монолитного `GraphStateChart.vue` на модульные компоненты
+**Результат:** 15+ компонентов с поддержкой ленивой загрузки и плагинов
+**Трудозатраты:** 16 часов
+**Статус:** ⏳ Ожидает разработки
+
+#### 🔄 **[TASK-091-02-04:](./TASK-091-02-04-sector-data-adapters.md)** Реализация адаптеров данных
+**Цель:** Создание нормализаторов данных для унификации работы с разными секторами
+**Результат:** `SectorDataNormalizer.js` и адаптеры для каждого сектора
+**Трудозатраты:** 10 часов
+**Статус:** ⏳ Ожидает разработки
+
+#### 💾 **[TASK-091-02-05:](./TASK-091-02-05-snapshots-caching-system.md)** Система слепков и кеширования
+**Цель:** Обновление системы слепков для поддержки множественных секторов
+**Результат:** `UniversalSnapshotService.js`, `SectorAwareCache.js`, миграция данных
+**Трудозатраты:** 12 часов
+**Статус:** ⏳ Ожидает разработки
+
+#### ✅ **[TASK-091-02-06:](./TASK-091-02-06-integration-testing-migration.md)** Интеграция, тестирование и миграция
+**Цель:** Полная интеграция с TASK-091 и миграция существующих слепков
+**Результат:** Рабочий модуль для всех 4 секторов с обратной совместимостью
+**Трудозатраты:** 14 часов
+**Статус:** ⏳ Ожидает разработки
+
+---
+
+### 📋 Детальные этапы рефакторинга (для справки)
+
+#### Этап 1: Создание базовой абстракции секторов (6 часов)
+
+**Задачи:**
+1. Создать `BaseGraphStateService.js` - абстрактный класс для графиков состояния
+2. Создать `SectorGraphAdapter.js` - адаптер для преобразования данных секторов
+3. Создать `GraphConfig.js` - конфигурация типов графиков и визуализаций
+4. Создать `SnapshotNormalizer.js` - универсальный нормализатор слепков
+
+**Технические детали:**
+
+**Анализ текущих зависимостей:**
+```javascript
+// Текущие жесткие зависимости в GraphStateService.php
+class GraphStateService {
+    public static function loadSnapshotData(string $type, bool $forceRefresh = false): array
+    {
+        // Жесткая зависимость от DashboardSector1CService
+        $sectorData = DashboardSector1CService::getSectorDataCached([
+            'forceRefresh' => $forceRefresh,
+            'ttl' => 600
+        ]);
+
+        // Нормализация только для структуры сектора 1С
+        $normalizedData = self::normalizeSectorDataToSnapshot($sectorData, $type);
+        return $normalizedData;
+    }
+}
+```
+
+**Новая абстрактная архитектура:**
+
+**BaseGraphStateService.js:**
+```javascript
+export class BaseGraphStateService {
+  constructor(sectorService, config) {
+    this.sectorService = sectorService;
+    this.config = config;
+    this.snapshotService = new SnapshotService(config.sectorId);
+  }
+
+  // Абстрактные методы для наследования
+  async getSectorData() { throw new Error('Must implement getSectorData'); }
+  getStagesConfig() { throw new Error('Must implement getStagesConfig'); }
+  getMetricsConfig() { throw new Error('Must implement getMetricsConfig'); }
+
+  // Общая логика для всех секторов
+  async createSnapshot(type, metadata) {
+    const sectorData = await this.getSectorData();
+    const normalizedData = this.normalizeForSnapshot(sectorData, type);
+    return this.snapshotService.createSnapshot(normalizedData, type, metadata);
+  }
+
+  async getSnapshotsForComparison(types) {
+    return this.snapshotService.getSnapshotsByTypes(types);
+  }
+}
+```
+
+**SectorGraphAdapter.js:**
+```javascript
+export class SectorGraphAdapter {
+  constructor(sectorConfig) {
+    this.sectorConfig = sectorConfig;
+  }
+
+  // Адаптация данных сектора под нужды графика
+  adaptSectorData(sectorData) {
+    return {
+      stages: this.adaptStages(sectorData.stages),
+      employees: this.adaptEmployees(sectorData.employees),
+      metrics: this.calculateMetrics(sectorData),
+      timeline: this.buildTimeline(sectorData)
+    };
+  }
+
+  // Адаптация стадий под универсальный формат
+  adaptStages(stages) {
+    return stages.map(stage => ({
+      id: stage.id,
+      name: stage.name,
+      color: this.getStageColor(stage.id),
+      ticketsCount: stage.tickets?.length || 0,
+      employeesCount: stage.employees?.length || 0,
+      loadPercentage: this.calculateLoadPercentage(stage)
+    }));
+  }
+}
+```
+
+### Этап 2: Разделение монолитного компонента (12 часов)
+
+**Задачи:**
+1. Разбить `GraphStateChart.vue` на модульные компоненты
+2. Создать фабрику компонентов графиков
+3. Реализовать ленивую загрузку типов графиков
+4. Создать систему плагинов для кастомных визуализаций
+
+**Анализ монолитного компонента:**
+
+**GraphStateChart.vue - проблемы:**
+```javascript
+// 2000+ строк кода в одном файле
+export default {
+  name: 'GraphStateChart',
+  // 50+ пропсов
+  props: {
+    snapshots: { type: Array, required: true },
+    chartType: { type: String, default: 'combo' },
+    comparisonType: { type: String, default: 'weekStartToWeekEnd' },
+    // ... еще 40+ пропсов
+  },
+
+  // Смешивание логики разных типов графиков
+  methods: {
+    // 20+ методов для линейного графика
+    prepareLineChartData() { /* 50 строк */ },
+    renderLineChart() { /* 80 строк */ },
+
+    // 15+ методов для столбчатого графика
+    prepareBarChartData() { /* 40 строк */ },
+    renderBarChart() { /* 60 строк */ },
+
+    // Логика сравнения слепков
+    calculateComparison() { /* 100 строк */ },
+    // ...
+  }
+}
+```
+
+**Новая модульная структура:**
+```
+components/graph-state/
+├── core/
+│   ├── ChartContainer.vue         # Главный контейнер
+│   ├── ChartCanvas.vue            # Холст для рендеринга
+│   └── ChartDataProcessor.vue     # Обработка данных
+├── charts/
+│   ├── base/
+│   │   ├── BaseChart.vue          # Базовый класс графика
+│   │   └── ChartMixin.js          # Общие методы
+│   ├── LineChart.vue              # Линейный график (300 строк)
+│   ├── BarChart.vue               # Столбчатый график (250 строк)
+│   ├── DoughnutChart.vue          # Кольцевой график (200 строк)
+│   └── ComboChart.vue             # Комбинированный график (400 строк)
+├── controls/
+│   ├── ChartTypeSelector.vue      # Переключатель типов (100 строк)
+│   ├── ComparisonSelector.vue     # Выбор сравнения (80 строк)
+│   ├── TimeRangeSelector.vue      # Выбор периода (60 строк)
+│   └── ChartSettings.vue          # Настройки графика (120 строк)
+├── ui/
+│   ├── ChartLegend.vue            # Легенда (150 строк)
+│   ├── ChartTooltip.vue           # Подсказки (100 строк)
+│   ├── ChartZoom.vue              # Масштабирование (80 строк)
+│   └── ChartExport.vue            # Экспорт (60 строк)
+└── plugins/
+    ├── ChartAnimation.js          # Анимации
+    ├── ChartInteraction.js        # Взаимодействие
+    └── ChartTheme.js              # Темизация
+```
+
+**ChartFactory.js с поддержкой плагинов:**
+```javascript
+export class ChartFactory {
+  static chartPlugins = new Map();
+
+  static registerPlugin(chartType, plugin) {
+    this.chartPlugins.set(chartType, plugin);
+  }
+
+  static async createChart(type, props, options = {}) {
+    const componentMap = {
+      line: () => import('./charts/LineChart.vue'),
+      bar: () => import('./charts/BarChart.vue'),
+      doughnut: () => import('./charts/DoughnutChart.vue'),
+      combo: () => import('./charts/ComboChart.vue')
+    };
+
+    const componentLoader = componentMap[type];
+    if (!componentLoader) {
+      throw new Error(`Unknown chart type: ${type}`);
+    }
+
+    // Ленивая загрузка компонента
+    const module = await componentLoader();
+    const ChartComponent = module.default;
+
+    // Применение плагинов
+    const plugin = this.chartPlugins.get(type);
+    if (plugin) {
+      return plugin.enhance(ChartComponent, props, options);
+    }
+
+    return ChartComponent;
+  }
+
+  static async preloadChart(type) {
+    // Предварительная загрузка для лучшей производительности
+    const componentMap = {
+      line: () => import('./charts/LineChart.vue'),
+      bar: () => import('./charts/BarChart.vue'),
+      // ...
+    };
+
+    const loader = componentMap[type];
+    if (loader) {
+      await loader();
+    }
+  }
+}
+
+// Регистрация плагинов
+ChartFactory.registerPlugin('line', LineChartAnimationPlugin);
+ChartFactory.registerPlugin('bar', BarChartInteractionPlugin);
+```
+
+**Пример разделенного компонента:**
+```javascript
+// LineChart.vue - только логика линейного графика
+export default {
+  name: 'LineChart',
+  mixins: [BaseChartMixin],
+
+  props: {
+    data: { type: Array, required: true },
+    config: { type: Object, default: () => ({}) }
+  },
+
+  computed: {
+    processedData() {
+      return this.prepareLineData(this.data);
+    },
+
+    chartOptions() {
+      return this.buildLineOptions(this.config);
+    }
+  },
+
+  methods: {
+    // Только методы для линейного графика
+    prepareLineData(data) { /* 30 строк */ },
+    buildLineOptions(config) { /* 25 строк */ },
+    renderLineChart() { /* 40 строк */ }
+  },
+
+  mounted() {
+    this.renderChart();
+  }
+}
+```
+
+### Этап 3: Реализация универсального сервиса графиков (16 часов)
+
+**Задачи:**
+1. Создать `UniversalGraphStateService.js` для работы с любым сектором
+2. Реализовать конфигурационную систему для секторов
+3. Создать адаптеры для каждого типа сектора
+
+**UniversalGraphStateService.js:**
+```javascript
+export class UniversalGraphStateService extends BaseGraphStateService {
+  constructor(sectorId) {
+    const sectorConfig = SectorGraphConfigFactory.getConfig(sectorId);
+    const sectorService = SectorServiceFactory.create(sectorId);
+    const graphAdapter = new SectorGraphAdapter(sectorConfig);
+
+    super(sectorService, sectorConfig);
+    this.adapter = graphAdapter;
+  }
+
+  async getSectorData() {
+    const rawData = await this.sectorService.getSectorData();
+    return this.adapter.adaptSectorData(rawData);
+  }
+
+  getStagesConfig() {
+    return this.config.stages;
+  }
+
+  getMetricsConfig() {
+    return {
+      ticketsCount: { label: 'Количество тикетов', type: 'number' },
+      employeesLoad: { label: 'Нагрузка сотрудников', type: 'percentage' },
+      stageDistribution: { label: 'Распределение по стадиям', type: 'distribution' },
+      timeToComplete: { label: 'Время выполнения', type: 'duration' }
+    };
+  }
+}
+```
+
+**Конфигурации секторов:**
+```javascript
+// configs/graph-state/sector-1c-graph-config.js
+export const sector1cGraphConfig = {
+  sectorId: '1c',
+  stages: {
+    'DT140_12:UC_0VHWE2': { name: 'Сформировано обращение', color: '#007bff' },
+    'DT140_12:PREPARATION': { name: 'Рассмотрение ТЗ', color: '#ffc107' },
+    'DT140_12:CLIENT': { name: 'Исполнение', color: '#28a745' }
+  },
+  metrics: ['ticketsCount', 'employeesLoad', 'stageDistribution'],
+  supportedCharts: ['line', 'bar', 'doughnut', 'combo'],
+  defaultChart: 'combo'
+};
+```
+
+### Этап 4: Интеграция и оптимизация (12 часов)
+
+**Задачи:**
+1. Обновить `GraphStateDashboard.vue` для работы с универсальным сервисом
+2. Реализовать кеширование для разных секторов
+3. Оптимизировать производительность рендеринга
+4. Создать систему миграции существующих слепков
+
+**Обновленный GraphStateDashboard.vue:**
+```vue
+<template>
+  <div class="graph-state-dashboard">
+    <div class="dashboard-header">
+      <h1>График состояния - {{ sectorConfig.name }}</h1>
+      <!-- Динамические контролы -->
+    </div>
+
+    <!-- Универсальный контейнер графика -->
+    <ChartContainer
+      :sector-id="sectorId"
+      :chart-types="supportedChartTypes"
+      :comparison-types="availableComparisons"
+      @chart-change="handleChartChange"
+    />
+  </div>
+</template>
+
+<script>
+import { computed } from 'vue';
+import ChartContainer from './components/ChartContainer.vue';
+import { UniversalGraphStateService } from '@/services/graph-state/UniversalGraphStateService.js';
+
+export default {
+  name: 'GraphStateDashboard',
+  components: { ChartContainer },
+
+  props: {
+    sectorId: {
+      type: String,
+      default: '1c' // Для обратной совместимости
+    }
+  },
+
+  setup(props) {
+    const sectorConfig = computed(() => {
+      // Получаем конфиг сектора из фабрики
+      return SectorGraphConfigFactory.getConfig(props.sectorId);
+    });
+
+    const graphService = computed(() => {
+      return new UniversalGraphStateService(props.sectorId);
+    });
+
+    return {
+      sectorConfig,
+      graphService
+    };
+  }
+};
+</script>
+```
+
+---
+
+## 🧪 Тестирование и миграция
+
+### Стратегия тестирования
+
+**Unit тесты:**
+```javascript
+describe('UniversalGraphStateService', () => {
+  test('should create service for different sectors', () => {
+    const service1C = new UniversalGraphStateService('1c');
+    const servicePDM = new UniversalGraphStateService('pdm');
+
+    expect(service1C.config.sectorId).toBe('1c');
+    expect(servicePDM.config.sectorId).toBe('pdm');
+  });
+
+  test('should adapt data from different sector structures', async () => {
+    const mockSectorData = { stages: [...], employees: [...] };
+    const adapted = await service.adaptSectorData(mockSectorData);
+
+    expect(adapted).toHaveProperty('stages');
+    expect(adapted).toHaveProperty('employees');
+    expect(adapted).toHaveProperty('metrics');
+  });
+});
+```
+
+**Integration тесты:**
+```javascript
+describe('Graph State Integration', () => {
+  test('should create and load snapshots for different sectors', async () => {
+    // Тест для сектора 1С
+    const service1C = new UniversalGraphStateService('1c');
+    const snapshot1C = await service1C.createSnapshot('test');
+
+    // Тест для сектора PDM
+    const servicePDM = new UniversalGraphStateService('pdm');
+    const snapshotPDM = await servicePDM.createSnapshot('test');
+
+    expect(snapshot1C.meta.sectorId).toBe('1C');
+    expect(snapshotPDM.meta.sectorId).toBe('PDM');
+  });
+});
+```
+
+### План миграции
+
+**Фаза 1: Подготовка (1 неделя)**
+- Создание базовых абстракций
+- Разработка конфигураций секторов
+- Тестирование базовой функциональности
+
+**Фаза 2: Параллельная разработка (2 недели)**
+- Рефакторинг компонентов для универсальности
+- Создание адаптеров для новых секторов
+- Разработка новых типов графиков
+
+**Фаза 3: Интеграция и тестирование (1 неделя)**
+- Интеграция с системой секторов TASK-091
+- Полное тестирование всех секторов
+- Оптимизация производительности
+
+**Фаза 4: Запуск (3 дня)**
+- Миграция существующих слепков
+- Постепенный переход пользователей
+- Мониторинг и горячие фиксы
+
+### Миграция существующих слепков
+
+**Проблема:** Существующие слепки жестко привязаны к сектору 1С
+
+**Решение:**
+```javascript
+// Migration script
+class SnapshotMigrationService {
+  static async migrateExistingSnapshots() {
+    const existingSnapshots = await this.getAllExistingSnapshots();
+
+    for (const snapshot of existingSnapshots) {
+      // Добавляем sectorId в метаданные
+      snapshot.meta.sectorId = '1C';
+
+      // Пересохраняем с новым форматом
+      await this.saveMigratedSnapshot(snapshot);
+    }
+  }
+}
+```
+
+---
+
+## ✅ Критерии приёмки
+
+### Функциональные критерии
+- [ ] Модуль работает с секторами 1С, PDM, Битрикс24, Железо/Прочее
+- [ ] Все типы графиков (линейный, столбчатый, кольцевой, комбинированный)
+- [ ] Создание и загрузка слепков для разных секторов
+- [ ] Сравнение слепков между секторами
+- [ ] Сохранение совместимости с существующими слепками
+
+### Технические критерии
+- [ ] Разделение монолитного компонента на модули
+- [ ] Универсальный API для работы с секторами
+- [ ] Конфигурационная система для типов графиков
+- [ ] Кеширование данных для разных секторов
+- [ ] Ленивая загрузка компонентов графиков
+
+### UX критерии
+- [ ] Интуитивный интерфейс для разных секторов
+- [ ] Адаптивные графики для мобильных устройств
+- [ ] Быстрая загрузка и переключение между типами графиков
+- [ ] Понятные легенды и подсказки
+
+### Производительность
+- [ ] Время загрузки графика: < 3 секунды
+- [ ] Плавная анимация переходов между типами графиков
+- [ ] Оптимизированный рендеринг для больших объемов данных
+- [ ] Эффективное кеширование слепков
+
+---
+
+## ⚠️ Потенциальные проблемы и решения
+
+### Проблема 1: Сложность миграции существующих слепков
+**Симптомы:** Существующие слепки не содержат информацию о секторе, что может привести к конфликтам
+**Решение:**
+```javascript
+class SnapshotMigrationManager {
+  static async migrateSnapshots() {
+    const snapshots = await this.loadAllSnapshots();
+
+    for (const snapshot of snapshots) {
+      if (!snapshot.meta.sectorId) {
+        // Автоматическая миграция для старых слепков
+        snapshot.meta.sectorId = await this.detectSector(snapshot.data);
+        await this.saveMigratedSnapshot(snapshot);
+      }
+    }
+  }
+
+  static async detectSector(snapshotData) {
+    // Логика определения сектора по структуре данных
+    // Анализ стадий, полей, количества сотрудников и т.д.
+    return '1C'; // По умолчанию для существующих
+  }
+}
+```
+
+### Проблема 2: Производительность при работе с большими графиками
+**Симптомы:** Зависания при рендеринге графиков с большим количеством данных
+**Решение:**
+```javascript
+class ChartPerformanceOptimizer {
+  static optimizeData(data, options = {}) {
+    const { maxPoints = 1000, sampling = 'average' } = options;
+
+    if (data.length <= maxPoints) return data;
+
+    // Семплирование данных для производительности
+    return this.sampleData(data, maxPoints, sampling);
+  }
+
+  static useVirtualization(data) {
+    // Виртуализация для очень больших наборов данных
+    return new VirtualizedChartData(data);
+  }
+
+  static enableProgressiveRender(chart) {
+    // Прогрессивный рендеринг для плавной загрузки
+    chart.renderProgressive = true;
+  }
+}
+```
+
+### Проблема 3: Несовместимость структур данных секторов
+**Симптомы:** Разные сектора имеют различную структуру стадий, сотрудников, метрик
+**Решение:**
+```javascript
+class SectorDataNormalizer {
+  static normalizeStages(stages, sectorConfig) {
+    return stages.map(stage => ({
+      id: stage.id,
+      name: stage.name || sectorConfig.stages[stage.id]?.name || stage.id,
+      color: stage.color || sectorConfig.stages[stage.id]?.color || '#666',
+      tickets: stage.tickets || [],
+      employees: stage.employees || [],
+      metrics: this.calculateStageMetrics(stage, sectorConfig)
+    }));
+  }
+
+  static normalizeEmployees(employees, sectorConfig) {
+    return employees.map(employee => ({
+      id: employee.id || employee.ID,
+      name: employee.name || employee.NAME || `${employee.LAST_NAME} ${employee.NAME}`,
+      department: employee.department || sectorConfig.defaultDepartment,
+      load: employee.load || this.calculateEmployeeLoad(employee, sectorConfig)
+    }));
+  }
+}
+```
+
+### Проблема 4: Конфликты в кешировании между секторами
+**Симптомы:** Данные одного сектора перезаписывают данные другого в кеше
+**Решение:**
+```javascript
+class SectorAwareCache {
+  constructor(baseCache) {
+    this.baseCache = baseCache;
+  }
+
+  get(key, sectorId) {
+    const sectorKey = `${sectorId}:${key}`;
+    return this.baseCache.get(sectorKey);
+  }
+
+  set(key, value, sectorId, ttl = 3600) {
+    const sectorKey = `${sectorId}:${key}`;
+    return this.baseCache.set(sectorKey, value, ttl);
+  }
+
+  invalidateSector(sectorId) {
+    // Очистка всех ключей сектора
+    const pattern = new RegExp(`^${sectorId}:`);
+    return this.baseCache.invalidatePattern(pattern);
+  }
+
+  getSectorStats(sectorId) {
+    // Статистика использования кеша по сектору
+    return this.baseCache.getStats(sectorId);
+  }
+}
+```
+
+### Проблема 5: Сложность тестирования визуальных компонентов
+**Симптомы:** Трудно тестировать графики и их интерактивность
+**Решение:**
+```javascript
+// ChartTestingUtils.js
+export class ChartTestingUtils {
+  static createMockChartData(type = 'line') {
+    const baseData = {
+      labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May'],
+      datasets: [{
+        label: 'Dataset 1',
+        data: [10, 20, 30, 40, 50],
+        backgroundColor: '#007bff'
+      }]
+    };
+
+    // Специфические данные для разных типов графиков
+    return this.adaptDataForType(baseData, type);
+  }
+
+  static mockChartInteractions(wrapper) {
+    // Мокаем Chart.js для тестирования
+    global.Chart = class MockChart {
+      constructor(ctx, config) {
+        this.ctx = ctx;
+        this.config = config;
+        this.render = jest.fn();
+        this.update = jest.fn();
+        this.destroy = jest.fn();
+      }
+    };
+  }
+
+  static async waitForChartRender(wrapper) {
+    // Ожидание рендеринга графика
+    await wrapper.vm.$nextTick();
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+}
+```
+
+### Проблема 6: Управление зависимостями между компонентами графиков
+**Симптомы:** Циклические зависимости, сложность обновления
+**Решение:**
+```javascript
+// Dependency Injection Container для графиков
+class ChartDependencyContainer {
+  static services = new Map();
+  static components = new Map();
+
+  static registerService(name, service) {
+    this.services.set(name, service);
+  }
+
+  static registerComponent(name, component) {
+    this.components.set(name, component);
+  }
+
+  static getService(name) {
+    const service = this.services.get(name);
+    if (!service) {
+      throw new Error(`Service ${name} not registered`);
+    }
+    return service;
+  }
+
+  static async getComponent(name) {
+    const component = this.components.get(name);
+    if (!component) {
+      throw new Error(`Component ${name} not registered`);
+    }
+    return await component();
+  }
+}
+
+// Регистрация зависимостей
+ChartDependencyContainer.registerService('chartRenderer', ChartRendererService);
+ChartDependencyContainer.registerService('dataProcessor', ChartDataProcessor);
+ChartDependencyContainer.registerComponent('tooltip', () => import('./ChartTooltip.vue'));
+```
+
+---
+
+## 📊 Метрики успеха рефакторинга
+
+### Качественные метрики
+- **Уменьшение размера основного компонента:** > 80% (с 2000+ строк до < 400 строк)
+- **Количество модулей:** 15+ независимых компонентов
+- **Тестовое покрытие:** > 90% для основных функций
+- **Время загрузки:** < 2 секунд для любого типа графика
+
+### Количественные метрики
+- **Поддержка секторов:** 4 сектора (1С, PDM, Битрикс24, Железо/Прочее)
+- **Типы графиков:** 4 основных типа + поддержка плагинов
+- **Совместимость:** 100% обратная совместимость со слепками
+- **Производительность:** Обработка до 10k точек данных без лагов
+
+### Бизнес метрики
+- **Время разработки нового графика:** < 2 дней
+- **Время добавления поддержки сектора:** < 4 часов
+- **Количество багов:** < 20% от текущего уровня
+- **Удовлетворенность разработчиков:** > 95%
+
+---
+
+## 📝 История изменений
+
+| Дата | Автор | Изменения |
+|------|-------|-----------|
+| 2026-01-12 | AI Assistant | Создан детальный анализ модуля "График состояния" для TASK-091-02 |
+| 2026-01-12 | AI Assistant | Добавлены технические решения, план рефакторинга и решения проблем |
+| 2026-01-12 | AI Assistant | Структурированы основные подзадачи TASK-091-02-01 до TASK-091-02-06 |
+| 2026-01-12 | AI Assistant | Созданы отдельные документы для каждой подзадачи |
+
+---
+
+## ❓ Вопросы и ответы
+
+**Q: Как обеспечить совместимость с существующими слепками сектора 1С?**  
+A: Через миграционный скрипт, который добавит sectorId в метаданные существующих слепков.
+
+**Q: Можно ли использовать разные типы графиков для разных секторов?**  
+A: Да, через конфигурацию сектора можно определить, какие типы графиков поддерживаются.
+
+**Q: Как обрабатывать различия в структуре данных между секторами?**  
+A: Через SectorGraphAdapter, который нормализует данные каждого сектора в универсальный формат.
+
+**Q: Нужно ли сохранять старую структуру GraphStateChart.vue для совместимости?**  
+A: Да, можно создать адаптер, который будет использовать новую архитектуру под капотом.

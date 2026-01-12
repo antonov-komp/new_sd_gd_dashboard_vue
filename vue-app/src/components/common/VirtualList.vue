@@ -1,31 +1,39 @@
 <template>
-  <div class="virtual-list" ref="container">
+  <div class="virtual-list-container" ref="container">
     <div
-      class="virtual-list-wrapper"
-      :style="{ height: totalHeight + 'px' }"
+      class="virtual-list"
+      :style="{ height: `${listHeight}px` }"
+      @scroll="handleScroll"
     >
       <div
-        class="virtual-list-items"
-        :style="{ transform: 'translateY(' + offsetY + 'px)' }"
+        class="virtual-spacer top"
+        :style="{ height: `${offsetTop}px` }"
+      ></div>
+
+      <div
+        v-for="(item, index) in visibleItems"
+        :key="getItemKey(item, startIndex + index)"
+        class="virtual-item"
       >
-        <div
-          v-for="item in visibleItems"
-          :key="getItemKey(item)"
-          class="virtual-item"
-          :style="{ height: itemHeight + 'px' }"
-        >
-          <slot :item="item" :index="getItemIndex(item)"></slot>
-        </div>
+        <slot
+          name="item"
+          :item="item"
+          :index="startIndex + index"
+        />
       </div>
+
+      <div
+        class="virtual-spacer bottom"
+        :style="{ height: `${offsetBottom}px` }"
+      ></div>
     </div>
   </div>
 </template>
 
 <script>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
-
 export default {
   name: 'VirtualList',
+  emits: ['item-click'],
   props: {
     items: {
       type: Array,
@@ -39,106 +47,145 @@ export default {
       type: Number,
       default: 400
     },
-    buffer: {
+    bufferSize: {
       type: Number,
-      default: 5 // Количество дополнительных элементов для рендеринга
+      default: 5
     }
   },
-  emits: ['item-visible'],
-  setup(props, { emit }) {
-    const container = ref(null);
-    const scrollTop = ref(0);
-
-    // Общее количество элементов
-    const totalCount = computed(() => props.items.length);
-
-    // Общая высота списка
-    const totalHeight = computed(() => totalCount.value * props.itemHeight);
-
-    // Начальный индекс видимых элементов
-    const startIndex = computed(() => {
-      const index = Math.floor(scrollTop.value / props.itemHeight);
-      return Math.max(0, index - props.buffer);
-    });
-
-    // Конечный индекс видимых элементов
-    const endIndex = computed(() => {
-      const index = Math.floor((scrollTop.value + props.containerHeight) / props.itemHeight);
-      return Math.min(totalCount.value - 1, index + props.buffer);
-    });
-
-    // Видимые элементы
-    const visibleItems = computed(() => {
-      return props.items.slice(startIndex.value, endIndex.value + 1);
-    });
-
-    // Смещение по Y для видимых элементов
-    const offsetY = computed(() => startIndex.value * props.itemHeight);
-
-    // Обработчик скролла
-    const handleScroll = () => {
-      if (container.value) {
-        scrollTop.value = container.value.scrollTop;
-      }
-    };
-
-    // Получение ключа элемента
-    const getItemKey = (item) => {
-      return item.id || item._id || props.items.indexOf(item);
-    };
-
-    // Получение индекса элемента в общем массиве
-    const getItemIndex = (item) => {
-      return props.items.indexOf(item);
-    };
-
-    onMounted(() => {
-      if (container.value) {
-        container.value.addEventListener('scroll', handleScroll);
-      }
-    });
-
-    onUnmounted(() => {
-      if (container.value) {
-        container.value.removeEventListener('scroll', handleScroll);
-      }
-    });
-
+  data() {
     return {
-      container,
-      totalHeight,
-      offsetY,
-      visibleItems,
-      getItemKey,
-      getItemIndex
+      scrollTop: 0
     };
+  },
+  computed: {
+    totalItems() {
+      return this.items.length;
+    },
+
+    totalHeight() {
+      return this.totalItems * this.itemHeight;
+    },
+
+    visibleCount() {
+      return Math.ceil(this.containerHeight / this.itemHeight) + (this.bufferSize * 2);
+    },
+
+    startIndex() {
+      const rawStart = Math.floor(this.scrollTop / this.itemHeight) - this.bufferSize;
+      return Math.max(0, rawStart);
+    },
+
+    endIndex() {
+      const rawEnd = this.startIndex + this.visibleCount;
+      return Math.min(this.totalItems, rawEnd);
+    },
+
+    visibleItems() {
+      return this.items.slice(this.startIndex, this.endIndex);
+    },
+
+    offsetTop() {
+      return this.startIndex * this.itemHeight;
+    },
+
+    offsetBottom() {
+      return Math.max(0, this.totalHeight - this.offsetTop - (this.visibleItems.length * this.itemHeight));
+    },
+
+    listHeight() {
+      return Math.min(this.totalHeight, this.containerHeight);
+    }
+  },
+  methods: {
+    handleScroll(event) {
+      this.scrollTop = event.target.scrollTop;
+    },
+
+    getItemKey(item, index) {
+      return item.id || item.key || index;
+    },
+
+    scrollToIndex(index) {
+      const scrollTop = Math.max(0, (index * this.itemHeight) - (this.containerHeight / 2));
+      this.$refs.container?.scrollTo({ top: scrollTop, behavior: 'smooth' });
+    },
+
+    scrollToTop() {
+      this.$refs.container?.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+
+    scrollToBottom() {
+      const scrollTop = this.totalHeight - this.containerHeight;
+      this.$refs.container?.scrollTo({ top: scrollTop, behavior: 'smooth' });
+    }
   }
 };
 </script>
 
 <style scoped>
-.virtual-list {
-  height: 400px;
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-
-.virtual-list-wrapper {
+.virtual-list-container {
   position: relative;
+  overflow: hidden;
+  width: 100%;
 }
 
-.virtual-list-items {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+.virtual-list {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #c1c1c1 #f1f1f1;
+}
+
+.virtual-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.virtual-list::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.virtual-list::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.virtual-list::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+.virtual-spacer {
+  pointer-events: none;
 }
 
 .virtual-item {
-  position: absolute;
-  left: 0;
-  right: 0;
-  display: flex;
-  align-items: center;
+  position: relative;
+}
+
+/* Smooth scrolling for better UX */
+.virtual-list {
+  scroll-behavior: smooth;
+}
+
+/* Focus management */
+.virtual-item:focus-within {
+  outline: 2px solid #007bff;
+  outline-offset: -2px;
+}
+
+/* Loading state styles can be added here if needed */
+.virtual-list.loading {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .virtual-list {
+    scrollbar-width: none;
+  }
+
+  .virtual-list::-webkit-scrollbar {
+    display: none;
+  }
 }
 </style>

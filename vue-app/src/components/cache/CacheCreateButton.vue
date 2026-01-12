@@ -74,24 +74,33 @@ export default {
 }
 
 .btn-create {
-  padding: 8px 16px;
-  background-color: #28a745;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, #28a745, #20c997);
   color: white;
   border: none;
-  border-radius: 4px;
-  cursor: pointer;
+  border-radius: 8px;
   font-size: 14px;
-  transition: background-color 0.3s ease;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(40, 167, 69, 0.2);
 }
 
 .btn-create:hover:not(.btn-disabled) {
-  background-color: #218838;
+  background: linear-gradient(135deg, #218838, #1aa085);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(40, 167, 69, 0.3);
 }
 
 .btn-create.btn-disabled {
-  background-color: #6c757d;
+  background: #6c757d;
   cursor: not-allowed;
   opacity: 0.6;
+  transform: none;
+  box-shadow: none;
 }
 </style>
 

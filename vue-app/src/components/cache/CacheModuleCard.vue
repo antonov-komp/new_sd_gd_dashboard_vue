@@ -156,7 +156,6 @@
           :disabled="creating"
           @created="handleCacheCreated"
           @creating="handleCreatingState"
-          class="action-button create-button"
           :class="{ 'loading': creating }"
         />
       </div>
@@ -675,6 +674,8 @@ export default {
     };
 
     const handleCacheCreated = () => {
+      // Очистка кеша категоризации после создания кеша модуля
+      CacheManagementService.invalidateCacheAfterModuleOperation();
       emit('refresh');
     };
 
@@ -833,8 +834,8 @@ export default {
   overflow: hidden;
   transition: var(--cache-transition);
   position: relative;
-  animation: cardFadeIn 0.4s ease-out;
-  animation-fill-mode: both;
+  /* animation: cardFadeIn 0.4s ease-out; - убрана анимация появления */
+  /* animation-fill-mode: both; - убрана анимация появления */
 }
 
 .cache-module-card:hover {
@@ -900,16 +901,7 @@ export default {
 }
 
 /* Анимации */
-@keyframes cardFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
+/* @keyframes cardFadeIn - удалено по требованию пользователя */
 
 /* @keyframes pulseWarning - удалено по требованию пользователя */
 
@@ -1236,7 +1228,7 @@ export default {
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  animation: fadeIn 0.2s ease-out;
+  /* animation: fadeIn 0.2s ease-out; - убрана анимация появления */
 }
 
 .detail-modal {
@@ -1246,24 +1238,12 @@ export default {
   max-width: 600px;
   width: 90%;
   max-height: 80vh;
-  animation: modalSlideIn 0.3s ease-out;
+  /* animation: modalSlideIn 0.3s ease-out; - убрана анимация появления */
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
+/* @keyframes fadeIn - удалено по требованию пользователя */
 
-@keyframes modalSlideIn {
-  from {
-    opacity: 0;
-    transform: scale(0.9) translateY(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
-}
+/* @keyframes modalSlideIn - удалено по требованию пользователя */
 
 .modal-header {
   display: flex;
@@ -1331,7 +1311,7 @@ export default {
   box-shadow: var(--cache-shadow-lg);
   max-width: 400px;
   width: 90%;
-  animation: modalSlideIn 0.3s ease-out;
+  /* animation: modalSlideIn 0.3s ease-out; - убрана анимация появления */
 }
 
 .modal-body {

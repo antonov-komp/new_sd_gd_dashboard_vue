@@ -278,8 +278,19 @@
 
 <script>
 import { computed, ref, onMounted, onUnmounted } from 'vue';
-import { formatDistanceToNow, format, parseISO } from 'date-fns';
-import { ru } from 'date-fns/locale';
+// Вспомогательные функции для работы с датами (замена date-fns для избежания зависимостей)
+const parseISO = (dateString) => new Date(dateString);
+const format = (date, formatString, options = {}) => {
+  const d = new Date(date);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+
+  return formatString
+    .replace('yyyy', year)
+    .replace('MM', month)
+    .replace('dd', day);
+};
 
 /**
  * UnifiedUserCard - единая карточка пользователя для списка
@@ -450,7 +461,7 @@ export default {
       if (diffHours < 24) return `${diffHours} ч`;
       if (diffDays < 7) return `${diffDays} д`;
       if (diffDays < 30) return `${Math.floor(diffDays / 7)} нед`;
-      return format(date, 'dd.MM.yyyy', { locale: ru });
+      return format(date, 'dd.MM.yyyy');
     });
 
     const activityScore = computed(() => {

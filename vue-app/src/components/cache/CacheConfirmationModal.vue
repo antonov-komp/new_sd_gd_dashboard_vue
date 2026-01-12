@@ -314,19 +314,10 @@ export default {
   overflow-y: auto;
   position: relative;
   z-index: 10001;
-  animation: modalSlideIn 0.3s ease-out;
+  /* animation: modalSlideIn 0.3s ease-out; - убрана анимация появления */
 }
 
-@keyframes modalSlideIn {
-  from {
-    opacity: 0;
-    transform: scale(0.9) translateY(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
-}
+/* @keyframes modalSlideIn - удалено по требованию пользователя */
 
 .modal-header {
   display: flex;

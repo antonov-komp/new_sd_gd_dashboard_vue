@@ -25,15 +25,18 @@
  * }
  */
 
-require_once $_SERVER['DOCUMENT_ROOT'] . '/rest_api_aps/sd_it_gen_plan/api/cache/GraphAdmissionClosureCache.php';
-require_once $_SERVER['DOCUMENT_ROOT'] . '/rest_api_aps/sd_it_gen_plan/api/cache/TimeTrackingCache.php';
-require_once $_SERVER['DOCUMENT_ROOT'] . '/rest_api_aps/sd_it_gen_plan/api/cache/UsersManagementCache.php';
-require_once $_SERVER['DOCUMENT_ROOT'] . '/rest_api_aps/sd_it_gen_plan/api/cache/UserActivityCache.php';
-require_once $_SERVER['DOCUMENT_ROOT'] . '/rest_api_aps/sd_it_gen_plan/api/cache/WebhookLogsCache.php';
+// Определяем базовый путь проекта
+$projectRoot = dirname(__DIR__, 2); // Поднимаемся на 2 уровня выше от api/admin/
+
+require_once $projectRoot . '/api/cache/GraphAdmissionClosureCache.php';
+require_once $projectRoot . '/api/cache/TimeTrackingCache.php';
+require_once $projectRoot . '/api/cache/UsersManagementCache.php';
+require_once $projectRoot . '/api/cache/UserActivityCache.php';
+require_once $projectRoot . '/api/cache/WebhookLogsCache.php';
 
 // TASK-082: Новые кеш-менеджеры для backend кеширования
-require_once $_SERVER['DOCUMENT_ROOT'] . '/rest_api_aps/sd_it_gen_plan/api/cache/DashboardSector1CCache.php';
-require_once $_SERVER['DOCUMENT_ROOT'] . '/rest_api_aps/sd_it_gen_plan/api/cache/GraphStateCache.php';
+require_once $projectRoot . '/api/cache/DashboardSector1CCache.php';
+require_once $projectRoot . '/api/cache/GraphStateCache.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
