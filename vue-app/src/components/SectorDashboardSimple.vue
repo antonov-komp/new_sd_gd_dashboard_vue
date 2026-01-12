@@ -1,17 +1,12 @@
 <template>
   <div :class="`dashboard-sector-${sectorId}`">
-    <!-- DEBUG: Показываем, что компонент рендерится -->
-    <div style="background: yellow; padding: 10px; margin-bottom: 10px; border: 2px solid red;">
-      🚨 DEBUG: SectorDashboard RENDERED for sector: {{ sectorId }} at {{ new Date().toISOString() }}
-    </div>
-
     <!-- Заголовок -->
     <div class="dashboard-header">
       <h1>Дашборд - Сектор {{ sectorName }}</h1>
     </div>
 
     <!-- Статистика сектора -->
-    <div class="sector-stats" v-if="!isLoading">
+    <div class="sector-stats">
       <div class="stat-item">
         <div class="stat-value">{{ totalTickets }}</div>
         <div class="stat-label">Всего тикетов</div>
@@ -20,21 +15,18 @@
 
     <!-- Основной контент -->
     <div class="dashboard-content">
-      <!-- Загрузка -->
-      <div v-if="isLoading" class="loading-indicator">
+      <div class="loading-indicator" v-if="isLoading">
         <div class="loading-spinner"></div>
         <p>Загрузка данных сектора...</p>
       </div>
 
-      <!-- Ошибка -->
-      <div v-else-if="error" class="error-indicator">
+      <div class="error-indicator" v-else-if="error">
         <div class="error-icon">⚠️</div>
         <p>Ошибка загрузки: {{ error }}</p>
         <button @click="handleRetry" class="btn-retry">Повторить</button>
       </div>
 
-      <!-- Нет данных -->
-      <div v-else-if="!hasData" class="empty-state">
+      <div class="empty-state" v-else-if="!hasData">
         <div class="empty-state-content">
           <div class="empty-icon">📋</div>
           <h3>Сектор "{{ sectorName }}" в разработке</h3>
@@ -43,8 +35,7 @@
         </div>
       </div>
 
-      <!-- Данные есть -->
-      <div v-else class="stages-container">
+      <div class="stages-container" v-else>
         <div
           v-for="stage in stages"
           :key="stage.id"
@@ -67,15 +58,15 @@
 </template>
 
 <script>
-import { onMounted, computed } from 'vue';
-import { useRouter } from 'vue-router';
+import { onMounted, computed, ref } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 
 import BackButton from './dashboard/BackButton.vue';
 import { useUniversalDashboardState } from '@/composables/useUniversalDashboardState.js';
 import { useUniversalDashboardActions } from '@/composables/useUniversalDashboardActions.js';
 
 export default {
-  name: 'SectorDashboard',
+  name: 'SectorDashboardSimple',
   components: {
     BackButton
   },
@@ -89,8 +80,9 @@ export default {
 
   setup(props) {
     const router = useRouter();
+    const route = useRoute();
 
-    // Состояние и действия
+    // Состояние
     const { state, actions } = useUniversalDashboardState(props.sectorId);
 
     // Вычисляемые свойства
@@ -115,7 +107,7 @@ export default {
 
     // Инициализация
     onMounted(() => {
-      console.log(`[SectorDashboard] Mounted for sector: ${props.sectorId}`);
+      console.log(`[SectorDashboardSimple] Mounted for sector: ${props.sectorId}`);
       actions.loadSectorData();
     });
 

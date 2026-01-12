@@ -71,7 +71,7 @@ const routes = [
   {
     path: '/dashboard/sector-pdm',
     name: 'dashboard-sector-pdm',
-    component: () => import(/* webpackChunkName: "dashboard-sector-pdm" */ '@/components/SectorDashboardPDM.vue'),
+    component: () => import(/* webpackChunkName: "sector-dashboard" */ '@/components/SectorDashboard.vue'),
     meta: {
       requiresAuth: true,
       chunk: 'dashboard-sector-pdm'

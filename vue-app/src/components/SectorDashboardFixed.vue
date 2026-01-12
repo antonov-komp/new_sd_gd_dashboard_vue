@@ -75,7 +75,7 @@ import { useUniversalDashboardState } from '@/composables/useUniversalDashboardS
 import { useUniversalDashboardActions } from '@/composables/useUniversalDashboardActions.js';
 
 export default {
-  name: 'SectorDashboard',
+  name: 'SectorDashboardFixed',
   components: {
     BackButton
   },
@@ -115,7 +115,7 @@ export default {
 
     // Инициализация
     onMounted(() => {
-      console.log(`[SectorDashboard] Mounted for sector: ${props.sectorId}`);
+      console.log(`[SectorDashboardFixed] Mounted for sector: ${props.sectorId}`);
       actions.loadSectorData();
     });
 
