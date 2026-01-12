@@ -154,8 +154,21 @@ export class UserActivityService {
       if (result.success) {
         let data = result.data || [];
 
+        // Предварительная фильтрация - убираем явно undefined/null элементы
+        data = data.filter(item => item !== null && item !== undefined);
+
         // Валидируем и очищаем данные
         data = this.validateAndCleanActivityData(data);
+
+        // Финальная фильтрация - только полностью валидные объекты
+        data = data.filter(entry =>
+          entry &&
+          typeof entry === 'object' &&
+          entry.user_id &&
+          entry.timestamp &&
+          typeof entry.type === 'string' &&
+          entry.type.trim() !== ''
+        );
 
         // Сохраняем в кеш
         if (useCache) {

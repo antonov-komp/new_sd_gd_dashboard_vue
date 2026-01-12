@@ -1,31 +1,31 @@
 <template>
-  <div class="user-activity-card" :class="cardClass" v-if="entry">
+  <div class="user-activity-card" :class="cardClass" v-if="isValidEntry">
     <div class="activity-icon">
-      <span v-if="entry.type === 'app_entry'">🚪</span>
-      <span v-else-if="entry.type === 'page_visit'">📄</span>
+      <span v-if="safeEntry.type === 'app_entry'">🚪</span>
+      <span v-else-if="safeEntry.type === 'page_visit'">📄</span>
       <span v-else>❓</span>
     </div>
 
     <div class="activity-content">
       <div class="activity-header">
-        <span class="user-name">{{ entry.user_name || `User #${entry.user_id}` }}</span>
-        <span class="activity-time">{{ formatTime(entry.timestamp) }}</span>
+        <span class="user-name">{{ safeEntry.user_name || `User #${safeEntry.user_id}` }}</span>
+        <span class="activity-time">{{ formatTime(safeEntry.timestamp) }}</span>
       </div>
 
       <div class="activity-details">
-        <span v-if="entry.type === 'app_entry'" class="activity-type">
+        <span v-if="safeEntry.type === 'app_entry'" class="activity-type">
           Открыл приложение
         </span>
-        <span v-else-if="entry.type === 'page_visit'" class="activity-type">
-          Открыл страницу: {{ entry.route_title || entry.route_path || entry.route_name || 'Неизвестная страница' }}
+        <span v-else-if="safeEntry.type === 'page_visit'" class="activity-type">
+          Открыл страницу: {{ safeEntry.route_title || safeEntry.route_path || safeEntry.route_name || 'Неизвестная страница' }}
         </span>
         <span v-else class="activity-type">
           Неизвестное действие
         </span>
       </div>
 
-      <div v-if="entry.type === 'page_visit' && entry.from_path" class="activity-from">
-        С: {{ entry.from_name || entry.from_path }}
+      <div v-if="safeEntry.type === 'page_visit' && safeEntry.from_path" class="activity-from">
+        С: {{ safeEntry.from_name || safeEntry.from_path }}
       </div>
     </div>
   </div>
@@ -57,11 +57,50 @@ export default {
     }
   },
   computed: {
-    cardClass() {
-      if (!this.entry) return {};
+    isValidEntry() {
+      return this.entry &&
+             typeof this.entry === 'object' &&
+             this.entry !== null &&
+             this.entry.user_id &&
+             this.entry.timestamp &&
+             typeof this.entry.type === 'string' &&
+             this.entry.type.trim() !== '';
+    },
+
+    safeEntry() {
+      if (!this.isValidEntry) {
+        return {
+          user_id: 'unknown',
+          user_name: 'Неизвестный пользователь',
+          timestamp: new Date().toISOString(),
+          type: 'unknown',
+          route_title: null,
+          route_path: null,
+          route_name: null,
+          from_path: null,
+          from_name: null
+        };
+      }
+
       return {
-        'activity-entry': this.entry.type === 'app_entry',
-        'activity-visit': this.entry.type === 'page_visit'
+        ...this.entry,
+        user_id: this.entry.user_id || 'unknown',
+        user_name: this.entry.user_name || `User #${this.entry.user_id}`,
+        timestamp: this.entry.timestamp || new Date().toISOString(),
+        type: this.entry.type || 'unknown',
+        route_title: this.entry.route_title || null,
+        route_path: this.entry.route_path || null,
+        route_name: this.entry.route_name || null,
+        from_path: this.entry.from_path || null,
+        from_name: this.entry.from_name || null
+      };
+    },
+
+    cardClass() {
+      if (!this.isValidEntry) return {};
+      return {
+        'activity-entry': this.safeEntry.type === 'app_entry',
+        'activity-visit': this.safeEntry.type === 'page_visit'
       };
     }
   },

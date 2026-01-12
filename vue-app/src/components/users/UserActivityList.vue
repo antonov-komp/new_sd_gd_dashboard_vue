@@ -48,6 +48,7 @@
           :key="getEntryKey(entry)"
           :entry="entry"
           @click="handleViewDetails(entry)"
+          v-if="entry && typeof entry === 'object' && entry.user_id && entry.timestamp && typeof entry.type === 'string'"
         />
       </div>
     </div>

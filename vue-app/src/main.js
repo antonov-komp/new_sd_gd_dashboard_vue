@@ -35,6 +35,19 @@ const safeStringifyForLog = (obj) => {
 
 // Глобальная обработка ошибок
 app.config.errorHandler = (err, instance, info) => {
+  // Специальная обработка ошибок доступа к undefined.type
+  if (err instanceof TypeError && err.message.includes("Cannot read properties of undefined (reading 'type')")) {
+    console.warn('Caught undefined.type error:', {
+      error: err.message,
+      component: instance?.$options?.name || 'Unknown',
+      info,
+      stack: err.stack
+    });
+
+    // Не логируем эти ошибки в Bitrix24, так как они обрабатываются на уровне компонентов
+    return;
+  }
+
   console.error('Vue error:', err, info);
 
   // Логирование в Bitrix24 (если доступно)

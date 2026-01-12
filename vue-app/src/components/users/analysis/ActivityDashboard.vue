@@ -223,27 +223,27 @@ export default {
     // Валидированные данные для графиков
     const safeActivityData = computed(() => {
       try {
-        if (!Array.isArray(activityData.value)) {
-          return [];
-        }
+        // Гарантируем, что activityData.value всегда массив
+        const rawData = Array.isArray(activityData.value) ? activityData.value : [];
 
         // Дополнительная валидация всех полей
-        return activityData.value.filter(entry => {
+        return rawData.filter(entry => {
+          // Строгая проверка существования и типа
           if (!entry || typeof entry !== 'object' || entry === null) {
             return false;
           }
 
-          // Обязательные поля
-          if (!entry.user_id || !entry.timestamp) {
+          // Обязательные поля с проверкой типов
+          if (!entry.user_id || typeof entry.user_id !== 'number' || !entry.timestamp) {
             return false;
           }
 
-          // Проверка типа
+          // Проверка типа активности
           if (typeof entry.type !== 'string' || !entry.type.trim()) {
             return false;
           }
 
-          // Проверка timestamp
+          // Проверка timestamp валидности
           try {
             const date = new Date(entry.timestamp);
             if (isNaN(date.getTime())) {
@@ -256,7 +256,7 @@ export default {
           return true;
         });
       } catch (error) {
-        console.warn('[ActivityDashboard] Error filtering activity data:', error);
+        console.error('[ActivityDashboard] Error in safeActivityData:', error);
         return [];
       }
     });

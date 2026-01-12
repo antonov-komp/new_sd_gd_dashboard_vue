@@ -115,7 +115,7 @@
         class="activity-card"
         :class="getRowClass(entry)"
         @click="handleRowClick(entry)"
-        v-if="entry"
+        v-if="entry && typeof entry === 'object' && entry.user_id && entry.timestamp && typeof entry.type === 'string'"
       >
         <div class="card-header">
           <div class="card-icon">{{ getActionIcon(entry.type) }}</div>
