@@ -3,7 +3,7 @@
  * Тест логики категоризации тикетов по длительности
  */
 
-require_once 'api/graph-admission-closure/util/DatePeriodHelper.php';
+require_once '../api/graph-admission-closure/util/DatePeriodHelper.php'; // Исправлен путь
 
 $helper = new DatePeriodHelper();
 

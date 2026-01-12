@@ -28,7 +28,7 @@ $mockTickets = [
     ]
 ];
 
-require_once 'api/graph-admission-closure/util/DatePeriodHelper.php';
+require_once '../api/graph-admission-closure/util/DatePeriodHelper.php'; // Исправлен путь
 
 $helper = new DatePeriodHelper();
 $weekStart = new DateTimeImmutable('2026-01-06 00:00:00', new DateTimeZone('UTC'));

@@ -5,18 +5,18 @@
 
 // Тест 1: Проверка что CRest доступен
 echo "1. Проверка доступности CRest... ";
-require_once '/var/www/app/public/rest_api_aps/sd_it_gen_plan/crest.php';
+require_once '../crest.php'; // Исправлен путь
 echo "✓ CRest загружен\n";
 
 // Тест 2: Проверка что сервисы могут быть загружены
 echo "2. Проверка загрузки сервисов... ";
-require_once 'api/services/DashboardSector1CService.php';
-require_once 'api/services/GraphStateService.php';
+require_once '../api/services/DashboardSector1CService.php'; // Исправлен путь
+require_once '../api/services/GraphStateService.php'; // Исправлен путь
 echo "✓ Сервисы загружены\n";
 
 // Тест 3: Проверка что функции существуют
 echo "3. Проверка функций создания кэша... ";
-require_once 'api/admin/cache-create.php';
+require_once '../api/admin/cache-create.php'; // Исправлен путь
 
 if (function_exists('createDashboardSectorCache') && function_exists('createGraphStateCache')) {
     echo "✓ Функции создания кэша доступны\n";

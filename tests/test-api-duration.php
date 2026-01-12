@@ -6,12 +6,12 @@
 echo "=== Тест API категоризации carryover тикетов ===\n\n";
 
 // Имитируем вызов API без кэша
-require_once 'api/graph-admission-closure/service/GraphAdmissionClosureService.php';
-require_once 'api/graph-admission-closure/bitrix/BitrixClient.php';
-require_once 'api/graph-admission-closure/domain/Aggregator.php';
-require_once 'api/graph-admission-closure/cache/CacheStore.php';
-require_once 'api/graph-admission-closure/config/Config.php';
-require_once 'api/graph-admission-closure/util/DatePeriodHelper.php';
+require_once '../api/graph-admission-closure/service/GraphAdmissionClosureService.php'; // Исправлен путь
+require_once '../api/graph-admission-closure/bitrix/BitrixClient.php'; // Исправлен путь
+require_once '../api/graph-admission-closure/domain/Aggregator.php'; // Исправлен путь
+require_once '../api/graph-admission-closure/cache/CacheStore.php'; // Исправлен путь
+require_once '../api/graph-admission-closure/config/Config.php'; // Исправлен путь
+require_once '../api/graph-admission-closure/util/DatePeriodHelper.php'; // Исправлен путь
 
 // Создаем экземпляры
 $config = new Config();

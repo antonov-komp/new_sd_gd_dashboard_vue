@@ -1,11 +1,11 @@
 <?php
 /**
  * Скрипт для проверки логов вебхуков
- * 
+ *
  * Использование: php check-webhook-logs.php
  */
 
-$logDir = __DIR__ . '/logs/webhooks/';
+$logDir = __DIR__ . '/../logs/webhooks/'; // Исправлен путь относительно новой папки
 $categories = ['tasks', 'smart-processes', 'errors'];
 
 echo "=== Проверка логов вебхуков ===\n\n";
@@ -17,24 +17,24 @@ $currentFile = $currentDate . '-' . $currentHour;
 
 foreach ($categories as $category) {
     $categoryDir = $logDir . $category . '/';
-    
+
     echo "Категория: $category\n";
     echo "Папка: $categoryDir\n";
-    
+
     if (!is_dir($categoryDir)) {
         echo "  ❌ Папка не существует\n\n";
         continue;
     }
-    
+
     // Проверка текущего файла
     $currentLogFile = $categoryDir . $currentFile . '.json';
     echo "  Текущий файл: " . basename($currentLogFile) . "\n";
-    
+
     if (file_exists($currentLogFile)) {
         $logs = json_decode(file_get_contents($currentLogFile), true) ?? [];
         $count = count($logs);
         echo "  ✅ Файл существует, записей: $count\n";
-        
+
         if ($count > 0) {
             echo "  Последние 3 записи:\n";
             $recent = array_slice($logs, -3);
@@ -46,7 +46,7 @@ foreach ($categories as $category) {
     } else {
         echo "  ⚠️  Файл не существует (события ещё не пришли)\n";
     }
-    
+
     // Поиск всех файлов в категории
     $files = glob($categoryDir . '*.json');
     if ($files) {
@@ -61,7 +61,7 @@ foreach ($categories as $category) {
             echo "    - " . basename($file) . " ($size bytes, $time)\n";
         }
     }
-    
+
     echo "\n";
 }
 
@@ -74,10 +74,10 @@ if (is_dir($errorDir)) {
         usort($errorFiles, function($a, $b) {
             return filemtime($b) - filemtime($a);
         });
-        
+
         $latestErrorFile = $errorFiles[0];
         $errors = json_decode(file_get_contents($latestErrorFile), true) ?? [];
-        
+
         echo "Последние ошибки (из " . basename($latestErrorFile) . "):\n";
         foreach (array_slice($errors, -5) as $error) {
             echo "  - " . ($error['error'] ?? 'Unknown error') . "\n";
@@ -89,7 +89,7 @@ if (is_dir($errorDir)) {
 }
 
 echo "\n=== Проверка конфигурации ===\n";
-$secretFile = __DIR__ . '/webhook-secret.php';
+$secretFile = __DIR__ . '/../webhook-secret.php'; // Исправлен путь
 if (file_exists($secretFile)) {
     $secret = include $secretFile;
     if ($secret && $secret !== 'YOUR_WEBHOOK_SECRET_HERE') {
@@ -106,6 +106,4 @@ echo "1. Проверьте URL вебхука в Bitrix24: https://your-domain.
 echo "2. Убедитесь, что веб-сервер правильно настроен для обработки PHP файлов\n";
 echo "3. Проверьте права доступа на папку logs/webhooks/\n";
 echo "4. Создайте тестовое событие в Bitrix24 (задачу или элемент смарт-процесса)\n";
-
-
 

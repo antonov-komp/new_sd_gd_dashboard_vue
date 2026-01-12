@@ -112,9 +112,9 @@
     </div>
 
     <script type="module">
-        // Импорт тестовых данных и функций фильтрации
-        import { testTickets, generateTestTickets } from './vue-app/src/test-data.js';
-        import { filterTicketsByTimePeriod, TIME_FILTERS, TIME_FILTER_LABELS, getTicketsCountByPeriods } from './vue-app/src/utils/time-filters.js';
+        // Импорт тестовых данных и функций фильтрации (пути исправлены для папки tests/)
+        import { testTickets, generateTestTickets } from '../vue-app/src/test-data.js';
+        import { filterTicketsByTimePeriod, TIME_FILTERS, TIME_FILTER_LABELS, getTicketsCountByPeriods } from '../vue-app/src/utils/time-filters.js';
 
         let currentTestData = testTickets;
 

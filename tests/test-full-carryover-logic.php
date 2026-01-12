@@ -3,7 +3,7 @@
  * Полный тест логики carryover тикетов: определение -> категоризация -> результат
  */
 
-require_once 'api/graph-admission-closure/util/DatePeriodHelper.php';
+require_once '../api/graph-admission-closure/util/DatePeriodHelper.php';
 
 $helper = new DatePeriodHelper();
 

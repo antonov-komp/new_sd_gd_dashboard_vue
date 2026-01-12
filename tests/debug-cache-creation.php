@@ -3,10 +3,10 @@
  * Отладочный скрипт для проверки создания кэша TASK-082
  */
 
-require_once 'api/cache/DashboardSector1CCache.php';
-require_once 'api/cache/GraphStateCache.php';
-require_once 'api/services/DashboardSector1CService.php';
-require_once 'api/services/GraphStateService.php';
+require_once '../api/cache/DashboardSector1CCache.php'; // Исправлен путь
+require_once '../api/cache/GraphStateCache.php'; // Исправлен путь
+require_once '../api/services/DashboardSector1CService.php'; // Исправлен путь
+require_once '../api/services/GraphStateService.php'; // Исправлен путь
 
 echo "=== Отладка создания кэша TASK-082 ===\n\n";
 
@@ -121,7 +121,7 @@ echo "\n=== Отладка завершена ===\n";
  */
 function testCacheCreation(string $moduleId, ?string $mode, array $params): array
 {
-    require_once 'api/admin/cache-create.php';
+    require_once '../api/admin/cache-create.php'; // Исправлен путь
 
     try {
         // Используем ту же логику, что и в cache-create.php

@@ -5,10 +5,10 @@
  * Проверяет работу новых кеш-менеджеров и сервисов
  */
 
-require_once 'api/cache/DashboardSector1CCache.php';
-require_once 'api/cache/GraphStateCache.php';
-require_once 'api/services/DashboardSector1CService.php';
-require_once 'api/services/GraphStateService.php';
+require_once '../api/cache/DashboardSector1CCache.php'; // Исправлен путь
+require_once '../api/cache/GraphStateCache.php'; // Исправлен путь
+require_once '../api/services/DashboardSector1CService.php'; // Исправлен путь
+require_once '../api/services/GraphStateService.php'; // Исправлен путь
 
 echo "=== TASK-082: Backend кеширование - Тестирование ===\n\n";
 

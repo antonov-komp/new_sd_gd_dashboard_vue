@@ -4,13 +4,13 @@
  */
 
 // Подключаем необходимые файлы
-require_once 'api/cache/GraphAdmissionClosureCache.php';
-require_once 'api/cache/TimeTrackingCache.php';
-require_once 'api/cache/UsersManagementCache.php';
-require_once 'api/cache/UserActivityCache.php';
-require_once 'api/cache/WebhookLogsCache.php';
-require_once 'api/cache/DashboardSector1CCache.php';
-require_once 'api/cache/GraphStateCache.php';
+require_once '../api/cache/GraphAdmissionClosureCache.php'; // Исправлен путь
+require_once '../api/cache/TimeTrackingCache.php'; // Исправлен путь
+require_once '../api/cache/UsersManagementCache.php'; // Исправлен путь
+require_once '../api/cache/UserActivityCache.php'; // Исправлен путь
+require_once '../api/cache/WebhookLogsCache.php'; // Исправлен путь
+require_once '../api/cache/DashboardSector1CCache.php'; // Исправлен путь
+require_once '../api/cache/GraphStateCache.php'; // Исправлен путь
 
 header('Content-Type: application/json; charset=utf-8');
 
