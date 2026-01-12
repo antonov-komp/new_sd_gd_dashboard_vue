@@ -7,7 +7,7 @@
  * - https://context7.com/bitrix24/rest/
  */
 
-import { Bitrix24ApiService } from '../../bitrix24-api.js';
+import { DashboardBitrix24Facade } from '../../facades/DashboardBitrix24Facade.js';
 
 /**
  * Базовый клиент для API запросов
@@ -21,7 +21,8 @@ export class ApiClient {
    * @returns {Promise<object>} Результат запроса
    */
   static async call(method, params = {}) {
-    return await Bitrix24ApiService.call(method, params);
+    const facade = new DashboardBitrix24Facade();
+    return await facade.call(method, params);
   }
 }
 

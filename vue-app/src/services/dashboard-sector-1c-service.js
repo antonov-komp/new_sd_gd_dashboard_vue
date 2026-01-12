@@ -25,7 +25,7 @@
  * - https://context7.com/bitrix24/rest/user.get
  */
 
-import { Bitrix24ApiService } from './bitrix24-api.js';
+import { DashboardBitrix24Facade } from './facades/DashboardBitrix24Facade.js';
 import {
   DEFAULT_PRIORITY_ID,
   getPriorityByBitrixValue,
@@ -137,7 +137,8 @@ export class DashboardSector1CService {
     while (hasMore) {
       try {
         // Загружаем тикеты по стадии (без фильтра по UF_CRM_7_TYPE_PRODUCT, т.к. не поддерживается)
-        const result = await Bitrix24ApiService.call('crm.item.list', {
+        const facade = new DashboardBitrix24Facade();
+        const result = await facade.call('crm.item.list', {
           entityTypeId: this.ENTITY_TYPE_ID,
           filter: {
             stageId: stageId  // Фильтр только по стадии
@@ -285,7 +286,8 @@ export class DashboardSector1CService {
     try {
       // Получаем данные сотрудников по их ID
       // Можно использовать фильтр ID или получать по одному
-      const result = await Bitrix24ApiService.call('user.get', {
+      const facade = new DashboardBitrix24Facade();
+      const result = await facade.call('user.get', {
         filter: {
           ID: employeeIds
         }
@@ -577,8 +579,9 @@ export class DashboardSector1CService {
   static async assignTicket(ticketId, employeeId, stageId) {
     try {
       const bitrixStageId = this.mapStageIdToBitrix(stageId);
-      
-      const result = await Bitrix24ApiService.call('crm.item.update', {
+      const facade = new DashboardBitrix24Facade();
+
+      const result = await facade.call('crm.item.update', {
         entityTypeId: this.ENTITY_TYPE_ID,
         id: ticketId,
         fields: {
@@ -605,7 +608,8 @@ export class DashboardSector1CService {
    */
   static async createTicket(ticketData) {
     try {
-      const result = await Bitrix24ApiService.call('crm.item.add', {
+      const facade = new DashboardBitrix24Facade();
+      const result = await facade.call('crm.item.add', {
         entityTypeId: this.ENTITY_TYPE_ID,
         fields: {
           title: ticketData.title,
@@ -632,7 +636,8 @@ export class DashboardSector1CService {
    */
   static async getTicket(ticketId) {
     try {
-      const result = await Bitrix24ApiService.call('crm.item.get', {
+      const facade = new DashboardBitrix24Facade();
+      const result = await facade.call('crm.item.get', {
         entityTypeId: this.ENTITY_TYPE_ID,
         id: ticketId
       });
@@ -656,7 +661,8 @@ export class DashboardSector1CService {
    */
   static async addComment(ticketId, comment) {
     try {
-      const result = await Bitrix24ApiService.call('crm.timeline.comment.add', {
+      const facade = new DashboardBitrix24Facade();
+      const result = await facade.call('crm.timeline.comment.add', {
         fields: {
           entityId: ticketId,
           entityType: 'DYNAMIC_' + this.ENTITY_TYPE_ID, // Для смарт-процессов используется префикс DYNAMIC_

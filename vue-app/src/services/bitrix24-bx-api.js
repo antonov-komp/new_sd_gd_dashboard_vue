@@ -8,7 +8,7 @@
  * при работе вне Bitrix24 iframe или при ошибках CORS
  */
 import { isInsideBitrix24, isBX24Available } from '@/utils/bitrix24-context.js';
-import { Bitrix24ApiService } from './bitrix24-api.js';
+import { CoreBitrix24Facade } from './facades/CoreBitrix24Facade.js';
 
 export class Bitrix24BxApi {
   /**
@@ -154,7 +154,8 @@ export class Bitrix24BxApi {
         // Используем прокси API как fallback, даже если он вернёт владельца токена
         // Это лучше, чем показывать ошибку пользователю
         try {
-          const proxyUser = await Bitrix24ApiService.getCurrentUser();
+          const facade = new CoreBitrix24Facade();
+          const proxyUser = await facade.getCurrentUser();
           console.log('Got user from proxy API (token owner, fallback):', proxyUser);
           return proxyUser;
         } catch (proxyError) {
@@ -167,10 +168,11 @@ export class Bitrix24BxApi {
         }
       }
     } else {
-      // Если мы не внутри Bitrix24 (standalone режим), 
+      // Если мы не внутри Bitrix24 (standalone режим),
       // то прокси - единственный способ, но он вернёт владельца токена
       console.warn('Not inside Bitrix24, using proxy API (will return token owner, not interface user)');
-      return await Bitrix24ApiService.getCurrentUser();
+      const facade = new CoreBitrix24Facade();
+      return await facade.getCurrentUser();
     }
   }
 

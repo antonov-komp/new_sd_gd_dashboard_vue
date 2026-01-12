@@ -23,7 +23,7 @@ export default defineConfig(({ mode }) => ({
       },
 
       output: {
-        // Консервативные manual chunks - только основные разделения
+        // Оптимизированные manual chunks для фасадов и компонентов TASK-088-02
         manualChunks(id) {
           // Vendor chunk - основные зависимости
           if (id.includes('node_modules')) {
@@ -35,7 +35,32 @@ export default defineConfig(({ mode }) => ({
             return 'vendor';
           }
 
-          // Application chunks - только основные сервисы
+          // Фасады - отдельные chunks для lazy loading (TASK-088-02)
+          if (id.includes('src/services/facades/ActivityBitrix24Facade.js')) {
+            return 'facades-activity';
+          }
+          if (id.includes('src/services/facades/DashboardBitrix24Facade.js')) {
+            return 'facades-dashboard';
+          }
+          if (id.includes('src/services/facades/UserManagementFacade.js')) {
+            return 'facades-user-mgmt';
+          }
+          if (id.includes('src/services/facades/CoreBitrix24Facade.js')) {
+            return 'facades-core';
+          }
+
+          // Компоненты TASK-088-01 - отдельные chunks
+          if (id.includes('src/components/ActivityDashboard.vue')) {
+            return 'activity-dashboard';
+          }
+          if (id.includes('src/components/UserProfileAnalysis.vue')) {
+            return 'user-profile-analysis';
+          }
+          if (id.includes('src/components/AdvancedFilters.vue')) {
+            return 'advanced-filters';
+          }
+
+          // Application chunks - основные сервисы
           if (id.includes('src/services/bitrix24-api') || id.includes('bitrix24-api-provider')) {
             return 'bitrix24-core';
           }

@@ -54,7 +54,7 @@ import UserActivityFilters from '@/components/users/UserActivityFilters.vue';
 import UserActivityStats from '@/components/users/UserActivityStats.vue';
 import HiddenUsersManager from '@/components/users/HiddenUsersManager.vue';
 import { AccessControlService } from '@/services/access-control-service.js';
-import { Bitrix24ApiService } from '@/services/bitrix24-api.js';
+import { ActivityBitrix24Facade } from '@/services/facades/ActivityBitrix24Facade.js';
 
 export default {
   name: 'UsersManagementPage',
@@ -79,11 +79,10 @@ export default {
      */
     const loadUsers = async () => {
       try {
-        // Получаем список пользователей через Bitrix24 API
-        const result = await Bitrix24ApiService.call('user.get', {});
-        if (result && result.result) {
-          users.value = result.result;
-        }
+        // Используем ActivityBitrix24Facade для получения пользователей
+        const facade = new ActivityBitrix24Facade();
+        const usersList = await facade.getUsersList();
+        users.value = usersList;
       } catch (error) {
         console.error('[UsersManagementPage] Error loading users:', error);
       }

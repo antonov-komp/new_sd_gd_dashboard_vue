@@ -11,7 +11,7 @@
  * Задача: TASK-033-01
  */
 
-import { Bitrix24ApiService } from '@/services/bitrix24-api.js';
+import { DashboardBitrix24Facade } from '@/services/facades/DashboardBitrix24Facade.js';
 import { mapTicket } from '@/services/dashboard-sector-1c/mappers/ticket-mapper.js';
 
 /**
@@ -43,7 +43,8 @@ class TicketDetailsService {
     }
 
     try {
-      const result = await Bitrix24ApiService.call('crm.item.list', {
+      const facade = new DashboardBitrix24Facade();
+      const result = await facade.call('crm.item.list', {
         entityTypeId: ENTITY_TYPE_ID,
         filter: {
           id: ticketId
@@ -163,7 +164,7 @@ class TicketDetailsService {
       
       // Bitrix24 API поддерживает фильтрацию по массиву ID
       // Используем select: ['*'] как в DashboardSector1CService для получения всех полей
-      const result = await Bitrix24ApiService.call('crm.item.list', {
+      const result = await facade.call('crm.item.list', {
         entityTypeId: ENTITY_TYPE_ID,
         filter: {
           id: toLoad

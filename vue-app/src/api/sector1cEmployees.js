@@ -9,7 +9,7 @@
  * Дата создания: 2025-12-11 (UTC+3, Брест)
  */
 
-import { Bitrix24ApiService } from '@/services/bitrix24-api.js';
+import { DashboardBitrix24Facade } from '@/services/facades/DashboardBitrix24Facade.js';
 import { SECTOR_IDS } from '@/services/dashboard-sector-1c/utils/sector-constants.js';
 
 // Константы
@@ -79,8 +79,9 @@ export async function fetchEmployees({
       filter['%WORK_POSITION'] = search;
     }
     
-    // Вызов Bitrix24 API
-    const result = await Bitrix24ApiService.call('user.get', {
+    // Вызов через DashboardBitrix24Facade
+    const facade = new DashboardBitrix24Facade();
+    const result = await facade.call('user.get', {
       filter: filter,
       select: [
         'ID',
